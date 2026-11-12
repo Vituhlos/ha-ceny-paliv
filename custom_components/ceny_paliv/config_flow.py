@@ -191,6 +191,8 @@ class _FuelStationSteps:
                         )
                     )
                 return await self.async_step_city()
+            if not hasattr(self, "_city"):
+                self._city = ""
             self._gps_config_unique_id = f"gps-{uuid4()}"
             return await self.async_step_location_method()
 

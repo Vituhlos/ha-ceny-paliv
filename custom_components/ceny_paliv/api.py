@@ -478,6 +478,7 @@ def build_payload(
         history[key] = log
 
     def entry(m: dict[str, Any], d: dt.date | None, rank: int | None) -> dict[str, Any]:
+        slug = _safe_station_slug(m) or ""
         log = history.get(history_key(m), [])
         data = {
             "rank": rank,
