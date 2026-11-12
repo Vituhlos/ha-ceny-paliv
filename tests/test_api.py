@@ -124,6 +124,80 @@ def test_gps_payload_keeps_price_order_separate_from_nearest_and_resolves_favour
     }
 
 
+def test_gps_nearest_list_is_bounded_and_area_history_tracks_only_visible_stations(
+    marker, now
+):
+    history = {"Same-slug": [["2025-01-14", 34]]}
+    old_favourite = {
+        **marker("Old-favourite", 25),
+        "url": "/Ceny-benzinu-a-nafty/Praha/Old-favourite/old",
+    }
+
+    for area in range(12):
+        area_markers = [
+            {
+                **marker(f"Area-{area}-{index}", 20 + index / 100),
+                "url": f"/Ceny-benzinu-a-nafty/Praha/Area-{area}-{index}/{area}-{index}",
+                "lat": 50.1 + index / 100000,
+            }
+            for index in range(80)
+        ]
+        result = build_payload(
+            [*area_markers, old_favourite],
+            fuel="n95",
+            city="",
+            home_slug=old_favourite["url"],
+            history=history,
+            now=now,
+            gps_method="map",
+            gps_center=(50.1, 14.4),
+            gps_radius_km=5,
+        )
+
+    assert len(result["gps_nearest_stations"]) == 10
+    assert result["gps_area"]["station_count"] == 81
+    assert len(history) == 7  # preserved city slug + five visible + favourite
+    assert "Same-slug" in history
+    assert old_favourite["url"] in history
+    assert all(f"/Area-11-" in key or key in {"Same-slug", old_favourite["url"]} for key in history)
+
+
+def test_gps_station_options_are_radius_first_unique_and_skip_malformed_markers(marker):
+    near = {
+        **marker("Shared", 30, name="Shell"),
+        "url": "/Ceny-benzinu-a-nafty/Praha/Shared/101",
+        "address": "Václavské náměstí 1",
+    }
+    duplicate_slug = {
+        **near,
+        "url": "/Ceny-benzinu-a-nafty/Brno/Shared/202",
+        "lat": 50.11,
+    }
+    outside = {**marker("Outside", 31), "lat": 51.0}
+    missing_name = {**marker("Missing-name", 33), "name": None}
+    missing_url = {**marker("Missing-url", 33)}
+    missing_url.pop("url")
+    invalid_coordinates = {**marker("Invalid-coordinate", 33), "lat": 91}
+
+    options = station_options(
+        [near, duplicate_slug, outside, missing_name, missing_url, invalid_coordinates],
+        None,
+        use_url=True,
+        center=(50.1, 14.4),
+        radius_km=5,
+    )
+
+    assert {option["value"] for option in options} == {
+        "/Ceny-benzinu-a-nafty/Praha/Shared/101",
+        "/Ceny-benzinu-a-nafty/Brno/Shared/202",
+    }
+    labels = {option["value"]: option["label"] for option in options}
+    assert "Praha" in labels["/Ceny-benzinu-a-nafty/Praha/Shared/101"]
+    assert "Brno" in labels["/Ceny-benzinu-a-nafty/Brno/Shared/202"]
+    assert "Václavské náměstí 1" in options[0]["label"]
+    assert options[0]["label"] != options[1]["label"]
+
+
 def test_gps_history_uses_station_url_without_migrating_ambiguous_slug(marker, now):
     station = {
         **marker("Same-slug", 35),

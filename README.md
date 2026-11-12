@@ -38,7 +38,7 @@ mBenzin blocks plain scraping with a browser check, but they give a **personal a
    2. choose **City** (the original behavior) or **GPS area**
    3. for GPS, choose Home Assistant's home location, a saved zone, a point on the built-in map, or advanced manual coordinates; set a 5–50 km radius (40 km by default)
    4. choose your **city** (City mode), **fuel(s)** and the **language** of the dashboard texts (English / Čeština)
-   5. for each fuel, choose a **favourite station** (City mode lists the city; GPS mode searches nationwide data and can keep a favourite outside the circle)
+   5. for each fuel, choose a **favourite station** (City mode lists the city; GPS mode lists stations in the selected circle first and retains an already-saved favourite outside it)
    6. optionally tick the **logos** of the chains to show (chains in the selected area are preselected; see [Station logos](#4-station-logos-optional))
 
 You can change the area mode, location method or point, radius, fuels, language, favourite stations and logos later: the integration's **Configure** button. Existing entries without an area mode remain in City mode. Home Assistant home coordinates are read at refresh time; zone changes trigger a refresh, while a deleted zone produces an empty GPS result until it is restored or replaced.
@@ -51,11 +51,11 @@ For each fuel `<fuel>` (`n95`, `benzinplus`, `diesel`, `dieselplus`, `lpg`, `cng
 
 | Entity | What |
 |---|---|
-| `sensor.ceny_paliv_<fuel>_top5` | price of the cheapest station; attributes: the 5 cheapest stations (name, address, price, coordinates, Google Maps link, trends…). GPS mode also provides `gps_area` metadata and a separate `gps_nearest_stations` list ordered by distance |
+| `sensor.ceny_paliv_<fuel>_top5` | price of the cheapest station; attributes: the 5 cheapest stations (name, address, price, coordinates, Google Maps link, trends…). GPS mode also provides `gps_area` metadata and at most 10 compact `gps_nearest_stations` summaries ordered by distance |
 | `sensor.ceny_paliv_<fuel>_home` | price at your favourite station (only if you chose one); trends, rank, statistics |
 | `sensor.ceny_paliv_<fuel>_1` … `_5` | the 5 cheapest stations, with latitude/longitude for the map card |
 
-The position sensors are named after the station they currently show (for example `1 · Orlen – Bratri Stefanu 69`); existing entity IDs remain stable when changing area mode. Prices refresh every 6 hours. If a refresh fails (for example HTTP 429) the last data is kept and the attribute `fetch_error` says why. Nationwide data is shared between configurations with the same key and fuel for up to 6 hours. GPS filtering uses that same snapshot; zone changes reuse the cache. Manual refreshes and integration reloads reuse this in-memory cache; restarting Home Assistant clears it. Cached relative freshness labels are interpreted against the original response time in the Czech timezone, not the later cache-use time.
+The position sensors are named after the station they currently show (for example `1 · Orlen – Bratri Stefanu 69`); existing entity IDs remain stable when changing area mode. Prices refresh every 6 hours. If a refresh fails (for example HTTP 429) the last data is kept and the attribute `fetch_error` says why. Nationwide data is shared between configurations with the same key and fuel for up to 6 hours. GPS filtering and the in-area favourite selector use that same snapshot; changing the area does not create another mBenzin request. Manual refreshes and integration reloads reuse this in-memory cache; restarting Home Assistant clears it. Cached relative freshness labels are interpreted against the original response time in the Czech timezone, not the later cache-use time.
 
 ## 3. The dashboard card (included, nothing else to install)
 
@@ -150,9 +150,9 @@ content: |-
   {% endfor %}
 ```
 
-Each station in `stations` has `rank`, `name`, `street`, `address`, `price`, `lat`, `lng`, `updated`, `maps`, `home` and `trends`; GPS entries also include `distance_km`. The top5 sensor's `gps_area` attribute contains the method, centre, radius, selected zone (if any), and any location error. `gps_nearest_stations` is separate from the cheapest `stations` list. Use the `_home` sensor for your favourite station (its attributes include `rank`, `vs_cheapest`, `trends`, and—when inside the GPS area—`distance_km`).
+Each station in `stations` has `rank`, `name`, `street`, `address`, `price`, `lat`, `lng`, `updated`, `maps`, `home` and `trends`; GPS entries also include `distance_km`. The top5 sensor's `gps_area` attribute contains the method, centre, radius, selected zone (if any), any location error, and the total count of usable stations in the circle. `gps_nearest_stations` is a separate, compact list of at most 10 nearby stations; it does not duplicate map links or trend histories. Provider-controlled text in GPS station attributes is capped to keep the complete state attributes below Home Assistant Recorder's 16 KiB limit. Use the `_home` sensor for your favourite station (its attributes include `rank`, `vs_cheapest`, `trends`, and—when inside the GPS area—`distance_km`).
 
-Changing a favourite to a different station gives it a station-specific statistics identity. The previous home sensor remains registered as an unavailable archived entity so its Home Assistant long-term statistics are not combined with the new station. GPS history uses each station's full marker URL; the integration does not migrate old city history based on a potentially ambiguous station slug. If a saved favourite cannot be uniquely resolved in nationwide markers, it is retained until you explicitly choose a station.
+Changing a favourite to a different station gives it a station-specific statistics identity. The previous home sensor remains registered as an unavailable archived entity so its Home Assistant long-term statistics are not combined with a different station; returning to a previously selected station reuses only that station's verified identity. GPS trend history uses full marker URLs and retains the current five cheapest stations and selected favourite, with the existing 35-day sample retention. When the GPS circle changes, no-longer-displayed GPS station logs are pruned on the next successful refresh; existing city histories are not migrated or removed. If a saved favourite cannot be uniquely resolved in nationwide markers, it is retained until you explicitly choose a station.
 
 After an explicit favourite change, Home Assistant may give the new home sensor a suffixed entity ID because the old ID remains attached to its archived statistics. The dashboard card resolves the current sensor automatically; standard YAML cards that refer directly to the old `_home` entity should be updated to the new home sensor entity ID.
 

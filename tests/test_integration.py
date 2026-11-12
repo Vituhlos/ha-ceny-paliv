@@ -1,4 +1,5 @@
 """Home Assistant configuration, coordinator and sensor regressions."""
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -303,6 +304,184 @@ async def test_changing_favourite_archives_old_statistics_identity(
         assert entry.options["home_history"]["n95"] == [
             {"identity": old["url"], "legacy": True}
         ]
+
+
+async def test_favourite_identity_cycles_modes_and_reloads_without_collisions(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    from custom_components.ceny_paliv.coordinator import CenyPalivCoordinator
+    from custom_components.ceny_paliv.sensor import (
+        CenyPalivArchivedHomeSensor,
+        CenyPalivHomeSensor,
+    )
+
+    hass.config.latitude = 50.1
+    hass.config.longitude = 14.4
+    stations = [marker(name, price) for name, price in (("Alpha", 30), ("Beta", 31), ("Gamma", 32))]
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": "Praha"},
+        options={"fuels": ["n95"], "homes": {"n95": "Alpha"}, "language": "en"},
+        unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+
+    def assert_active_and_archived_ids_are_safe():
+        coordinator = CenyPalivCoordinator(hass, entry)
+        active = CenyPalivHomeSensor(coordinator, entry, "n95")
+        known = {active.unique_id}
+        archives = []
+        for record in coordinator.home_history.get("n95", []):
+            archived = CenyPalivArchivedHomeSensor(
+                coordinator,
+                entry,
+                "n95",
+                record["identity"],
+                record["legacy"],
+            )
+            if archived.unique_id not in known:
+                archives.append(archived)
+                known.add(archived.unique_id)
+        assert len(known) == 1 + len(archives)
+        return active, archives
+
+    async def choose_favourite(area_mode, choice):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"area_mode": area_mode}
+        )
+        if area_mode == "city":
+            result = await hass.config_entries.options.async_configure(
+                result["flow_id"], {"city": "Praha"}
+            )
+        else:
+            result = await hass.config_entries.options.async_configure(
+                result["flow_id"], {"location_method": "map"}
+            )
+            result = await hass.config_entries.options.async_configure(
+                result["flow_id"],
+                {"location": {"latitude": 50.1, "longitude": 14.4}},
+            )
+            result = await hass.config_entries.options.async_configure(
+                result["flow_id"], {"gps_radius_km": 40}
+            )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"fuels": ["n95"], "language": "en"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"station": choice}
+        )
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+
+    with (
+        patch(
+            "custom_components.ceny_paliv.config_flow.async_fetch_markers",
+            new=AsyncMock(return_value=stations),
+        ),
+        patch("custom_components.ceny_paliv.config_flow.async_fetch_index", new=AsyncMock(return_value=None)),
+    ):
+        await choose_favourite("city", "Beta")
+        assert entry.options["home_identities"]["n95"] == stations[1]["url"]
+        assert entry.options["home_history"]["n95"] == [
+            {"identity": stations[0]["url"], "legacy": True}
+        ]
+        active, archives = assert_active_and_archived_ids_are_safe()
+        assert active.unique_id != archives[0].unique_id
+
+        await choose_favourite("city", "Alpha")
+        assert "home_identities" not in entry.options
+        active, archives = assert_active_and_archived_ids_are_safe()
+        assert active.unique_id == f"{entry.entry_id}_n95_home"
+        assert all(archived.unique_id != active.unique_id for archived in archives)
+
+        await choose_favourite("gps", stations[0]["url"])
+        assert entry.options["homes"]["n95"] == stations[0]["url"]
+        assert "home_identities" not in entry.options
+        await choose_favourite("gps", stations[2]["url"])
+        assert entry.options["home_identities"]["n95"] == stations[2]["url"]
+        await choose_favourite("gps", stations[1]["url"])
+        assert entry.options["home_identities"]["n95"] == stations[1]["url"]
+        await choose_favourite("gps", stations[0]["url"])
+        assert "home_identities" not in entry.options
+        active, archives = assert_active_and_archived_ids_are_safe()
+        assert active.unique_id == f"{entry.entry_id}_n95_home"
+        assert all(archived.unique_id != active.unique_id for archived in archives)
+        assert len({archived.unique_id for archived in archives}) == len(archives)
+
+    snapshot = MarkerSnapshot(markers=stations, fetched_at=dt_util.now())
+    with patch(
+        "custom_components.ceny_paliv.coordinator.async_fetch_snapshot",
+        new=AsyncMock(return_value=snapshot),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        active_home = next(
+            state
+            for state in hass.states.async_all("sensor")
+            if state.attributes.get("cp_config_id") == entry.entry_id
+            and state.attributes.get("cp_role") == "home"
+        )
+        assert active_home.state == "30"
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+        reloaded_home = hass.states.get(active_home.entity_id)
+        assert reloaded_home is not None
+        assert reloaded_home.state == "30"
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_gps_sensor_attributes_stay_below_recorder_limit_for_large_feed(
+    hass, enable_custom_integrations, mock_frontend
+):
+    hass.config.latitude = 50.1
+    hass.config.longitude = 14.4
+    long_text = "Long station name " * 120
+    markers = [
+        {
+            "url": f"/Ceny-benzinu-a-nafty/Praha/Station-{index}/{index}",
+            "name": f"{long_text}-{index}",
+            "chain": long_text,
+            "price": 30 + index / 1000,
+            "fresh": "Dnes",
+            "lat": 50.1 + index / 1000000,
+            "lng": 14.4,
+        }
+        for index in range(1200)
+    ]
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": ""},
+        options={
+            "area_mode": "gps",
+            "location_method": "home",
+            "gps_radius_km": 5,
+            "fuels": ["n95"],
+            "homes": {},
+        },
+        unique_id="gps-load-test",
+    )
+    entry.add_to_hass(hass)
+    snapshot = MarkerSnapshot(markers=markers, fetched_at=dt_util.now())
+    with patch(
+        "custom_components.ceny_paliv.coordinator.async_fetch_snapshot",
+        new=AsyncMock(return_value=snapshot),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        top = next(
+            state
+            for state in hass.states.async_all("sensor")
+            if state.attributes.get("cp_config_id") == entry.entry_id
+            and state.attributes.get("cp_role") == "top5"
+        )
+        serialized = json.dumps(top.attributes, ensure_ascii=False).encode("utf-8")
+        assert len(serialized) < 16 * 1024
+        assert len(top.attributes["stations"]) == 5
+        assert len(top.attributes["gps_nearest_stations"]) == 10
+        assert top.attributes["gps_area"]["station_count"] == 1200
+        nearest = top.attributes["gps_nearest_stations"]
+        assert all("trends" not in station and "maps" not in station for station in nearest)
+        assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_home_sensor_ids_keep_legacy_and_separate_changed_station_statistics(

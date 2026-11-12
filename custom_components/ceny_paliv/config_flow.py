@@ -91,9 +91,20 @@ def _valid_coordinates(latitude: Any, longitude: Any) -> bool:
 
 
 def _station_slug(marker: dict[str, Any]) -> str | None:
+    if not isinstance(marker, dict) or not isinstance(marker.get("url"), str):
+        return None
     try:
-        return marker["url"].split("/")[3]
-    except (KeyError, IndexError, AttributeError):
+        parts = marker["url"].split("/")
+        if (
+            len(parts) < 5
+            or parts[1] != "Ceny-benzinu-a-nafty"
+            or not parts[2]
+            or not parts[3]
+            or not parts[4]
+        ):
+            return None
+        return parts[3]
+    except (KeyError, IndexError, AttributeError, TypeError):
         return None
 
 
@@ -162,20 +173,40 @@ class _FuelStationSteps:
                             session, self._key, fuel, cache=shared_marker_cache(self.hass)
                         )
                         gps = self._area_mode == AREA_MODE_GPS
-                        stations[fuel] = station_options(
-                            markers,
-                            None if gps else self._city,
-                            use_url=gps,
+                        gps_center = self._gps_center_for_flow() if gps else None
+                        stations[fuel] = (
+                            station_options(
+                                markers,
+                                None,
+                                use_url=True,
+                                center=gps_center,
+                                radius_km=getattr(
+                                    self, "_gps_radius_km", DEFAULT_GPS_RADIUS_KM
+                                ),
+                            )
+                            if gps and gps_center is not None
+                            else []
+                            if gps
+                            else station_options(markers, self._city)
                         )
-                        station_markers[fuel] = [
-                            marker
-                            for marker in markers
-                            if gps or city_of(marker) == self._city
-                        ]
+                        station_markers[fuel] = (
+                            [marker for marker in markers if isinstance(marker, dict)]
+                            if gps
+                            else [
+                                marker
+                                for marker in markers
+                                if isinstance(marker, dict)
+                                and city_of(marker) == self._city
+                            ]
+                        )
                         chains |= {
-                            m.get("chain") or m["name"]
+                            m.get("chain")
+                            if isinstance(m.get("chain"), str)
+                            else m.get("name")
                             for m in markers
-                            if gps or city_of(m) == self._city
+                            if isinstance(m, dict)
+                            and isinstance(m.get("name"), str)
+                            and (gps or city_of(m) == self._city)
                         }
                 except MBenzinError as err:
                     errors["base"] = _error_key(err)
@@ -217,6 +248,25 @@ class _FuelStationSteps:
             {"value": value, "label": labels[1 if language == "cs" else 0]}
             for value, labels in values.items()
         ]
+
+    def _gps_center_for_flow(self) -> tuple[float, float] | None:
+        method = getattr(self, "_location_method", LOCATION_HOME)
+        if method == LOCATION_HOME:
+            latitude, longitude = self.hass.config.latitude, self.hass.config.longitude
+        elif method == LOCATION_ZONE:
+            entity_id = getattr(self, "_gps_zone_entity", None)
+            state = self.hass.states.get(entity_id) if entity_id else None
+            if state is None:
+                return None
+            latitude = state.attributes.get(CONF_LATITUDE)
+            longitude = state.attributes.get(CONF_LONGITUDE)
+        else:
+            location = getattr(self, "_gps_location", None) or {}
+            latitude = location.get(CONF_LATITUDE)
+            longitude = location.get(CONF_LONGITUDE)
+        if not _valid_coordinates(latitude, longitude):
+            return None
+        return float(latitude), float(longitude)
 
     async def async_step_area_mode(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
@@ -446,16 +496,52 @@ class _FuelStationSteps:
         default = self._defaults_homes.get(fuel, NONE_VALUE)
         if default not in {option["value"] for option in options} and default != NONE_VALUE:
             language = (self.hass.config.language or DEFAULT_LANGUAGE).split("-")[0]
-            options.append(
-                {
-                    "value": default,
-                    "label": (
-                        "Saved station (not resolved)"
+            candidates = [
+                marker
+                for marker in self._station_markers.get(fuel, [])
+                if marker.get("url") == default or _station_slug(marker) == default
+            ]
+            if len(candidates) == 1 and self._area_mode == AREA_MODE_GPS:
+                marker = candidates[0]
+                pretty_options = station_options([marker], None, use_url=True)
+                if pretty_options:
+                    in_area = marker["url"] in {
+                        option["value"] for option in self._stations[fuel]
+                    }
+                    prefix = (
+                        "Outside selected GPS area · "
+                        if not in_area and language != "cs"
+                        else "Mimo zvolenou GPS oblast · "
+                        if not in_area
+                        else "Saved favourite · "
                         if language != "cs"
-                        else "Uložená stanice (neověřená)"
-                    ),
-                }
-            )
+                        else "Uložená oblíbená · "
+                    )
+                    options.append(
+                        {"value": default, "label": prefix + pretty_options[0]["label"]}
+                    )
+                else:
+                    options.append(
+                        {
+                            "value": default,
+                            "label": (
+                                "Saved station (not resolved)"
+                                if language != "cs"
+                                else "Uložená stanice (neověřená)"
+                            ),
+                        }
+                    )
+            else:
+                options.append(
+                    {
+                        "value": default,
+                        "label": (
+                            "Saved station (not resolved)"
+                            if language != "cs"
+                            else "Uložená stanice (neověřená)"
+                        ),
+                    }
+                )
         valid = {option["value"] for option in options}
         schema = vol.Schema(
             {
@@ -535,6 +621,8 @@ class _FuelStationSteps:
         }
         home_identities = getattr(self, "_home_identities", {})
         home_history = getattr(self, "_home_history", {})
+        options.pop(CONF_HOME_IDENTITIES, None)
+        options.pop(CONF_HOME_HISTORY, None)
         if home_identities:
             options[CONF_HOME_IDENTITIES] = dict(home_identities)
         if home_history:

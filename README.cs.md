@@ -44,7 +44,7 @@ Co je dobré vědět:
    2. **Město** (původní režim) nebo **GPS okolí**,
    3. v GPS režimu zvolit polohu domácnosti, uloženou zónu, bod na vestavěné mapě nebo pokročilé ruční souřadnice a poloměr 5–50 km (výchozí 40 km),
    4. v městském režimu vybrat **město**, následně **paliva** a **jazyk** textů v dashboardu,
-   5. pro každé palivo vybrat **oblíbenou stanici** (městský režim nabízí stanice města, GPS režim celorepubliková data a oblíbená stanice může být i mimo kruh),
+   5. pro každé palivo vybrat **oblíbenou stanici** (městský režim nabízí stanice města, GPS režim přednostně nabízí stanice ve zvoleném kruhu a zachová již uloženou oblíbenou stanici mimo něj),
    6. volitelně zaškrtnout **loga** řetězců (řetězce ve vybrané oblasti jsou předvybrané; viz [Loga čerpacích stanic](#4-loga-čerpacích-stanic-volitelné)).
 
 Režim oblasti, zdroj a bod polohy, poloměr, paliva, jazyk, oblíbené stanice i loga můžete později změnit tlačítkem **Konfigurovat** u integrace. Starší konfigurace bez volby oblasti zůstávají v městském režimu. Domácí souřadnice se znovu načtou při aktualizaci; změna zóny vyvolá okamžitou aktualizaci. Po odstranění zóny budou výsledky GPS prázdné, dokud ji neobnovíte nebo nevyberete jiný způsob.
@@ -57,11 +57,11 @@ Pro každé palivo `<palivo>` (`n95`, `benzinplus`, `diesel`, `dieselplus`, `lpg
 
 | Entita | Co obsahuje |
 |---|---|
-| `sensor.ceny_paliv_<palivo>_top5` | cena nejlevnější stanice; atributy obsahují 5 nejlevnějších stanic. GPS režim přidává metadata `gps_area` a samostatný seznam `gps_nearest_stations` seřazený podle vzdálenosti |
+| `sensor.ceny_paliv_<palivo>_top5` | cena nejlevnější stanice; atributy obsahují 5 nejlevnějších stanic. GPS režim přidává metadata `gps_area` a samostatný kompaktní seznam nejvýše 10 stanic `gps_nearest_stations` seřazených podle vzdálenosti |
 | `sensor.ceny_paliv_<palivo>_home` | cena u vaší oblíbené stanice (jen pokud jste nějakou vybrali), trendy, pořadí, statistika |
 | `sensor.ceny_paliv_<palivo>_1` … `_5` | 5 nejlevnějších stanic se zeměpisnou šířkou a délkou pro kartu mapy |
 
-Senzory se jmenují podle stanice, kterou právě ukazují (např. `1 · Orlen – Bratri Stefanu 69`). Identifikátory stávajících senzorů se při přepnutí oblasti nemění. Ceny se obnovují každých 6 hodin. Pokud se aktualizace nepovede (třeba kvůli chybě 429), zůstanou zachována poslední data a atribut `fetch_error` uvede důvod. Celorepubliková data se sdílejí mezi konfiguracemi se stejným klíčem a palivem po dobu až 6 hodin. GPS výpočty používají tutéž cache, nevytvářejí další požadavky. Ruční aktualizace i znovunačtení integrace cache využívají; restart Home Assistantu ji vymaže. Relativní údaj o aktuálnosti se vyhodnocuje podle původního času odpovědi v českém časovém pásmu.
+Senzory se jmenují podle stanice, kterou právě ukazují (např. `1 · Orlen – Bratri Stefanu 69`). Identifikátory stávajících senzorů se při přepnutí oblasti nemění. Ceny se obnovují každých 6 hodin. Pokud se aktualizace nepovede (třeba kvůli chybě 429), zůstanou zachována poslední data a atribut `fetch_error` uvede důvod. Celorepubliková data se sdílejí mezi konfiguracemi se stejným klíčem a palivem po dobu až 6 hodin. GPS výpočty i výběr oblíbené stanice v kruhu používají tutéž cache; změna oblasti nevytváří další požadavek na mBenzin. Ruční aktualizace i znovunačtení integrace cache využívají; restart Home Assistantu ji vymaže. Relativní údaj o aktuálnosti se vyhodnocuje podle původního času odpovědi v českém časovém pásmu.
 
 ## 3. Karta pro dashboard (je součástí, nic dalšího se neinstaluje)
 
@@ -156,9 +156,9 @@ content: |-
   {% endfor %}
 ```
 
-Každá stanice v `stations` má `rank`, `name`, `street`, `address`, `price`, `lat`, `lng`, `updated`, `maps`, `home` a `trends`; v GPS režimu navíc `distance_km`. Atribut `gps_area` senzoru top5 obsahuje způsob výběru, střed, poloměr, případnou zónu a chybu polohy. `gps_nearest_stations` je oddělený od seznamu nejlevnějších stanic. Pro oblíbenou stanici použijte senzor `_home` (obsahuje `rank`, `vs_cheapest`, `trends` a při poloze uvnitř GPS oblasti také `distance_km`).
+Každá stanice v `stations` má `rank`, `name`, `street`, `address`, `price`, `lat`, `lng`, `updated`, `maps`, `home` a `trends`; v GPS režimu navíc `distance_km`. Atribut `gps_area` senzoru top5 obsahuje způsob výběru, střed, poloměr, případnou zónu, chybu polohy a celkový počet použitelných stanic v kruhu. `gps_nearest_stations` je oddělený kompaktní seznam nejvýše 10 blízkých stanic; neopakuje odkazy na mapy ani historii trendů. Text od poskytovatele se v GPS atributech omezuje, aby se celý stavový JSON vešel pod limit 16 KiB Home Assistant Recorderu. Pro oblíbenou stanici použijte senzor `_home` (obsahuje `rank`, `vs_cheapest`, `trends` a při poloze uvnitř GPS oblasti také `distance_km`).
 
-Při změně oblíbené stanice dostane nová stanice vlastní identitu statistik. Předchozí senzor zůstane registrovaný jako nedostupná archivovaná entita, aby se dlouhodobé statistiky Home Assistantu nesloučily s jinou stanicí. GPS historie používá celé URL markeru; stará městská historie se nepřevádí podle potenciálně nejednoznačného slugu. Pokud oblíbenou stanici nelze v celorepublikových datech určit jednoznačně, uložený výběr zůstane zachován, dokud výslovně nevyberete jinou stanici.
+Při změně oblíbené stanice dostane nová stanice vlastní identitu statistik. Předchozí senzor zůstane registrovaný jako nedostupná archivovaná entita, aby se dlouhodobé statistiky Home Assistantu nesloučily s jinou stanicí; při návratu k dříve vybrané stanici se obnoví pouze její ověřená identita. GPS historie používá celé URL markeru a uchovává záznamy pěti aktuálně nejlevnějších stanic a oblíbené stanice po stávající retenční dobu 35 dnů. Při změně GPS kruhu se historie již nezobrazovaných GPS stanic smaže při příští úspěšné aktualizaci; existující městská historie se nepřevádí ani nemaže. Pokud oblíbenou stanici nelze v celorepublikových datech určit jednoznačně, uložený výběr zůstane zachován, dokud výslovně nevyberete jinou stanici.
 
 Po výslovné změně oblíbené stanice může Home Assistant nové entitě oblíbené stanice přidělit příponu, protože původní ID zůstává archivované kvůli statistikám. Karta dashboardu aktuální senzor najde automaticky; v běžných YAML kartách s přímým odkazem na původní entitu `_home` bude nutné odkaz aktualizovat na nové ID.
 
