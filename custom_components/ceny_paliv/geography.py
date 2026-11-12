@@ -1,6 +1,7 @@
 """Reusable geographic filtering for mBenzin station markers."""
 from __future__ import annotations
 
+import json
 import math
 from numbers import Real
 from typing import Any
@@ -8,7 +9,6 @@ from typing import Any
 EARTH_RADIUS_KM = 6371.0088
 MIN_RADIUS_KM = 5
 MAX_RADIUS_KM = 50
-_BOUNDARY_TOLERANCE_KM = 1e-9
 
 
 def _finite_number(value: Any, name: str) -> float:
@@ -37,7 +37,10 @@ def distance_km(latitude1: Any, longitude1: Any, latitude2: Any, longitude2: Any
     """Return great-circle distance between two GPS coordinates using Haversine."""
     lat1, lng1 = _coordinates(latitude1, longitude1, "first")
     lat2, lng2 = _coordinates(latitude2, longitude2, "second")
+    return _distance_km_validated(lat1, lng1, lat2, lng2)
 
+
+def _distance_km_validated(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     lat1_rad, lat2_rad = math.radians(lat1), math.radians(lat2)
     delta_lat = lat2_rad - lat1_rad
     delta_lng = math.radians(lng2 - lng1)
@@ -55,11 +58,13 @@ def _marker_coordinates(marker: dict[str, Any]) -> tuple[float, float] | None:
         return None
 
 
-def _station_key(station: dict[str, Any]) -> tuple[str, ...]:
-    """Stable tie-breakers without treating a slug as a station identifier."""
-    return tuple(
-        str(station.get(field) or "")
-        for field in ("url", "city", "name", "address", "lat", "lng")
+def _station_key(station: dict[str, Any]) -> str:
+    """Canonical sort-only key for JSON markers; never an identity or dedupe key."""
+    return json.dumps(
+        station,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
     )
 
 
@@ -79,9 +84,24 @@ def stations_within_radius(
 ) -> list[dict[str, Any]]:
     """Return valid station markers within the inclusive 5–50 km radius.
 
-    Invalid marker coordinates are skipped. The returned marker dictionaries are
-    copies with an additional ``distance_km`` field; source freshness fields are
-    left intact.
+    Invalid marker coordinates and non-object entries are skipped. This function
+    does not filter price age; callers must apply the integration's fuel-specific
+    freshness policy before using its results for price decisions. Returned marker
+    dictionaries are copies with ``distance_km`` added and source fields retained.
+    """
+    stations = _stations_within_radius(markers, latitude, longitude, radius_km)
+    return sorted(stations, key=lambda station: (station["distance_km"], _station_key(station)))
+
+
+def _stations_within_radius(
+    markers: list[dict[str, Any]],
+    latitude: Any,
+    longitude: Any,
+    radius_km: Any,
+) -> list[dict[str, Any]]:
+    """Validate inputs and return eligible station copies without sorting.
+
+    The eight-ULP allowance only absorbs floating-point round-off at the boundary.
     """
     center_lat, center_lng = _coordinates(latitude, longitude, "center")
     radius = _finite_number(radius_km, "radius")
@@ -95,15 +115,13 @@ def stations_within_radius(
         coordinates = _marker_coordinates(marker)
         if coordinates is None:
             continue
-        distance = distance_km(center_lat, center_lng, *coordinates)
-        if distance <= radius or math.isclose(
-            distance, radius, rel_tol=0.0, abs_tol=_BOUNDARY_TOLERANCE_KM
-        ):
+        distance = _distance_km_validated(center_lat, center_lng, *coordinates)
+        if distance <= radius or distance - radius <= 8 * math.ulp(radius):
             station = dict(marker)
             station["distance_km"] = distance
             stations.append(station)
 
-    return sorted(stations, key=lambda station: (station["distance_km"], _station_key(station)))
+    return stations
 
 
 def cheapest_stations_within_radius(
@@ -112,20 +130,19 @@ def cheapest_stations_within_radius(
     longitude: Any,
     radius_km: Any = 5,
 ) -> list[dict[str, Any]]:
-    """Return area stations ordered by price, then distance and stable fields."""
-    stations = [
-        station
-        for station in stations_within_radius(markers, latitude, longitude, radius_km)
-        if _price(station) is not None
+    """Return priced stations ordered by price, then distance and marker data.
+
+    Invalid, negative, or non-finite prices are excluded. Zero remains valid to
+    match the existing city payload's non-validating numeric price sort. Price
+    freshness is not checked here; callers must apply the fuel-specific policy.
+    """
+    priced = [
+        (price, station)
+        for station in _stations_within_radius(markers, latitude, longitude, radius_km)
+        if (price := _price(station)) is not None
     ]
-    return sorted(
-        stations,
-        key=lambda station: (
-            _price(station),
-            station["distance_km"],
-            _station_key(station),
-        ),
-    )
+    priced.sort(key=lambda item: (item[0], item[1]["distance_km"], _station_key(item[1])))
+    return [station for _, station in priced]
 
 
 def nearest_stations_within_radius(
@@ -134,13 +151,20 @@ def nearest_stations_within_radius(
     longitude: Any,
     radius_km: Any = 5,
 ) -> list[dict[str, Any]]:
-    """Return area stations ordered by distance, then price and stable fields."""
-    stations = stations_within_radius(markers, latitude, longitude, radius_km)
-    return sorted(
-        stations,
-        key=lambda station: (
-            station["distance_km"],
-            _price(station) if _price(station) is not None else math.inf,
-            _station_key(station),
-        ),
+    """Return area stations by distance; invalid/missing prices sort last at ties.
+
+    Stations are not excluded for missing prices because this is a proximity
+    result. Price freshness is retained but not filtered by this spatial helper.
+    """
+    ordered: list[tuple[dict[str, Any], float | None]] = []
+    for station in _stations_within_radius(markers, latitude, longitude, radius_km):
+        price = _price(station)
+        ordered.append((station, price))
+    ordered.sort(
+        key=lambda item: (
+            item[0]["distance_km"],
+            item[1] if item[1] is not None else math.inf,
+            _station_key(item[0]),
+        )
     )
+    return [station for station, _ in ordered]

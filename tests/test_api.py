@@ -123,7 +123,7 @@ def test_distance_km_zero_and_known_distance():
     assert distance_km(90, 0, 0, 0) == pytest.approx(10007.55722101796, abs=1e-8)
     assert distance_km(-90, 0, 0, 0) == pytest.approx(10007.55722101796, abs=1e-8)
     assert distance_km(0, 0, 0, 180) == pytest.approx(20015.11444203592, abs=1e-8)
-    assert distance_km(50.0755, 14.4378, 49.1951, 16.6068) == pytest.approx(186.4, abs=1)
+    assert distance_km(50.0755, 14.4378, 49.1951, 16.6068) == pytest.approx(184.3, abs=0.1)
 
 
 @pytest.mark.parametrize(
@@ -198,9 +198,14 @@ def test_boundary_tolerance_does_not_admit_points_outside_by_a_fraction_of_a_mic
         (float("inf"), 0),
         (0, float("-inf")),
         (10**400, 0),
+        ("50", 14.4),
+        ("", 14.4),
         (91, 0),
+        (-91, 0),
         (0, 181),
+        (0, -181),
         (True, 0),
+        (False, 0),
     ],
 )
 def test_invalid_center_coordinates_rejected(latitude, longitude):
@@ -314,7 +319,10 @@ def test_empty_geographic_results(marker):
     assert nearest_stations_within_radius([], 50.1, 14.4) == []
 
 
-@pytest.mark.parametrize("price", [None, float("nan"), float("inf"), -1, True, "30"])
+@pytest.mark.parametrize(
+    "price",
+    [None, float("nan"), float("inf"), float("-inf"), -1, True, "30", "", 10**400],
+)
 def test_invalid_station_prices_are_excluded_from_cheapest(marker, price):
     stations = [marker("invalid", price), marker("valid", 30)]
 
