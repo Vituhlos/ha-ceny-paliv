@@ -14,7 +14,10 @@ _BOUNDARY_TOLERANCE_KM = 1e-9
 def _finite_number(value: Any, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, Real):
         raise ValueError(f"{name} must be a finite number")
-    number = float(value)
+    try:
+        number = float(value)
+    except (OverflowError, ValueError) as err:
+        raise ValueError(f"{name} must be a finite number") from err
     if not math.isfinite(number):
         raise ValueError(f"{name} must be a finite number")
     return number

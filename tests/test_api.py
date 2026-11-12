@@ -145,6 +145,7 @@ def test_stations_inside_outside_and_exactly_on_radius(marker):
         (0, float("nan")),
         (float("inf"), 0),
         (0, float("-inf")),
+        (10**400, 0),
         (91, 0),
         (0, 181),
         (True, 0),
@@ -155,18 +156,26 @@ def test_invalid_center_coordinates_rejected(latitude, longitude):
         stations_within_radius([], latitude, longitude)
 
 
-@pytest.mark.parametrize("radius", [None, 4.99, 50.01, float("nan"), float("inf"), True, "10"])
+@pytest.mark.parametrize(
+    "radius",
+    [None, -1, 0, 4.99, 50.01, 51, float("nan"), float("inf"), True, "10", 10**400],
+)
 def test_invalid_radius_rejected(radius):
     with pytest.raises(ValueError):
         stations_within_radius([], 0, 0, radius)
 
 
 def test_invalid_station_coordinates_are_skipped(marker):
+    missing_lat = marker("missing-lat", 30)
+    del missing_lat["lat"]
+    missing_lng = marker("missing-lng", 31)
+    del missing_lng["lng"]
     markers = [
-        {**marker("missing-lat", 30), "lat": None},
-        {**marker("nan-lng", 31), "lng": float("nan")},
-        {**marker("infinite-lat", 32), "lat": float("inf")},
-        {**marker("out-of-range", 33), "lat": -91},
+        missing_lat,
+        missing_lng,
+        {**marker("nan-lng", 32), "lng": float("nan")},
+        {**marker("infinite-lat", 33), "lat": float("inf")},
+        {**marker("out-of-range", 34), "lat": -91},
         marker("valid", 34),
     ]
 
@@ -228,12 +237,9 @@ def test_empty_geographic_results(marker):
     assert nearest_stations_within_radius([], 50.1, 14.4) == []
 
 
-def test_invalid_station_prices_are_excluded_from_cheapest(marker):
-    stations = [
-        marker("invalid", float("nan")),
-        marker("negative", -1),
-        marker("valid", 30),
-    ]
+@pytest.mark.parametrize("price", [None, float("nan"), float("inf"), -1, True, "30"])
+def test_invalid_station_prices_are_excluded_from_cheapest(marker, price):
+    stations = [marker("invalid", price), marker("valid", 30)]
 
     assert [station["name"] for station in cheapest_stations_within_radius(stations, 50.1, 14.4)] == [
         "valid",
