@@ -26,6 +26,7 @@ from .api import (
     city_of,
     city_options,
     pretty,
+    shared_marker_cache,
     station_options,
 )
 from .const import (
@@ -83,7 +84,9 @@ class _FuelStationSteps:
                 chains: set[str] = set()
                 try:
                     for fuel in fuels:
-                        markers = await async_fetch_markers(session, self._key, fuel)
+                        markers = await async_fetch_markers(
+                            session, self._key, fuel, cache=shared_marker_cache(self.hass)
+                        )
                         stations[fuel] = station_options(markers, self._city)
                         chains |= {m.get("chain") or m["name"] for m in markers if city_of(m) == self._city}
                 except MBenzinError as err:
@@ -205,7 +208,12 @@ class CenyPalivConfigFlow(_FuelStationSteps, ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             key = user_input[CONF_KEY].strip()
             try:
-                markers = await async_fetch_markers(async_get_clientsession(self.hass), key, "n95")
+                markers = await async_fetch_markers(
+                    async_get_clientsession(self.hass),
+                    key,
+                    "n95",
+                    cache=shared_marker_cache(self.hass),
+                )
             except MBenzinError as err:
                 errors["base"] = _error_key(err)
             else:

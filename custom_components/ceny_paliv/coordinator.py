@@ -12,7 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .logos import logo_dir, scan_logos
-from .api import MBenzinError, async_fetch_markers, build_payload
+from .api import MBenzinError, async_fetch_snapshot, build_payload, shared_marker_cache
 from .const import (
     CONF_CITY,
     CONF_FUELS,
@@ -59,14 +59,16 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         key = self.config_entry.data[CONF_KEY]
         city = self.config_entry.data[CONF_CITY]
         homes = self.homes
-        now = dt_util.now()
         result: dict[str, dict[str, Any]] = {}
         errors: list[str] = []
 
         for fuel in self.fuels:
             try:
-                markers = await async_fetch_markers(session, key, fuel)
+                snapshot = await async_fetch_snapshot(
+                    session, key, fuel, cache=shared_marker_cache(self.hass)
+                )
             except MBenzinError as err:
+                now = dt_util.now()
                 err_name = type(err).__name__
                 errors.append(f"{fuel}: {err_name}")
                 previous = (self.data or {}).get(fuel)
@@ -80,14 +82,16 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                     "next_update": (now + UPDATE_INTERVAL).isoformat(timespec="seconds"),
                 }
                 continue
+            now = dt_util.now()
             result[fuel] = build_payload(
-                markers,
+                snapshot.markers,
                 fuel=fuel,
                 city=city,
                 home_slug=homes.get(fuel),
                 history=self._history.setdefault(fuel, {}),
                 now=now,
                 language=self.language,
+                fetched_at=snapshot.fetched_at,
             )
 
         logos = await self.hass.async_add_executor_job(scan_logos, logo_dir(self.hass))

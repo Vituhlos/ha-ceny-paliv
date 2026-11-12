@@ -4,9 +4,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ceny_paliv.api import CannotConnect, InvalidAuth
+from custom_components.ceny_paliv.api import CannotConnect, InvalidAuth, MarkerSnapshot
 from custom_components.ceny_paliv.const import DOMAIN
 
 
@@ -95,7 +96,8 @@ async def test_coordinator_sensors_and_failed_refresh(hass, enable_custom_integr
     )
     entry.add_to_hass(hass)
     markers = [marker("Oblibena", 35), marker("Levna", 33)]
-    with patch("custom_components.ceny_paliv.coordinator.async_fetch_markers", new=AsyncMock(return_value=markers)) as fetch:
+    snapshot = MarkerSnapshot(markers=markers, fetched_at=dt_util.now())
+    with patch("custom_components.ceny_paliv.coordinator.async_fetch_snapshot", new=AsyncMock(return_value=snapshot)) as fetch:
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
         assert entry.state is ConfigEntryState.LOADED
@@ -112,10 +114,10 @@ async def test_coordinator_sensors_and_failed_refresh(hass, enable_custom_integr
         saved = await entry.runtime_data._store.async_load()
         assert saved["n95"]["Oblibena"][-1][1] == 35
 
-        async def partial_failure(session, key, fuel):
+        async def partial_failure(session, key, fuel, *, cache=None):
             if fuel == "n95":
                 raise CannotConnect()
-            return [marker("Levna", 32)]
+            return MarkerSnapshot(markers=[marker("Levna", 32)], fetched_at=dt_util.now())
 
         fetch.side_effect = partial_failure
         await entry.runtime_data.async_refresh()
