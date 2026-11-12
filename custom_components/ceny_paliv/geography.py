@@ -60,12 +60,23 @@ def _marker_coordinates(marker: dict[str, Any]) -> tuple[float, float] | None:
 
 def _station_key(station: dict[str, Any]) -> str:
     """Canonical sort-only key for JSON markers; never an identity or dedupe key."""
-    return json.dumps(
-        station,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-    )
+    try:
+        return json.dumps(
+            station,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        )
+    except (TypeError, ValueError, RecursionError):
+        # A non-JSON value in an otherwise usable marker must not break sorting.
+        sortable_fields = ("url", "name", "chain", "price", "fresh", "lat", "lng")
+        scalar_types = (type(None), bool, int, float, str)
+        sortable = {
+            key: station[key]
+            for key in sortable_fields
+            if key in station and isinstance(station[key], scalar_types)
+        }
+        return json.dumps(sortable, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
 def _price(station: dict[str, Any]) -> float | None:

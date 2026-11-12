@@ -350,6 +350,14 @@ def test_zero_price_remains_valid_and_nearest_does_not_require_a_price(marker):
     ]
 
 
+def test_non_json_marker_values_do_not_break_nearest_sorting(marker):
+    stations = [marker("invalid-price", object()), marker("valid-price", 30)]
+
+    assert [station["name"] for station in nearest_stations_within_radius(stations, 50.1, 14.4)] == [
+        "valid-price", "invalid-price",
+    ]
+
+
 def test_geographic_ranking_preserves_but_does_not_filter_stale_price(marker):
     stale = {**marker("stale-cheapest", 10, fresh="před 30 dny"), "lat": 50.1, "lng": 14.4}
     fresh = {**marker("fresh", 20, fresh="Dnes"), "lat": 50.101, "lng": 14.4}
