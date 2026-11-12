@@ -553,6 +553,27 @@ async def test_cached_relative_freshness_stays_anchored_across_midnight(marker):
     assert session.get.call_count == 1
 
 
+def test_response_captured_after_midnight_is_not_future_dated(marker):
+    timezone = ZoneInfo("Europe/Prague")
+    fetched_at = datetime(2025, 1, 16, 0, 1, tzinfo=timezone)
+    processed_at = datetime(2025, 1, 16, 0, 2, tzinfo=timezone)
+    markers = [marker("Station", 30, fresh="Dnes")]
+
+    result = build_payload(
+        markers,
+        fuel="n95",
+        city="Praha",
+        home_slug="Station",
+        history={},
+        now=processed_at,
+        fetched_at=fetched_at,
+    )
+
+    assert result["home"]["updated_date"] == "2025-01-16"
+    assert result["home"]["age_days"] == 0
+    assert result["stations"][0]["updated_date"] == "2025-01-16"
+
+
 @pytest.mark.parametrize(
     ("fresh", "expected", "age_days", "included"),
     [

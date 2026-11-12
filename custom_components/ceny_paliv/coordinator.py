@@ -59,7 +59,6 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         key = self.config_entry.data[CONF_KEY]
         city = self.config_entry.data[CONF_CITY]
         homes = self.homes
-        now = dt_util.now()
         result: dict[str, dict[str, Any]] = {}
         errors: list[str] = []
 
@@ -69,6 +68,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                     session, key, fuel, cache=shared_marker_cache(self.hass)
                 )
             except MBenzinError as err:
+                now = dt_util.now()
                 err_name = type(err).__name__
                 errors.append(f"{fuel}: {err_name}")
                 previous = (self.data or {}).get(fuel)
@@ -82,6 +82,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                     "next_update": (now + UPDATE_INTERVAL).isoformat(timespec="seconds"),
                 }
                 continue
+            now = dt_util.now()
             result[fuel] = build_payload(
                 snapshot.markers,
                 fuel=fuel,

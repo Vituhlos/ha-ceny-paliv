@@ -441,7 +441,8 @@ def build_payload(
     excluded = 0
     for m in in_city:
         d = parse_fresh(m.get("fresh"), sample_day)
-        if d is None or (today - d).days > max_age:
+        age_days = max(0, (today - d).days) if d is not None else None
+        if age_days is None or age_days > max_age:
             excluded += 1
             continue
         kept.append((m, d))
@@ -456,7 +457,7 @@ def build_payload(
             d = parse_fresh(m.get("fresh"), sample_day)
             pos = next((i + 1 for i, (k, _) in enumerate(kept) if station_slug(k) == home_slug), None)
             home = entry(m, d, pos)
-            home["age_days"] = (today - d).days if d else None
+            home["age_days"] = max(0, (today - d).days) if d else None
             home["fresh_count"] = len(kept)
             if kept:
                 home["cheapest_name"] = kept[0][0]["name"]
