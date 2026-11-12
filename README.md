@@ -154,6 +154,14 @@ Each station in the `stations` attribute of `sensor.ceny_paliv_<fuel>_top5` has:
 - Entity ids are `sensor.ceny_paliv_<fuel>_…`. A second city would get a `_2` suffix.
 - The daily price log used for the trends is stored by Home Assistant and fills up over time (a `*` next to a trend in the card marks a trend computed from a shorter history).
 
+## Development tests
+
+Use Python 3.12 and install `requirements_test.txt`, then run `python -m pytest`.
+The tests use simulated data and block network sockets; no mBenzin key is needed.
+CI also tests Python 3.14 with `requirements_test_latest.txt`. These requirements pin
+the test framework, which in turn pins Home Assistant 2025.1.0 and 2026.10.4 respectively.
+The Home Assistant frontend and HTTP server are mocked in integration tests.
+
 ## 🇨🇿 Česky
 
 Úplný český popis (získání klíče, instalace přes HACS, senzory, dashboard) najdete v **[README.cs.md](README.cs.md)**. Stručně: klíč zdarma na reklama@mbenzin.cz, HACS → Vlastní repozitáře → `https://github.com/donthedandy/ha-ceny-paliv` (Integrace) → restart → Přidat integraci **Ceny paliv**.
