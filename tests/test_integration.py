@@ -103,6 +103,8 @@ async def test_options_flow_preserves_settings(hass, enable_custom_integrations,
 
 
 async def test_gps_config_flow_with_home_location(hass, enable_custom_integrations, mock_frontend, marker):
+    hass.config.latitude = 50.1
+    hass.config.longitude = 14.4
     with (
         patch(
             "custom_components.ceny_paliv.config_flow.async_fetch_markers",
@@ -161,10 +163,15 @@ async def test_gps_manual_and_zone_location_flows(
         hass.states.async_set(
             "zone.cottage", "Cottage", {"latitude": 49.2, "longitude": 16.6}
         )
+    selected_marker = {
+        **marker("Oblibena", 33),
+        "lat": 49.2,
+        "lng": 16.6,
+    }
     with (
         patch(
             "custom_components.ceny_paliv.config_flow.async_fetch_markers",
-            new=AsyncMock(return_value=[marker("Oblibena", 33)]),
+            new=AsyncMock(return_value=[selected_marker]),
         ),
         patch("custom_components.ceny_paliv.config_flow.async_fetch_index", new=AsyncMock(return_value=None)),
         patch("custom_components.ceny_paliv.async_setup_entry", new=AsyncMock(return_value=True)),
@@ -345,7 +352,7 @@ async def test_favourite_identity_cycles_modes_and_reloads_without_collisions(
         assert len(known) == 1 + len(archives)
         return active, archives
 
-    async def choose_favourite(area_mode, choice):
+    async def choose_favourite(area_mode, choice, center=(50.1, 14.4)):
         result = await hass.config_entries.options.async_init(entry.entry_id)
         result = await hass.config_entries.options.async_configure(
             result["flow_id"], {"area_mode": area_mode}
@@ -360,7 +367,7 @@ async def test_favourite_identity_cycles_modes_and_reloads_without_collisions(
             )
             result = await hass.config_entries.options.async_configure(
                 result["flow_id"],
-                {"location": {"latitude": 50.1, "longitude": 14.4}},
+                {"location": {"latitude": center[0], "longitude": center[1]}},
             )
             result = await hass.config_entries.options.async_configure(
                 result["flow_id"], {"gps_radius_km": 40}
@@ -394,8 +401,8 @@ async def test_favourite_identity_cycles_modes_and_reloads_without_collisions(
         assert active.unique_id == f"{entry.entry_id}_n95_home"
         assert all(archived.unique_id != active.unique_id for archived in archives)
 
-        await choose_favourite("gps", stations[0]["url"])
-        assert entry.options["homes"]["n95"] == stations[0]["url"]
+        await choose_favourite("gps", "Alpha", center=(49.2, 16.6))
+        assert entry.options["homes"]["n95"] == "Alpha"
         assert "home_identities" not in entry.options
         await choose_favourite("gps", stations[2]["url"])
         assert entry.options["home_identities"]["n95"] == stations[2]["url"]

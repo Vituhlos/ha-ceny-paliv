@@ -36,7 +36,6 @@ from .const import (
     USER_AGENT,
 )
 from .geography import (
-    cheapest_stations_within_radius,
     distance_km,
     nearest_stations_within_radius,
     stations_within_radius,
@@ -409,8 +408,15 @@ def station_options(
             )
         except (TypeError, ValueError, OverflowError):
             valid_markers = []
+    if city is not None:
+        valid_markers = [m for m in valid_markers if city_of(m) == city]
+    value_counts: dict[str, int] = {}
+    for marker in valid_markers:
+        value = marker["url"] if use_url else station_slug(marker)
+        value_counts[value] = value_counts.get(value, 0) + 1
     for m in valid_markers:
-        if city is not None and city_of(m) != city:
+        value = m["url"] if use_url else station_slug(m)
+        if value_counts[value] != 1:
             continue
         slug = station_slug(m)
         label = station_title(m["name"], pretty(slug))
@@ -423,7 +429,7 @@ def station_options(
                 f" · {_bounded_text(pretty(city_of(m) or ''), 30)}"
                 f" · {_bounded_text(station_id, 32)}"
             )
-        out.append({"value": m["url"] if use_url else slug, "label": label})
+        out.append({"value": value, "label": label})
     return sorted(out, key=lambda o: o["label"].casefold())
 
 
@@ -509,7 +515,7 @@ def build_payload(
     gps_mode = gps_method is not None
     in_city = [m for m in markers if city_of(m) == city] if not gps_mode else []
     in_region = (
-        cheapest_stations_within_radius(markers, *gps_center, gps_radius_km)
+        stations_within_radius(markers, *gps_center, gps_radius_km)
         if gps_mode and gps_center is not None
         else []
     )
@@ -708,6 +714,6 @@ def build_payload(
             "radius_km": gps_radius_km,
             "zone_entity": gps_zone_entity,
             "error": gps_error,
-            "station_count": len(region_markers),
+            "station_count": len(in_region),
         }
     return result

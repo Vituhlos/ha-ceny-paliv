@@ -265,7 +265,7 @@ def test_gps_payload_skips_malformed_markers(marker, now):
     )
 
     assert [station["name"] for station in result["stations"]] == ["Valid"]
-    assert result["gps_area"]["station_count"] == 1
+    assert result["gps_area"]["station_count"] == 2
 
 
 @pytest.mark.parametrize(
