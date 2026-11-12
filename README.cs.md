@@ -160,6 +160,15 @@ Každá stanice v atributu `stations` senzoru `sensor.ceny_paliv_<palivo>_top5` 
 - Entity se jmenují `sensor.ceny_paliv_<palivo>_…`. Druhé město by dostalo příponu `_2`.
 - Denní záznam cen potřebný pro trendy ukládá Home Assistant a postupně se plní (hvězdička u trendu v kartě označuje trend z kratší historie).
 
+## Vývojářské testy
+
+Použijte Python 3.12, nainstalujte `requirements_test.txt` a spusťte `python -m pytest`.
+Testy používají simulovaná data a blokují síťové sockety; klíč mBenzin není potřeba.
+CI testuje také Python 3.14 s `requirements_test_latest.txt`. Tyto soubory fixují
+verzi testovacího frameworku, který následně fixuje Home Assistant na 2025.1.0,
+respektive 2026.10.4. Frontend a HTTP server Home Assistantu jsou v integračních
+testech simulovány.
+
 ## Licence
 
 MIT – viz [LICENSE](LICENSE).
