@@ -44,7 +44,7 @@ A substantive response to another person's issue, pull request, or review **must
 - **Emoji:** A few meaningful markers are fine: ✅ done, 🔜 planned, 🧪 unverified, ❓ question, 🙏 thanks or request. Avoid decorative emoji overload (usually no more than one or two per paragraph).
 - **Accuracy:** Name the affected version and whether a fix is released, only in a development branch, or still proposed. Give a separate note about what is **not** verified, including live mBenzin responses or Home Assistant runtime behavior. Do not promise dates.
 - **Questions:** If more evidence is needed, close with numbered, actionable questions rather than a vague request for information.
-- **Signature:** Finish with `🤖 Agent-authored: <actual agent>, model \`<actual model ID or not exposed>\``. Never fabricate the model name.
+- **Signature:** Finish with a line beginning `🤖 Agent-authored:`, followed by the actual agent name and the real model ID in inline code (or `not exposed` if unavailable). Never fabricate the model name.
 - Do not close a contributor's issue merely because code has been proposed. Wait for the applicable resolution/confirmation and the maintainer's authorization.
 
 ### Pull request descriptions
