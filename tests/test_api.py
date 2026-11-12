@@ -232,6 +232,7 @@ def test_same_slug_in_different_cities_are_distinct_markers(marker):
 
 def test_empty_geographic_results(marker):
     assert stations_within_radius([], 50.1, 14.4) == []
+    assert stations_within_radius([], 0, 0, 50) == []
     assert stations_within_radius([marker("far", 30)], 0, 0) == []
     assert cheapest_stations_within_radius([], 50.1, 14.4) == []
     assert nearest_stations_within_radius([], 50.1, 14.4) == []
