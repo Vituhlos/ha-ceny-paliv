@@ -34,6 +34,7 @@ from .const import (
     URL,
     USER_AGENT,
 )
+from .geography import cheapest_stations_within_radius, nearest_stations_within_radius
 
 _CZECH_TIMEZONE = ZoneInfo("Europe/Prague")
 
@@ -304,6 +305,13 @@ def station_slug(marker: dict[str, Any]) -> str:
     return marker["url"].split("/")[3]
 
 
+def _safe_station_slug(marker: dict[str, Any]) -> str | None:
+    try:
+        return station_slug(marker)
+    except (KeyError, IndexError, AttributeError):
+        return None
+
+
 def pretty(slug: str) -> str:
     return slug.replace("-", " ")
 
@@ -327,14 +335,24 @@ def city_options(markers: list[dict[str, Any]]) -> list[dict[str, str]]:
     return [{"value": s, "label": pretty(s)} for s in sorted(slugs, key=str.casefold)]
 
 
-def station_options(markers: list[dict[str, Any]], city: str) -> list[dict[str, str]]:
+def station_options(
+    markers: list[dict[str, Any]],
+    city: str | None,
+    *,
+    use_url: bool = False,
+) -> list[dict[str, str]]:
     """Stations of one city selling the fuel, for a select box."""
     out = []
     for m in markers:
-        if city_of(m) != city:
+        if city is not None and city_of(m) != city:
             continue
         slug = station_slug(m)
-        out.append({"value": slug, "label": station_title(m["name"], pretty(slug))})
+        out.append(
+            {
+                "value": m["url"] if use_url else slug,
+                "label": station_title(m["name"], pretty(slug)),
+            }
+        )
     return sorted(out, key=lambda o: o["label"].casefold())
 
 
@@ -385,6 +403,11 @@ def build_payload(
     now: dt.datetime,
     language: str = DEFAULT_LANGUAGE,
     fetched_at: dt.datetime | None = None,
+    gps_method: str | None = None,
+    gps_center: tuple[float, float] | None = None,
+    gps_radius_km: float = 40,
+    gps_zone_entity: str | None = None,
+    gps_error: str | None = None,
 ) -> dict[str, Any]:
     """Top stations of the city + the favourite station, with trends.
 
@@ -406,22 +429,57 @@ def build_payload(
         fetched_stamp = source_time
     label, unit = FUELS.get(fuel, (fuel, "Kč/l"))
     max_age = MAX_AGE_DAYS_BY_FUEL.get(fuel, MAX_AGE_DAYS_DEFAULT)
-    in_city = [m for m in markers if city_of(m) == city]
+    gps_mode = gps_method is not None
+    in_city = [m for m in markers if city_of(m) == city] if not gps_mode else []
+    in_region = (
+        cheapest_stations_within_radius(markers, *gps_center, gps_radius_km)
+        if gps_mode and gps_center is not None
+        else []
+    )
+    region_markers = in_region if gps_mode else []
+    candidate_markers = region_markers if gps_mode else in_city
+
+    def history_key(marker: dict[str, Any]) -> str:
+        return str(marker.get("url") or station_slug(marker)) if gps_mode else station_slug(marker)
+
+    home_matches: list[dict[str, Any]] = []
+    if home_slug:
+        if gps_mode and "/" in home_slug:
+            home_matches = [m for m in markers if isinstance(m, dict) and m.get("url") == home_slug]
+        elif gps_mode:
+            home_matches = [
+                m for m in markers
+                if isinstance(m, dict) and _safe_station_slug(m) == home_slug
+            ]
+            if len(home_matches) != 1:
+                home_matches = []
+        else:
+            home_matches = [
+                m for m in markers
+                if isinstance(m, dict)
+                and city_of(m) == city
+                and (m.get("url") == home_slug or _safe_station_slug(m) == home_slug)
+            ]
+        if len(home_matches) > 1:
+            home_matches = []
+    home_marker = home_matches[0] if home_matches else None
 
     cutoff = (today - dt.timedelta(days=HISTORY_DAYS)).isoformat()
-    for m in in_city:
-        slug = station_slug(m)
-        log = [e for e in history.get(slug, []) if e[0] >= cutoff]
+    history_markers = list(candidate_markers)
+    if gps_mode and home_marker is not None and home_marker not in history_markers:
+        history_markers.append(home_marker)
+    for m in history_markers:
+        key = history_key(m)
+        log = [e for e in history.get(key, []) if e[0] >= cutoff]
         sample_date = sample_day.isoformat()
         if not log or sample_date >= log[-1][0]:
             log = [e for e in log if e[0] != sample_date]
             log.append([sample_date, m["price"]])
-        history[slug] = log
+        history[key] = log
 
     def entry(m: dict[str, Any], d: dt.date | None, rank: int | None) -> dict[str, Any]:
-        slug = station_slug(m)
-        log = history.get(slug, [])
-        return {
+        log = history.get(history_key(m), [])
+        data = {
             "rank": rank,
             "name": m["name"],
             "chain": m.get("chain") or m["name"],
@@ -433,52 +491,96 @@ def build_payload(
             "updated": m.get("fresh"),
             "updated_date": d.isoformat() if d else None,
             "maps": MAPS.format(lat=m["lat"], lng=m["lng"]),
-            "home": bool(home_slug) and slug == home_slug,
+            "home": (
+                bool(home_marker) and m.get("url") == home_marker.get("url")
+                if gps_mode
+                else bool(home_slug)
+                and (station_slug(m) == home_slug or m.get("url") == home_slug)
+            ),
             "trends": {str(n): _trend(log, m["price"], today, n) for n in PERIODS},
         }
+        if "distance_km" in m:
+            data["distance_km"] = m["distance_km"]
+        return data
 
     kept: list[tuple[dict[str, Any], dt.date]] = []
     excluded = 0
-    for m in in_city:
+    for m in candidate_markers:
         d = parse_fresh(m.get("fresh"), sample_day)
         age_days = max(0, (today - d).days) if d is not None else None
         if age_days is None or age_days > max_age:
             excluded += 1
             continue
         kept.append((m, d))
-    kept.sort(key=lambda t: t[0]["price"])
+    kept.sort(
+        key=lambda t: (
+            t[0]["price"],
+            t[0].get("distance_km", 0),
+        )
+    )
     stations = [entry(m, d, i + 1) for i, (m, d) in enumerate(kept[:TOP])]
 
     home = None
-    if home_slug:
-        for m in in_city:
-            if station_slug(m) != home_slug:
-                continue
+    if home_marker is not None:
+        m = home_marker
+        if not gps_mode or gps_center is None or any(
+            candidate.get("url") == m.get("url") for candidate in in_region
+        ):
             d = parse_fresh(m.get("fresh"), sample_day)
-            pos = next((i + 1 for i, (k, _) in enumerate(kept) if station_slug(k) == home_slug), None)
+            pos = next(
+                (i + 1 for i, (k, _) in enumerate(kept) if history_key(k) == history_key(m)),
+                None,
+            )
             home = entry(m, d, pos)
             home["age_days"] = max(0, (today - d).days) if d else None
             home["fresh_count"] = len(kept)
             if kept:
                 home["cheapest_name"] = kept[0][0]["name"]
                 home["vs_cheapest"] = round(m["price"] - kept[0][0]["price"], 2)
-            break
+        elif gps_mode:
+            d = parse_fresh(m.get("fresh"), sample_day)
+            home = entry(m, d, None)
+            home["age_days"] = max(0, (today - d).days) if d else None
+            home["fresh_count"] = len(kept)
+            if kept:
+                home["cheapest_name"] = kept[0][0]["name"]
+                home["vs_cheapest"] = round(m["price"] - kept[0][0]["price"], 2)
 
     stamp = fetched_stamp.isoformat(timespec="seconds")
-    return {
+    result = {
         "stations": stations,
         "home": home,
         "fetched_at": stamp,
         "last_attempt": now.isoformat(timespec="seconds"),
         "fetch_error": None,
-        "city_total": len(in_city),
         "excluded": excluded,
         "max_age_days": max_age,
         "fuel": fuel,
         "fuel_label": label,
         "unit": unit,
-        "city_name": pretty(city),
+        "city_name": pretty(city) if not gps_mode else ("GPS area" if language != "cs" else "GPS okolí"),
         "language": language,
         "labels": LABELS.get(language, LABELS[DEFAULT_LANGUAGE]),
         "next_update": (now + UPDATE_INTERVAL).isoformat(timespec="seconds"),
     }
+    if not gps_mode:
+        result["city_total"] = len(in_city)
+    else:
+        nearest = nearest_stations_within_radius(
+            [m for m, _ in kept], *gps_center, gps_radius_km
+        ) if gps_center is not None else []
+        nearest_dates = {history_key(m): d for m, d in kept}
+        result["gps_nearest_stations"] = [
+            entry(m, nearest_dates.get(history_key(m)), index)
+            for index, m in enumerate(nearest, start=1)
+        ]
+        result["gps_area"] = {
+            "method": gps_method,
+            "latitude": gps_center[0] if gps_center is not None else None,
+            "longitude": gps_center[1] if gps_center is not None else None,
+            "radius_km": gps_radius_km,
+            "zone_entity": gps_zone_entity,
+            "error": gps_error,
+            "station_count": len(region_markers),
+        }
+    return result

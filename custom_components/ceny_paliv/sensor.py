@@ -24,6 +24,8 @@ from .coordinator import CenyPalivConfigEntry, CenyPalivCoordinator
 TOP_ATTRIBUTES = (
     "stations",
     "home",
+    "gps_area",
+    "gps_nearest_stations",
     "fetched_at",
     "last_attempt",
     "fetch_error",
@@ -39,7 +41,18 @@ TOP_ATTRIBUTES = (
     "next_update",
     "logos",
 )
-HOME_ATTRIBUTES = ("updated", "updated_date", "age_days", "rank", "fresh_count", "vs_cheapest", "cheapest_name", "trends", "maps")
+HOME_ATTRIBUTES = (
+    "updated",
+    "updated_date",
+    "age_days",
+    "rank",
+    "fresh_count",
+    "vs_cheapest",
+    "cheapest_name",
+    "trends",
+    "maps",
+    "distance_km",
+)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: CenyPalivConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
@@ -63,6 +76,7 @@ class CenyPalivEntity(CoordinatorEntity[CenyPalivCoordinator], SensorEntity):
         self._fuel = fuel
         self._attr_unique_id = f"{entry.entry_id}_{fuel}_{suffix}"
         self._attr_name = f"Ceny paliv {fuel} {suffix}"
+        self._entry_id = entry.entry_id
         self.entity_id = f"sensor.ceny_paliv_{fuel}_{suffix}"  # suggestion for new installs
         self._attr_native_unit_of_measurement = FUELS.get(fuel, (fuel, "Kč/l"))[1]
         # No device on purpose: with a device, Home Assistant puts the device name in front of every entity name
@@ -98,7 +112,7 @@ class CenyPalivTop5Sensor(CenyPalivEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs = {k: self._payload.get(k) for k in TOP_ATTRIBUTES}
-        attrs.update(cp_fuel=self._fuel, cp_role="top5")
+        attrs.update(cp_fuel=self._fuel, cp_role="top5", cp_config_id=self._entry_id)
         return attrs
 
 
@@ -135,7 +149,7 @@ class CenyPalivHomeSensor(CenyPalivEntity):
         home = self._home or {}
         attrs = {"station": home.get("address"), "latitude": home.get("lat"), "longitude": home.get("lng")}
         attrs.update({k: home.get(k) for k in HOME_ATTRIBUTES})
-        attrs.update(cp_fuel=self._fuel, cp_role="home")
+        attrs.update(cp_fuel=self._fuel, cp_role="home", cp_config_id=self._entry_id)
         return attrs
 
 
@@ -171,7 +185,12 @@ class CenyPalivPositionSensor(CenyPalivEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         s = self._station
-        attrs: dict[str, Any] = {"cp_fuel": self._fuel, "cp_role": "position", "cp_index": self._index + 1}
+        attrs: dict[str, Any] = {
+            "cp_fuel": self._fuel,
+            "cp_role": "position",
+            "cp_index": self._index + 1,
+            "cp_config_id": self._entry_id,
+        }
         if s:
             # the favourite station is drawn by its own sensor on the map: no coordinates here
             attrs.update(
