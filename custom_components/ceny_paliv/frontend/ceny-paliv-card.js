@@ -105,9 +105,13 @@ class CenyPalivCard extends HTMLElement {
       if (!state) return false;
       const a = state.attributes || {};
       if (a.cp_role) {
-        return a.cp_role === role && a.cp_fuel === fuel && (!configId || a.cp_config_id === configId);
+        return a.cp_role === role
+          && a.cp_fuel === fuel
+          && (!configId || a.cp_config_id === configId)
+          && (role !== 'home' || !['unavailable', 'unknown'].includes(state.state));
       }
-      return !configId && role !== 'home_archive';
+      return !configId && role !== 'home_archive'
+        && (role !== 'home' || !['unavailable', 'unknown'].includes(state.state));
     };
     const topState = c && c.top5 && hass.states[c.top5];
     const cachedTopConfig = topState && (topState.attributes || {}).cp_config_id;
@@ -153,7 +157,11 @@ class CenyPalivCard extends HTMLElement {
         role = m[2] === 'top5' ? 'top5' : m[2] === 'home' ? 'home' : 'position';
         idx = /^\d$/.test(m[2]) ? Number(m[2]) : 0;
       }
-      if (role === 'home' && (!selectedConfig || a.cp_config_id === selectedConfig)) ids.home = id;
+      if (
+        role === 'home'
+        && !['unavailable', 'unknown'].includes(hass.states[id].state)
+        && (!selectedConfig || a.cp_config_id === selectedConfig)
+      ) ids.home = id;
       else if (role === 'position' && idx >= 1 && idx <= 5) ids.pos[idx - 1] = id;
     }
     return ids;

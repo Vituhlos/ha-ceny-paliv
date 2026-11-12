@@ -494,7 +494,8 @@ def build_payload(
 ) -> dict[str, Any]:
     """Top stations of the city + the favourite station, with trends.
 
-    `history` ({station slug: [[date, price], ...]}) is updated in place with today's prices.
+    `history` ({station URL: [[date, price], ...]}) is updated in place. Legacy
+    City slug keys remain untouched because they cannot be safely assigned to URLs.
     """
     today = (
         now.astimezone(_CZECH_TIMEZONE).date()

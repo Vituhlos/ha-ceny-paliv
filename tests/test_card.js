@@ -51,10 +51,14 @@ const sensor = (fuel, role, configId, extra = {}) => ({
 });
 
 test("cached archive binding is rescanned even if the old entity never disappears", () => {
+  const unavailableArchive = sensor("n95", "home_archive", "area-a");
+  unavailableArchive.state = "unavailable";
+  delete unavailableArchive.attributes.cp_role;
+  unavailableArchive.attributes.icon = "mdi:archive";
   const hass = {
     states: {
       "sensor.ceny_paliv_n95_top5": sensor("n95", "top5", "area-a", { home: { price: 32 } }),
-      "sensor.ceny_paliv_n95_home": sensor("n95", "home_archive", "area-a"),
+      "sensor.ceny_paliv_n95_home": unavailableArchive,
       "sensor.ceny_paliv_n95_home_abc": sensor("n95", "home", "area-a"),
     },
   };

@@ -124,10 +124,16 @@ def test_gps_payload_keeps_price_order_separate_from_nearest_and_resolves_favour
     }
 
 
-def test_gps_nearest_list_is_bounded_and_area_history_tracks_only_visible_stations(
+def test_gps_nearest_list_is_bounded_and_area_history_retains_inactive_stations(
     marker, now
 ):
-    history = {"Same-slug": [["2025-01-14", 34]]}
+    expired_url = "/Ceny-benzinu-a-nafty/Praha/Expired/old"
+    empty_url = "/Ceny-benzinu-a-nafty/Praha/Empty/empty"
+    history = {
+        "Same-slug": [["2025-01-14", 34]],
+        expired_url: [["2024-12-01", 40]],
+        empty_url: [],
+    }
     old_favourite = {
         **marker("Old-favourite", 25),
         "url": "/Ceny-benzinu-a-nafty/Praha/Old-favourite/old",
@@ -158,6 +164,8 @@ def test_gps_nearest_list_is_bounded_and_area_history_tracks_only_visible_statio
     assert result["gps_area"]["station_count"] == 81
     assert len(history) == 62  # all 35-day URL histories survive area changes
     assert "Same-slug" in history
+    assert expired_url not in history
+    assert empty_url not in history
     assert old_favourite["url"] in history
     assert sum(key.startswith("/Ceny-benzinu-a-nafty/") for key in history) == 61
 
@@ -403,16 +411,41 @@ def test_gps_history_keeps_inactive_top_five_samples_until_expiry(marker, now):
     assert not any(not entries for entries in history.values())
 
 
+def test_gps_manual_refreshes_replace_the_same_daily_sample(marker, now):
+    history = {}
+    station = {
+        **marker("Repeated", 30),
+        "url": "/Ceny-benzinu-a-nafty/Praha/Repeated/1",
+    }
+    for price in range(30, 80):
+        build_payload(
+            [dict(station, price=price)],
+            fuel="n95",
+            city="",
+            home_slug=None,
+            history=history,
+            now=now,
+            fetched_at=now,
+            gps_method="map",
+            gps_center=(50.1, 14.4),
+            gps_radius_km=5,
+        )
+
+    assert history[station["url"]] == [["2025-01-15", 79]]
+
+
 def test_city_history_uses_full_url_and_does_not_merge_equal_slugs(marker, now):
     city_a = marker("Shared-slug", 30, city="Praha")
     city_b = marker("Shared-slug", 40, city="Brno")
-    history = {}
+    legacy_history = [["2025-01-14", 34]]
+    history = {"Shared-slug": legacy_history.copy()}
 
     payload([city_a], now, home="Shared-slug", history=history, city="Praha")
     payload([city_b], now + timedelta(days=1), home="Shared-slug", history=history, city="Brno")
 
     assert history[city_a["url"]] == [["2025-01-15", 30]]
     assert history[city_b["url"]] == [["2025-01-16", 40]]
+    assert history["Shared-slug"] == legacy_history
 
 
 def test_options_filter_cities_and_stations(marker):
