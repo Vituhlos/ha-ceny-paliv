@@ -30,7 +30,7 @@ mBenzin před automatickým stahováním dat chrání ověřením prohlížeče,
 Co je dobré vědět:
 
 - Klíč je **osobní** – nikomu ho nesdílejte a nikam ho nezveřejňujte. **Každý si žádá vlastní.**
-- Poskytovatel zatím nepotvrdil limit požadavků pro tuto integraci. Automatická aktualizace zůstává každých **6 hodin**; požadavky se stejným klíčem a palivem se sdílejí mezi konfiguracemi a integrace neopakuje požadavky agresivně.
+- Poskytovatel zatím nepotvrdil limit požadavků pro tuto integraci. Automatická aktualizace zůstává každých **6 hodin** a požadavky se stejným klíčem a palivem se sdílejí mezi konfiguracemi. Integrace neopakuje požadavky okamžitě; po HTTP 429 čeká podle platné hlavičky `Retry-After`, případně 6 hodin, pokud ji poskytovatel neposlal.
 - Klíč se odesílá v HTTP hlavičce, nikoli v URL požadavku.
 - Integrace používá data cenové mapy mBenzin, nikoli oficiálně zdokumentované API. Buďte k serveru ohleduplní a respektujte podmínky mBenzin.
 

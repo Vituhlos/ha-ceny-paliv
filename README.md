@@ -24,7 +24,7 @@ A HACS integration that shows the cheapest stations of **your city** for the fue
 mBenzin blocks plain scraping with a browser check, but they give a **personal access key** to Home Assistant users. E-mail **reklama@mbenzin.cz** and tell them what the prices are for, which city/stations, and how often you load them. (For me the answer came quickly and the key worked immediately.)
 
 - The key is **personal — never share it or publish it**. Everyone requests their own.
-- The provider has not confirmed a request limit for this integration. Automatic refreshes remain every **6 hours**; requests for the same key and fuel are shared across configurations, and the integration does not retry aggressively.
+- The provider has not confirmed a request limit for this integration. Automatic refreshes remain every **6 hours**, and requests for the same key and fuel are shared across configurations. The integration does not retry immediately; after HTTP 429 it waits for a valid `Retry-After` value or 6 hours when none is provided.
 - The key is sent in an HTTP header, not in the request URL.
 - It uses mBenzin's price-map data, which is not a documented public API: be gentle and respect their conditions.
 

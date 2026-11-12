@@ -167,20 +167,16 @@ class SharedMarkerCache:
         try:
             markers = await _async_fetch_markers(session, key, fuel)
         except MBenzinError as err:
-            delay = (
-                err.retry_after
-                if isinstance(err, RateLimited) and err.retry_after is not None
-                else self.ttl
-            )
-            async with self._lock:
-                self._entries[cache_key] = _MarkerCacheEntry(
-                    asyncio.get_running_loop().time() + delay,
-                    error_type=type(err),
-                    retry_after=err.retry_after if isinstance(err, RateLimited) else None,
-                )
-                self._entries.move_to_end(cache_key)
-                self._trim()
             if isinstance(err, RateLimited):
+                delay = err.retry_after if err.retry_after is not None else self.ttl
+                async with self._lock:
+                    self._entries[cache_key] = _MarkerCacheEntry(
+                        asyncio.get_running_loop().time() + delay,
+                        error_type=RateLimited,
+                        retry_after=err.retry_after,
+                    )
+                    self._entries.move_to_end(cache_key)
+                    self._trim()
                 raise RateLimited(err.retry_after)
             raise type(err)(*err.args)
         else:

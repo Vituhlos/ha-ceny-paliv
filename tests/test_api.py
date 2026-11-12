@@ -531,8 +531,19 @@ async def test_shared_cache_single_flight(marker):
     assert session.get.call_count == 1
 
 
-async def test_shared_cache_expires_and_does_not_remain_blocked_after_failure(marker):
+async def test_shared_cache_expires_successful_markers(marker):
     cache = SharedMarkerCache(max_entries=20, ttl=timedelta(milliseconds=10))
+    first = session_with_response(data={"markers": [marker("Old", 31)]})
+    fresh = session_with_response(data={"markers": [marker("New", 30)]})
+
+    assert await async_fetch_markers(first, "key", "n95", cache=cache) == [marker("Old", 31)]
+    await asyncio.sleep(0.02)
+    assert await async_fetch_markers(fresh, "key", "n95", cache=cache) == [marker("New", 30)]
+    assert first.get.call_count == fresh.get.call_count == 1
+
+
+async def test_shared_cache_failed_flight_clears_and_allows_later_request(marker):
+    cache = SharedMarkerCache(max_entries=20)
     session = MagicMock()
     session.get.side_effect = aiohttp.ClientError("connection failed")
 
@@ -541,12 +552,8 @@ async def test_shared_cache_expires_and_does_not_remain_blocked_after_failure(ma
     results = await asyncio.gather(first, second, return_exceptions=True)
     assert all(isinstance(result, CannotConnect) for result in results)
     assert session.get.call_count == 1
+    assert len(cache._inflight) == 0
 
-    with pytest.raises(CannotConnect):
-        await async_fetch_markers(session, "key", "n95", cache=cache)
-    assert session.get.call_count == 1
-
-    await asyncio.sleep(0.02)
     session.get.side_effect = None
     session.get.return_value = session_with_response(data={"markers": [marker("Recovered", 32)]}).get.return_value
     assert await async_fetch_markers(session, "key", "n95", cache=cache) == [marker("Recovered", 32)]
