@@ -64,6 +64,157 @@ def test_favourite_in_top_and_missing(marker, now):
     assert payload([], now)["stations"] == []
 
 
+def test_gps_payload_keeps_price_order_separate_from_nearest_and_resolves_favourite_by_url(
+    marker, now
+):
+    closest = {
+        **marker("Shared-slug", 40),
+        "url": "/Ceny-benzinu-a-nafty/Praha/Shared-slug/101",
+        "lat": 50.101,
+        "lng": 14.4,
+    }
+    cheap = {
+        **marker("Levna", 30),
+        "url": "/Ceny-benzinu-a-nafty/Brno/Levna/202",
+        "lat": 50.13,
+        "lng": 14.4,
+    }
+    favourite_outside = {
+        **marker("Shared-slug", 35, city="Brno"),
+        "url": "/Ceny-benzinu-a-nafty/Brno/Shared-slug/303",
+        "lat": 50.2,
+        "lng": 14.4,
+    }
+    stale = {
+        **marker("Zastarala", 1, fresh="před 2 dny"),
+        "lat": 50.102,
+        "lng": 14.4,
+    }
+    result = build_payload(
+        [closest, cheap, favourite_outside, stale],
+        fuel="n95",
+        city="",
+        home_slug=favourite_outside["url"],
+        history={},
+        now=now,
+        gps_method="map",
+        gps_center=(50.1, 14.4),
+        gps_radius_km=5,
+    )
+
+    assert [station["price"] for station in result["stations"]] == [30, 40]
+    assert [station["name"] for station in result["gps_nearest_stations"]] == [
+        "Shared-slug",
+        "Levna",
+    ]
+    assert result["stations"][0]["distance_km"] > result["gps_nearest_stations"][0]["distance_km"]
+    assert result["home"]["name"] == "Shared-slug"
+    assert result["home"]["rank"] is None
+    assert result["home"]["distance_km"] == pytest.approx(
+        distance_km(50.1, 14.4, 50.2, 14.4)
+    )
+    assert result["gps_area"] == {
+        "method": "map",
+        "latitude": 50.1,
+        "longitude": 14.4,
+        "radius_km": 5,
+        "zone_entity": None,
+        "error": None,
+        "station_count": 3,
+    }
+
+
+def test_gps_history_uses_station_url_without_migrating_ambiguous_slug(marker, now):
+    station = {
+        **marker("Same-slug", 35),
+        "url": "/Ceny-benzinu-a-nafty/Praha/Same-slug/123",
+    }
+    other_city = {
+        **marker("Same-slug", 32, city="Brno"),
+        "url": "/Ceny-benzinu-a-nafty/Brno/Same-slug/456",
+    }
+    history = {"Same-slug": [["2025-01-14", 34]]}
+
+    result = build_payload(
+        [station, other_city],
+        fuel="n95",
+        city="",
+        home_slug="Same-slug",
+        history=history,
+        now=now,
+        gps_method="home",
+        gps_center=(50.1, 14.4),
+        gps_radius_km=5,
+    )
+
+    assert result["home"] is None
+    assert history["Same-slug"] == [["2025-01-14", 34]]
+    assert history[station["url"]][-1] == ["2025-01-15", 35]
+    assert history[other_city["url"]][-1] == ["2025-01-15", 32]
+
+
+def test_gps_payload_with_invalid_location_is_empty_and_keeps_metadata(marker, now):
+    result = build_payload(
+        [marker("Oblibena", 35)],
+        fuel="n95",
+        city="",
+        home_slug=None,
+        history={},
+        now=now,
+        gps_method="zone",
+        gps_center=None,
+        gps_radius_km=40,
+        gps_zone_entity="zone.cottage",
+        gps_error="zone_unavailable",
+    )
+
+    assert result["stations"] == []
+    assert result["gps_nearest_stations"] == []
+    assert result["gps_area"]["error"] == "zone_unavailable"
+    assert result["gps_area"]["zone_entity"] == "zone.cottage"
+
+
+def test_gps_payload_skips_malformed_markers(marker, now):
+    malformed = marker("No-url", 20)
+    malformed.pop("url")
+    invalid_coordinates = {**marker("Invalid-coordinate", 21), "lat": 91}
+    result = build_payload(
+        [malformed, invalid_coordinates, marker("Valid", 35)],
+        fuel="n95",
+        city="",
+        home_slug=None,
+        history={},
+        now=now,
+        gps_method="map",
+        gps_center=(50.1, 14.4),
+        gps_radius_km=5,
+    )
+
+    assert [station["name"] for station in result["stations"]] == ["Valid"]
+    assert result["gps_area"]["station_count"] == 1
+
+
+@pytest.mark.parametrize(
+    ("fuel", "fresh", "expected"),
+    [("n95", "před 2 dny", False), ("lpg", "před 7 dny", True)],
+)
+def test_gps_payload_preserves_fuel_specific_price_age(fuel, fresh, expected, marker, now):
+    result = build_payload(
+        [marker("Stanice", 35, fresh=fresh)],
+        fuel=fuel,
+        city="",
+        home_slug=None,
+        history={},
+        now=now,
+        gps_method="map",
+        gps_center=(50.1, 14.4),
+        gps_radius_km=5,
+    )
+
+    assert bool(result["stations"]) is expected
+    assert result["excluded"] == int(not expected)
+
+
 @pytest.mark.parametrize(
     ("fuel", "fresh", "expected"),
     [

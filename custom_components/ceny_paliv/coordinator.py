@@ -21,6 +21,8 @@ from .const import (
     CONF_FUELS,
     CONF_GPS_RADIUS_KM,
     CONF_HOMES,
+    CONF_HOME_HISTORY,
+    CONF_HOME_IDENTITIES,
     CONF_KEY,
     CONF_LOCATION,
     CONF_LOCATION_METHOD,
@@ -70,12 +72,23 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         return dict(self.config_entry.options.get(CONF_HOMES, {}))
 
     @property
+    def home_identities(self) -> dict[str, str]:
+        return dict(self.config_entry.options.get(CONF_HOME_IDENTITIES, {}))
+
+    @property
+    def home_history(self) -> dict[str, list[dict[str, Any]]]:
+        return {
+            fuel: list(records)
+            for fuel, records in self.config_entry.options.get(CONF_HOME_HISTORY, {}).items()
+        }
+
+    @property
     def language(self) -> str:
         return self.config_entry.options.get(CONF_LANGUAGE, DEFAULT_LANGUAGE)
 
     async def _async_zone_state_changed(self, event: Event) -> None:
         """Refresh immediately when the configured zone changes or is removed."""
-        await self.async_request_refresh()
+        await self.async_refresh()
 
     def _gps_location(self) -> tuple[tuple[float, float] | None, str | None]:
         options = self.config_entry.options
@@ -108,7 +121,9 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             CONF_CITY, self.config_entry.data.get(CONF_CITY, "")
         )
         gps_mode = self.config_entry.options.get(CONF_AREA_MODE) == AREA_MODE_GPS
-        location_method = self.config_entry.options.get(CONF_LOCATION_METHOD)
+        location_method = self.config_entry.options.get(
+            CONF_LOCATION_METHOD, LOCATION_HOME
+        )
         gps_center, gps_error = self._gps_location() if gps_mode else (None, None)
         gps_radius_km = self.config_entry.options.get(
             CONF_GPS_RADIUS_KM, DEFAULT_GPS_RADIUS_KM

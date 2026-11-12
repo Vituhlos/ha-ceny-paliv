@@ -19,7 +19,7 @@
  *
  * Texts come from the language chosen in the integration setup (attribute `labels` of the top5 sensor).
  */
-const CARD_VERSION = '0.4.1';
+const CARD_VERSION = '0.4.2';
 
 const PARTS = ['home', 'list', 'map', 'graph'];
 
@@ -89,9 +89,7 @@ class CenyPalivCard extends HTMLElement {
     if (this._children) this._children.forEach((c) => { c.hass = hass; });
   }
 
-  // Find this fuel's sensors by their attributes, so the card does not depend on how Home Assistant names the
-  // entities (device name prefix, renamed entities, second city...). Older installs without the attributes are
-  // matched on the entity id suffix (..._<fuel>_top5, _home, _1 .. _5).
+  // Find one configuration's sensors by their attributes, not by entity-id suffix alone.
   _resolve(hass) {
     const c = this._ids;
     const valid = c && c.top5 && hass.states[c.top5] && (!c.home || hass.states[c.home]) && c.pos.every((id) => !id || hass.states[id]);
@@ -100,9 +98,28 @@ class CenyPalivCard extends HTMLElement {
     this._scanAt = now;
     const fuel = this._config.fuel;
     const ids = { top5: null, home: null, pos: [] };
+    const tops = [];
     for (const id of Object.keys(hass.states)) {
       if (!id.startsWith('sensor.ceny_paliv_')) continue;
       const a = hass.states[id].attributes || {};
+      if (a.cp_fuel) {
+        if (a.cp_fuel === fuel && a.cp_role === 'top5') tops.push({ id, attributes: a });
+      } else {
+        const m = id.match(/_([a-z0-9]+)_(top5|home|[1-5])$/);
+        if (m && m[1] === fuel && m[2] === 'top5') tops.push({ id, attributes: a });
+      }
+    }
+    const candidates = this._config.config_id
+      ? tops.filter((top) => top.attributes.cp_config_id === this._config.config_id)
+      : tops;
+    if (candidates.length !== 1) return ids;
+    const selected = candidates[0];
+    const selectedConfig = selected.attributes.cp_config_id;
+    ids.top5 = selected.id;
+    for (const id of Object.keys(hass.states)) {
+      if (!id.startsWith('sensor.ceny_paliv_')) continue;
+      const a = hass.states[id].attributes || {};
+      if (selectedConfig && a.cp_config_id !== selectedConfig) continue;
       let role = null; let idx = 0;
       if (a.cp_fuel) {
         if (a.cp_fuel !== fuel) continue;
@@ -110,10 +127,10 @@ class CenyPalivCard extends HTMLElement {
       } else {
         const m = id.match(/_([a-z0-9]+)_(top5|home|[1-5])$/);
         if (!m || m[1] !== fuel) continue;
-        role = m[2] === 'top5' ? 'top5' : m[2] === 'home' ? 'home' : 'position'; idx = /^\d$/.test(m[2]) ? Number(m[2]) : 0;
+        role = m[2] === 'top5' ? 'top5' : m[2] === 'home' ? 'home' : 'position';
+        idx = /^\d$/.test(m[2]) ? Number(m[2]) : 0;
       }
-      if (role === 'top5') ids.top5 = id;
-      else if (role === 'home') ids.home = id;
+      if (role === 'home') ids.home = id;
       else if (role === 'position' && idx >= 1 && idx <= 5) ids.pos[idx - 1] = id;
     }
     return ids;
@@ -148,6 +165,22 @@ class CenyPalivCard extends HTMLElement {
       const isTop = a.cp_role === 'top5' || (!a.cp_role && /_top5$/.test(id) && a.fuel);
       if (isTop && a.fuel && !out.some((o) => o.value === a.fuel)) out.push({ value: a.fuel, label: a.fuel_label || a.fuel });
     }
+    return out;
+  }
+  static configurations(hass, fuel) {
+    const configs = [];
+    for (const [id, state] of Object.entries((hass && hass.states) || {})) {
+      const a = state.attributes || {};
+      if (!id.startsWith('sensor.ceny_paliv_') || a.cp_fuel !== fuel || a.cp_role !== 'top5' || !a.cp_config_id) continue;
+      if (!configs.some((item) => item.value === a.cp_config_id)) {
+        const label = a.city_name || 'GPS area';
+        configs.push({
+          value: a.cp_config_id,
+          label: `${label} (${a.cp_config_id.slice(0, 8)})`,
+        });
+      }
+    }
+    return configs.sort((a, b) => a.label.localeCompare(b.label));
     return out;
   }
   static getStubConfig(hass) {
@@ -294,7 +327,7 @@ class CenyPalivCard extends HTMLElement {
     const root = this.shadowRoot;
     const slot = (p, html) => { const el = root.getElementById(p); if (el) el.innerHTML = html; };
     if (!top || top.state === 'unavailable') {
-      const msg = `<div class="card" style="color:#9aa1ad;font-size:14px">Ceny paliv (${esc(this._config.fuel)}): sensor not found or unavailable — is the fuel set up in the integration?</div>`;
+      const msg = `<div class="card" style="color:#9aa1ad;font-size:14px">Ceny paliv (${esc(this._config.fuel)}): sensor not found, unavailable, or ambiguous — choose its configuration in the card editor.</div>`;
       const first = this._show.find((p) => p === 'home' || p === 'list') || this._show[0];
       this._show.forEach((p) => slot(p, p === first ? msg : ''));
       return;
@@ -465,13 +498,13 @@ class CenyPalivCard extends HTMLElement {
 // ------------------------------------------------------------------ visual editor
 const EDITOR_TEXT = {
   en: {
-    fuel: 'Fuel', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
+    fuel: 'Fuel', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
     map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
     home: 'My station', list: 'Cheapest stations', map: 'Map', graph: '30-day graph',
     auto: 'Automatic: 2 columns when the card is wide', columns: 'Always 2 columns', stack: 'Always 1 column',
   },
   cs: {
-    fuel: 'Palivo', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
+    fuel: 'Palivo', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
     map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
     home: 'Moje stanice', list: 'Nejlevnější stanice', map: 'Mapa', graph: 'Graf za 30 dní',
     auto: 'Automaticky: 2 sloupce, je-li karta široká', columns: 'Vždy 2 sloupce', stack: 'Vždy 1 sloupec',
@@ -499,10 +532,14 @@ class CenyPalivCardEditor extends HTMLElement {
     const lang = ((this._hass.language || 'en').split('-')[0] in EDITOR_TEXT) ? this._hass.language.split('-')[0] : 'en';
     const L = EDITOR_TEXT[lang];
     const options = CenyPalivCard.fuels(this._hass);
+    const configurations = CenyPalivCard.configurations(this._hass, this._config.fuel);
     this._form.hass = this._hass;
     this._form.data = Object.assign({ show: PARTS, layout: 'auto', stations: 5, compact: false, show_footer: !this._config.compact, map_height: 0 }, this._config);
     this._form.schema = [
       { name: 'fuel', required: true, selector: { select: { options, mode: 'dropdown' } } },
+      ...(configurations.length > 1
+        ? [{ name: 'config_id', selector: { select: { options: configurations, mode: 'dropdown' } } }]
+        : []),
       { name: 'show', selector: { select: { multiple: true, mode: 'list', options: PARTS.map((p) => ({ value: p, label: L[p] })) } } },
       { name: 'layout', selector: { select: { mode: 'dropdown', options: ['auto', 'columns', 'stack'].map((p) => ({ value: p, label: L[p] })) } } },
       { name: 'stations', selector: { number: { min: 1, max: 5, step: 1, mode: 'slider' } } },

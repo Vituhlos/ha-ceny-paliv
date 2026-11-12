@@ -11,6 +11,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import timezone
 from email.utils import parsedate_to_datetime
+from numbers import Real
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
@@ -34,7 +35,11 @@ from .const import (
     URL,
     USER_AGENT,
 )
-from .geography import cheapest_stations_within_radius, nearest_stations_within_radius
+from .geography import (
+    cheapest_stations_within_radius,
+    distance_km,
+    nearest_stations_within_radius,
+)
 
 _CZECH_TIMEZONE = ZoneInfo("Europe/Prague")
 
@@ -312,6 +317,24 @@ def _safe_station_slug(marker: dict[str, Any]) -> str | None:
         return None
 
 
+def _usable_gps_marker(marker: dict[str, Any]) -> bool:
+    if _safe_station_slug(marker) is None or not isinstance(marker.get("name"), str):
+        return False
+    try:
+        price = marker["price"]
+        if (
+            isinstance(price, bool)
+            or not isinstance(price, Real)
+            or not math.isfinite(float(price))
+            or float(price) < 0
+        ):
+            return False
+        distance_km(marker.get("lat"), marker.get("lng"), marker.get("lat"), marker.get("lng"))
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return False
+    return True
+
+
 def pretty(slug: str) -> str:
     return slug.replace("-", " ")
 
@@ -436,7 +459,11 @@ def build_payload(
         if gps_mode and gps_center is not None
         else []
     )
-    region_markers = in_region if gps_mode else []
+    region_markers = (
+        [marker for marker in in_region if _usable_gps_marker(marker)]
+        if gps_mode
+        else []
+    )
     candidate_markers = region_markers if gps_mode else in_city
 
     def history_key(marker: dict[str, Any]) -> str:
@@ -445,11 +472,16 @@ def build_payload(
     home_matches: list[dict[str, Any]] = []
     if home_slug:
         if gps_mode and "/" in home_slug:
-            home_matches = [m for m in markers if isinstance(m, dict) and m.get("url") == home_slug]
+            home_matches = [
+                m for m in markers
+                if isinstance(m, dict) and m.get("url") == home_slug and _usable_gps_marker(m)
+            ]
         elif gps_mode:
             home_matches = [
                 m for m in markers
-                if isinstance(m, dict) and _safe_station_slug(m) == home_slug
+                if isinstance(m, dict)
+                and _safe_station_slug(m) == home_slug
+                and _usable_gps_marker(m)
             ]
             if len(home_matches) != 1:
                 home_matches = []
@@ -523,7 +555,11 @@ def build_payload(
 
     home = None
     if home_marker is not None:
-        m = home_marker
+        m = dict(home_marker)
+        if gps_mode and gps_center is not None:
+            m["distance_km"] = distance_km(
+                *gps_center, m["lat"], m["lng"]
+            )
         if not gps_mode or gps_center is None or any(
             candidate.get("url") == m.get("url") for candidate in in_region
         ):

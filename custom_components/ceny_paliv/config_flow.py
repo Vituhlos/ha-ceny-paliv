@@ -45,6 +45,8 @@ from .const import (
     CONF_FUELS,
     CONF_GPS_RADIUS_KM,
     CONF_HOMES,
+    CONF_HOME_HISTORY,
+    CONF_HOME_IDENTITIES,
     CONF_KEY,
     CONF_LOCATION,
     CONF_LOCATION_METHOD,
@@ -88,6 +90,13 @@ def _valid_coordinates(latitude: Any, longitude: Any) -> bool:
     return math.isfinite(lat) and math.isfinite(lng) and -90 <= lat <= 90 and -180 <= lng <= 180
 
 
+def _station_slug(marker: dict[str, Any]) -> str | None:
+    try:
+        return marker["url"].split("/")[3]
+    except (KeyError, IndexError, AttributeError):
+        return None
+
+
 class _FuelStationSteps:
     """Shared by the config flow and the options flow: choose fuels, then a favourite station per fuel."""
 
@@ -97,7 +106,10 @@ class _FuelStationSteps:
     _language: str
     _queue: list[str]
     _homes: dict[str, str]
+    _home_identities: dict[str, str]
+    _home_history: dict[str, list[dict[str, Any]]]
     _stations: dict[str, list[dict[str, str]]]
+    _station_markers: dict[str, list[dict[str, Any]]]
     _defaults_fuels: list[str] = DEFAULT_FUELS
     _defaults_language: str | None = None
     _defaults_homes: dict[str, str] = {}
@@ -111,6 +123,28 @@ class _FuelStationSteps:
     _chains: set[str]
     _logos: list[str] | None = None
 
+    async def async_step_city(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            self._city = user_input[CONF_CITY]
+            if not getattr(self, "_options_flow", False):
+                await self.async_set_unique_id(self._city)
+                self._abort_if_unique_id_configured()
+            return await self.async_step_fuels()
+        city_key = vol.Required(CONF_CITY)
+        if (
+            getattr(self, "_defaults_city", None)
+            in {city["value"] for city in self._cities}
+        ):
+            city_key = vol.Required(CONF_CITY, default=self._defaults_city)
+        schema = vol.Schema(
+            {
+                city_key: SelectSelector(
+                    SelectSelectorConfig(options=self._cities, mode=SelectSelectorMode.DROPDOWN)
+                )
+            }
+        )
+        return self.async_show_form(step_id="city", data_schema=schema)
+
     async def async_step_fuels(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -120,6 +154,7 @@ class _FuelStationSteps:
             else:
                 session = async_get_clientsession(self.hass)
                 stations: dict[str, list[dict[str, str]]] = {}
+                station_markers: dict[str, list[dict[str, Any]]] = {}
                 chains: set[str] = set()
                 try:
                     for fuel in fuels:
@@ -132,6 +167,11 @@ class _FuelStationSteps:
                             None if gps else self._city,
                             use_url=gps,
                         )
+                        station_markers[fuel] = [
+                            marker
+                            for marker in markers
+                            if gps or city_of(marker) == self._city
+                        ]
                         chains |= {
                             m.get("chain") or m["name"]
                             for m in markers
@@ -141,6 +181,7 @@ class _FuelStationSteps:
                     errors["base"] = _error_key(err)
                 else:
                     self._fuels, self._stations, self._chains = fuels, stations, chains
+                    self._station_markers = station_markers
                     self._language = user_input[CONF_LANGUAGE]
                     self._queue, self._homes = list(fuels), {}
                     return await self.async_step_station()
@@ -320,7 +361,7 @@ class _FuelStationSteps:
                     default=default_location[CONF_LATITUDE],
                 ): NumberSelector(
                     NumberSelectorConfig(
-                        min=-90, max=90, step=0.000001, mode=NumberSelectorMode.BOX
+                        min=-90, max=90, step="any", mode=NumberSelectorMode.BOX
                     )
                 ),
                 vol.Required(
@@ -328,7 +369,7 @@ class _FuelStationSteps:
                     default=default_location[CONF_LONGITUDE],
                 ): NumberSelector(
                     NumberSelectorConfig(
-                        min=-180, max=180, step=0.000001, mode=NumberSelectorMode.BOX
+                        min=-180, max=180, step="any", mode=NumberSelectorMode.BOX
                     )
                 ),
             }
@@ -369,26 +410,53 @@ class _FuelStationSteps:
         fuel = self._queue[0]
         if user_input is not None:
             choice = user_input.get(CONF_STATION, NONE_VALUE)
+            previous_choice = self._defaults_homes.get(fuel, NONE_VALUE)
+            previous_identity = self._canonical_station_identity(fuel, previous_choice)
+            selected_identity = self._canonical_station_identity(fuel, choice)
+            if (
+                getattr(self, "_options_flow", False)
+                and previous_choice != choice
+                and previous_identity != selected_identity
+            ):
+                if previous_choice != NONE_VALUE:
+                    identity = previous_identity or previous_choice
+                    legacy = fuel not in self._home_identities
+                    records = self._home_history.setdefault(fuel, [])
+                    record = {"identity": identity, "legacy": legacy}
+                    if record not in records:
+                        records.append(record)
+                if choice != NONE_VALUE and selected_identity is not None:
+                    if any(
+                        record.get("identity") == selected_identity
+                        and record.get("legacy")
+                        for record in self._home_history.get(fuel, [])
+                    ):
+                        self._home_identities.pop(fuel, None)
+                    else:
+                        self._home_identities[fuel] = selected_identity
             if choice != NONE_VALUE:
                 self._homes[fuel] = choice
+            else:
+                self._homes.pop(fuel, None)
             self._queue.pop(0)
             if self._queue:
                 return await self.async_step_station()
             return await self.async_step_logos()
         options = [{"value": NONE_VALUE, "label": "—"}] + self._stations[fuel]
-        valid = {o["value"] for o in options}
         default = self._defaults_homes.get(fuel, NONE_VALUE)
-        if default not in valid and default != NONE_VALUE:
+        if default not in {option["value"] for option in options} and default != NONE_VALUE:
+            language = (self.hass.config.language or DEFAULT_LANGUAGE).split("-")[0]
             options.append(
                 {
                     "value": default,
                     "label": (
                         "Saved station (not resolved)"
-                        if self._default_language() != "cs"
+                        if language != "cs"
                         else "Uložená stanice (neověřená)"
                     ),
                 }
             )
+        valid = {option["value"] for option in options}
         schema = vol.Schema(
             {
                 vol.Optional(CONF_STATION, default=default if default in valid else NONE_VALUE): SelectSelector(
@@ -401,6 +469,19 @@ class _FuelStationSteps:
             data_schema=schema,
             description_placeholders={"fuel": FUELS[fuel][0], "city": pretty(self._city)},
         )
+
+    def _canonical_station_identity(self, fuel: str, choice: str) -> str | None:
+        if choice == NONE_VALUE:
+            return None
+        matching = [
+            marker
+            for marker in self._station_markers.get(fuel, [])
+            if marker.get("url") == choice or _station_slug(marker) == choice
+        ]
+        if len(matching) != 1:
+            return None
+        url = matching[0].get("url")
+        return url if isinstance(url, str) else None
 
     async def async_step_logos(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Optional: tick the chains whose logos should be downloaded from the pack on GitHub."""
@@ -452,6 +533,14 @@ class _FuelStationSteps:
             CONF_LANGUAGE: self._language,
             CONF_AREA_MODE: self._area_mode,
         }
+        home_identities = getattr(self, "_home_identities", {})
+        home_history = getattr(self, "_home_history", {})
+        if home_identities:
+            options[CONF_HOME_IDENTITIES] = dict(home_identities)
+        if home_history:
+            options[CONF_HOME_HISTORY] = {
+                fuel: list(records) for fuel, records in home_history.items()
+            }
         if self._area_mode == AREA_MODE_CITY:
             options[CONF_CITY] = self._city
         else:
@@ -494,22 +583,6 @@ class CenyPalivConfigFlow(_FuelStationSteps, ConfigFlow, domain=DOMAIN):
         )
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
-    async def async_step_city(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        if user_input is not None:
-            self._city = user_input[CONF_CITY]
-            if not getattr(self, "_options_flow", False):
-                await self.async_set_unique_id(self._city)
-                self._abort_if_unique_id_configured()
-            return await self.async_step_fuels()
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_CITY): SelectSelector(
-                    SelectSelectorConfig(options=self._cities, mode=SelectSelectorMode.DROPDOWN)
-                )
-            }
-        )
-        return self.async_show_form(step_id="city", data_schema=schema)
-
     async def _async_finish(self) -> ConfigFlowResult:
         if self._area_mode == AREA_MODE_GPS:
             await self.async_set_unique_id(self._gps_config_unique_id)
@@ -537,8 +610,14 @@ class CenyPalivOptionsFlow(_FuelStationSteps, OptionsFlow):
         self._options_flow = True
         self._key = entry.data[CONF_KEY]
         self._city = entry.options.get(CONF_CITY, entry.data.get(CONF_CITY, ""))
+        self._defaults_city = self._city
         self._defaults_fuels = list(entry.options.get(CONF_FUELS, DEFAULT_FUELS))
         self._defaults_homes = dict(entry.options.get(CONF_HOMES, {}))
+        self._home_identities = dict(entry.options.get(CONF_HOME_IDENTITIES, {}))
+        self._home_history = {
+            fuel: list(records)
+            for fuel, records in entry.options.get(CONF_HOME_HISTORY, {}).items()
+        }
         self._defaults_language = entry.options.get(CONF_LANGUAGE)
         self._defaults_logos = entry.options.get(CONF_LOGOS)
         self._defaults_area_mode = entry.options.get(CONF_AREA_MODE, AREA_MODE_CITY)

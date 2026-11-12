@@ -4,7 +4,7 @@
 
 [English](README.md) · **Česky**
 
-Integrace pro HACS, která v Home Assistantu ukazuje ceny paliv z [mBenzin.cz](https://www.mbenzin.cz) pro **vaše město**: **Natural 95, naftu, LPG, CNG** a další. Najdete v ní žebříček nejlevnějších čerpacích stanic, mapu a **vaši oblíbenou stanici** s historií cen a trendy. Všechno se nastavuje v rozhraní Home Assistantu, bez úprav souborů.
+Integrace pro HACS, která v Home Assistantu ukazuje ceny paliv z [mBenzin.cz](https://www.mbenzin.cz) pro **vaše město** nebo **GPS oblast o poloměru 5–50 km**: **Natural 95, naftu, LPG, CNG** a další. Najdete v ní žebříček nejlevnějších čerpacích stanic, mapu a **vaši oblíbenou stanici** s historií cen a trendy. Všechno se nastavuje v rozhraní Home Assistantu, bez úprav souborů.
 
 ![Dashboard](docs/screenshot.webp)
 
@@ -13,6 +13,7 @@ Integrace pro HACS, která v Home Assistantu ukazuje ceny paliv z [mBenzin.cz](h
 ## Co umí
 
 - Vyberete si **město**, **jedno či více paliv** (třeba Natural 95 a LPG pro vůz na dvě paliva) a pro každé palivo **oblíbenou stanici**.
+- Nebo nastavíte GPS oblast kolem polohy domácnosti Home Assistantu, uložené zóny `zone.*`, bodu vybraného na mapě nebo (pokročile) ručně zadaných souřadnic. Poloměr je **5–50 km**, výchozí **40 km**. Nepoužívá se poloha telefonu, GPS tracker, geokódovací služba ani další požadavek na mBenzin.
 - Pro každé palivo **5 nejlevnějších stanic ve městě** (jen z vašeho města, nikoli z celého kraje), odkaz na Google Maps a **mapu s cenami**.
 - U oblíbené stanice: aktuální cena, **trendy oproti 1, 2, 7, 14 a 30 dnům**, pořadí ve městě a dlouhodobá statistika (graf za 30 dní).
 - Hotová **karta pro dashboard** (`ceny-paliv-card`) přímo v integraci – přidáte ji z nabídky karet, bez kopírování YAML – s volbou jazyka **čeština / angličtina**. Je **přizpůsobitelná**: na širokém dashboardu dva sloupce, v telefonu jeden, kompaktní verze a každou část (oblíbená stanice, seznam, mapa, graf) lze umístit jako samostatnou kartu.
@@ -40,12 +41,13 @@ Co je dobré vědět:
 2. Vyhledejte **Ceny paliv**, stáhněte ho a **restartujte** Home Assistant.
 3. Otevřete **Nastavení → Zařízení a služby → Přidat integraci → Ceny paliv** a postupně zadejte:
    1. **přístupový klíč**,
-   2. **město** (výběr ze seznamu),
-   3. **paliva** (jedno nebo více) a **jazyk** textů v dashboardu,
-   4. pro každé palivo **oblíbenou stanici** ze seznamu stanic ve vašem městě (nebo „—“, pokud žádnou nechcete),
-   5. volitelně zaškrtnout **loga** řetězců (řetězce z vašeho města jsou předvybrané; viz [Loga čerpacích stanic](#4-loga-čerpacích-stanic-volitelné)).
+   2. **Město** (původní režim) nebo **GPS okolí**,
+   3. v GPS režimu zvolit polohu domácnosti, uloženou zónu, bod na vestavěné mapě nebo pokročilé ruční souřadnice a poloměr 5–50 km (výchozí 40 km),
+   4. v městském režimu vybrat **město**, následně **paliva** a **jazyk** textů v dashboardu,
+   5. pro každé palivo vybrat **oblíbenou stanici** (městský režim nabízí stanice města, GPS režim celorepubliková data a oblíbená stanice může být i mimo kruh),
+   6. volitelně zaškrtnout **loga** řetězců (řetězce ve vybrané oblasti jsou předvybrané; viz [Loga čerpacích stanic](#4-loga-čerpacích-stanic-volitelné)).
 
-Paliva, jazyk, oblíbené stanice i loga můžete později změnit tlačítkem **Konfigurovat** u integrace.
+Režim oblasti, zdroj a bod polohy, poloměr, paliva, jazyk, oblíbené stanice i loga můžete později změnit tlačítkem **Konfigurovat** u integrace. Starší konfigurace bez volby oblasti zůstávají v městském režimu. Domácí souřadnice se znovu načtou při aktualizaci; změna zóny vyvolá okamžitou aktualizaci. Po odstranění zóny budou výsledky GPS prázdné, dokud ji neobnovíte nebo nevyberete jiný způsob.
 
 > Texty samotného nastavení se řídí jazykem Home Assistantu (čeština i angličtina jsou k dispozici). Volba jazyka v kroku „Paliva a jazyk“ určuje jen popisky v kartě pro dashboard.
 
@@ -55,11 +57,11 @@ Pro každé palivo `<palivo>` (`n95`, `benzinplus`, `diesel`, `dieselplus`, `lpg
 
 | Entita | Co obsahuje |
 |---|---|
-| `sensor.ceny_paliv_<palivo>_top5` | cena nejlevnější stanice; v atributech je všech 5 stanic (název, adresa, cena, souřadnice, odkaz na Google Maps, trendy…) a texty ve zvoleném jazyce |
+| `sensor.ceny_paliv_<palivo>_top5` | cena nejlevnější stanice; atributy obsahují 5 nejlevnějších stanic. GPS režim přidává metadata `gps_area` a samostatný seznam `gps_nearest_stations` seřazený podle vzdálenosti |
 | `sensor.ceny_paliv_<palivo>_home` | cena u vaší oblíbené stanice (jen pokud jste nějakou vybrali), trendy, pořadí, statistika |
 | `sensor.ceny_paliv_<palivo>_1` … `_5` | 5 nejlevnějších stanic se zeměpisnou šířkou a délkou pro kartu mapy |
 
-Senzory se jmenují podle stanice, kterou právě ukazují (např. `1 · Orlen – Bratri Stefanu 69`); identifikátory entit se nemění. Ceny se obnovují každých 6 hodin. Pokud se aktualizace nepovede (třeba kvůli chybě 429), zůstanou zachována poslední data a atribut `fetch_error` uvede důvod. Celorepubliková data se sdílejí mezi konfiguracemi se stejným klíčem a palivem po dobu až 6 hodin. Ruční aktualizace i znovunačtení integrace tuto paměťovou cache využívají; restart Home Assistantu ji vymaže. Relativní údaj o aktuálnosti uložených dat se vyhodnocuje podle původního času odpovědi v českém časovém pásmu, nikoli podle pozdějšího použití cache.
+Senzory se jmenují podle stanice, kterou právě ukazují (např. `1 · Orlen – Bratri Stefanu 69`). Identifikátory stávajících senzorů se při přepnutí oblasti nemění. Ceny se obnovují každých 6 hodin. Pokud se aktualizace nepovede (třeba kvůli chybě 429), zůstanou zachována poslední data a atribut `fetch_error` uvede důvod. Celorepubliková data se sdílejí mezi konfiguracemi se stejným klíčem a palivem po dobu až 6 hodin. GPS výpočty používají tutéž cache, nevytvářejí další požadavky. Ruční aktualizace i znovunačtení integrace cache využívají; restart Home Assistantu ji vymaže. Relativní údaj o aktuálnosti se vyhodnocuje podle původního času odpovědi v českém časovém pásmu.
 
 ## 3. Karta pro dashboard (je součástí, nic dalšího se neinstaluje)
 
@@ -75,11 +77,12 @@ type: custom:ceny-paliv-card
 fuel: n95            # n95 | benzinplus | diesel | dieselplus | lpg | cng | adblue
 ```
 
-Pro každé palivo jedna karta: pro vůz na dvě paliva přidejte druhou kartu s `fuel: lpg`. Karta má čtyři části: vaši oblíbenou stanici (cena, trendy, pořadí), 5 nejlevnějších stanic (klepnutím se otevře Google Maps), mapu a graf za 30 dní. Všechny volby níže jsou i ve vizuálním editoru karty.
+Pro každé palivo jedna karta: pro vůz na dvě paliva přidejte druhou kartu s `fuel: lpg`. Karta má čtyři části: vaši oblíbenou stanici (cena, trendy, pořadí), 5 nejlevnějších stanic (klepnutím se otevře Google Maps), mapu a graf za 30 dní. Pokud máte pro stejné palivo více konfigurací, vyberte správnou konfiguraci ve vizuálním editoru (nebo v YAML přidejte `config_id` z atributu `cp_config_id` senzoru top5); karta bez volby konfigurace nikdy nebude míchat entity z různých oblastí. Všechny volby níže jsou i ve vizuálním editoru karty.
 
 | Volba | Výchozí | |
 |---|---|---|
 | `fuel` | – | povinné |
+| `config_id` | automaticky, je-li jednoznačné | při více konfiguracích stejného paliva vybere jednu oblast |
 | `show` | `[home, list, map, graph]` | které části zobrazit: `home` (oblíbená stanice), `list` (nejlevnější stanice), `map`, `graph` (30 dní) |
 | `layout` | `auto` | `auto`: dva sloupce (stanice a seznam vlevo, mapa a graf vpravo), je-li karta široká, a jeden sloupec, je-li úzká, třeba v telefonu; `columns`: vždy dva; `stack`: vždy jeden |
 | `stations` | `5` | kolik stanic v seznamu (1–5, i na mapě) |
@@ -153,12 +156,16 @@ content: |-
   {% endfor %}
 ```
 
-Každá stanice v atributu `stations` senzoru `sensor.ceny_paliv_<palivo>_top5` má: `rank`, `name`, `street`, `address`, `price`, `lat`, `lng`, `updated`, `maps`, `home` a `trends`. Pro oblíbenou stanici použijte senzor `_home` (jeho atributy obsahují `rank`, `vs_cheapest` a `trends`).
+Každá stanice v `stations` má `rank`, `name`, `street`, `address`, `price`, `lat`, `lng`, `updated`, `maps`, `home` a `trends`; v GPS režimu navíc `distance_km`. Atribut `gps_area` senzoru top5 obsahuje způsob výběru, střed, poloměr, případnou zónu a chybu polohy. `gps_nearest_stations` je oddělený od seznamu nejlevnějších stanic. Pro oblíbenou stanici použijte senzor `_home` (obsahuje `rank`, `vs_cheapest`, `trends` a při poloze uvnitř GPS oblasti také `distance_km`).
+
+Při změně oblíbené stanice dostane nová stanice vlastní identitu statistik. Předchozí senzor zůstane registrovaný jako nedostupná archivovaná entita, aby se dlouhodobé statistiky Home Assistantu nesloučily s jinou stanicí. GPS historie používá celé URL markeru; stará městská historie se nepřevádí podle potenciálně nejednoznačného slugu. Pokud oblíbenou stanici nelze v celorepublikových datech určit jednoznačně, uložený výběr zůstane zachován, dokud výslovně nevyberete jinou stanici.
+
+Po výslovné změně oblíbené stanice může Home Assistant nové entitě oblíbené stanice přidělit příponu, protože původní ID zůstává archivované kvůli statistikám. Karta dashboardu aktuální senzor najde automaticky; v běžných YAML kartách s přímým odkazem na původní entitu `_home` bude nutné odkaz aktualizovat na nové ID.
 
 ## Poznámky
 
 - **E10** mBenzin nerozlišuje: u Natural 95 jde o cenu pro všechny 95oktanové benzíny.
-- Entity se jmenují `sensor.ceny_paliv_<palivo>_…`. Druhé město by dostalo příponu `_2`.
+- Entity se jmenují `sensor.ceny_paliv_<palivo>_…`; druhá konfigurace stejného paliva má v Home Assistantu vlastní ID. Pro přiřazení karty použijte `config_id`.
 - Denní záznam cen potřebný pro trendy ukládá Home Assistant a postupně se plní (hvězdička u trendu v kartě označuje trend z kratší historie).
 
 ## Vývojářské testy
