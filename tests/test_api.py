@@ -156,10 +156,10 @@ def test_gps_nearest_list_is_bounded_and_area_history_tracks_only_visible_statio
 
     assert len(result["gps_nearest_stations"]) == 10
     assert result["gps_area"]["station_count"] == 81
-    assert len(history) == 7  # preserved city slug + five visible + favourite
+    assert len(history) == 62  # all 35-day URL histories survive area changes
     assert "Same-slug" in history
     assert old_favourite["url"] in history
-    assert all(f"/Area-11-" in key or key in {"Same-slug", old_favourite["url"]} for key in history)
+    assert sum(key.startswith("/Ceny-benzinu-a-nafty/") for key in history) == 61
 
 
 def test_gps_station_options_are_radius_first_unique_and_skip_malformed_markers(marker):
@@ -305,7 +305,9 @@ def test_freshness_limits_and_stale_home(marker, now, fuel, fresh, expected):
     assert bool(result["stations"]) is expected
     assert result["excluded"] == int(not expected)
     assert result["home"]["rank"] == (1 if expected else None)
-    assert history["Oblibena"] == [["2025-01-15", 35]]
+    assert history["/Ceny-benzinu-a-nafty/Praha/Oblibena/123"] == [
+        ["2025-01-15", 35]
+    ]
 
 
 @pytest.mark.parametrize(
@@ -322,12 +324,13 @@ def test_parse_fresh(value, expected):
 
 
 def test_history_pruning_replacement_and_trends(marker, now):
-    history = {"Oblibena": [
+    station = marker("Oblibena", 35)
+    history = {station["url"]: [
         ["2024-12-10", 50], ["2024-12-11", 40], ["2025-01-08", 36],
         ["2025-01-14", 34], ["2025-01-15", 10],
     ]}
-    result = payload([marker("Oblibena", 35)], now, home="Oblibena", history=history)
-    assert history["Oblibena"] == [
+    result = payload([station], now, home="Oblibena", history=history)
+    assert history[station["url"]] == [
         ["2024-12-11", 40], ["2025-01-08", 36], ["2025-01-14", 34], ["2025-01-15", 35],
     ]
     trends = result["home"]["trends"]
@@ -335,9 +338,81 @@ def test_history_pruning_replacement_and_trends(marker, now):
     assert trends["7"]["dir"] == "down"
     assert trends["30"]["ref_date"] == "2024-12-11"
     payload([marker("Oblibena", 34)], now, history=history)
-    assert history["Oblibena"][-1] == ["2025-01-15", 34]
-    assert len(history["Oblibena"]) == 4
+    assert history[station["url"]][-1] == ["2025-01-15", 34]
+    assert len(history[station["url"]]) == 4
     assert payload([marker("Nova", 35)], now)["stations"][0]["trends"]["1"] is None
+
+
+def test_gps_history_keeps_inactive_top_five_samples_until_expiry(marker, now):
+    history = {}
+    station_a = {
+        **marker("A", 20),
+        "url": "/Ceny-benzinu-a-nafty/Praha/A/1",
+    }
+
+    def update(day, a_price, *, other_prices=()):
+        sample_time = now + timedelta(days=day - 1)
+        markers = [dict(station_a, price=a_price)]
+        markers.extend(
+            {
+                **marker(f"Other-{index}", price),
+                "url": f"/Ceny-benzinu-a-nafty/Praha/Other-{index}/{index}",
+            }
+            for index, price in enumerate(other_prices)
+        )
+        return build_payload(
+            markers,
+            fuel="n95",
+            city="",
+            home_slug=None,
+            history=history,
+            now=sample_time,
+            fetched_at=sample_time,
+            gps_method="map",
+            gps_center=(50.1, 14.4),
+            gps_radius_km=5,
+        )
+
+    update(1, 20, other_prices=[21, 22, 23, 24])
+    assert history[station_a["url"]] == [["2025-01-15", 20]]
+
+    update(2, 50, other_prices=[21, 22, 23, 24, 25])
+    assert history[station_a["url"]] == [["2025-01-15", 20]]
+
+    result = update(3, 19, other_prices=[21, 22, 23, 24])
+    assert history[station_a["url"]] == [
+        ["2025-01-15", 20],
+        ["2025-01-17", 19],
+    ]
+    assert result["stations"][0]["trends"]["1"]["ref_date"] == "2025-01-15"
+
+    expired_day = now + timedelta(days=39)
+    build_payload(
+        [],
+        fuel="n95",
+        city="",
+        home_slug=None,
+        history=history,
+        now=expired_day,
+        fetched_at=expired_day,
+        gps_method="map",
+        gps_center=(50.1, 14.4),
+        gps_radius_km=5,
+    )
+    assert station_a["url"] not in history
+    assert not any(not entries for entries in history.values())
+
+
+def test_city_history_uses_full_url_and_does_not_merge_equal_slugs(marker, now):
+    city_a = marker("Shared-slug", 30, city="Praha")
+    city_b = marker("Shared-slug", 40, city="Brno")
+    history = {}
+
+    payload([city_a], now, home="Shared-slug", history=history, city="Praha")
+    payload([city_b], now + timedelta(days=1), home="Shared-slug", history=history, city="Brno")
+
+    assert history[city_a["url"]] == [["2025-01-15", 30]]
+    assert history[city_b["url"]] == [["2025-01-16", 40]]
 
 
 def test_options_filter_cities_and_stations(marker):
@@ -755,7 +830,7 @@ async def test_cached_relative_freshness_stays_anchored_across_midnight(marker):
     session = session_with_response(data={"markers": original})
 
     snapshot = await async_fetch_snapshot(session, "key", "n95", cache=cache)
-    history = {"Praha": [["2025-01-14", 31]]}
+    history = {marker_data["url"]: [["2025-01-14", 31]]}
     result = build_payload(
         snapshot.markers,
         fuel="n95",
@@ -772,7 +847,9 @@ async def test_cached_relative_freshness_stays_anchored_across_midnight(marker):
     assert result["last_attempt"] == "2025-01-16T00:10:00+01:00"
     assert result["stations"][0]["updated_date"] == "2025-01-15"
     assert result["home"]["age_days"] == 1
-    assert history["Praha"] == [["2025-01-14", 31], ["2025-01-15", 30]]
+    assert history[marker_data["url"]] == [
+        ["2025-01-14", 31], ["2025-01-15", 30]
+    ]
     assert snapshot.markers == original
     assert marker_data["fresh"] == "Dnes"
     assert session.get.call_count == 1

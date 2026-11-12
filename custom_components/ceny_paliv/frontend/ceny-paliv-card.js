@@ -78,10 +78,19 @@ class CenyPalivCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (!this._config) return;
+    const previousIds = this._ids;
     this._ids = this._resolve(hass);
+    if (previousIds && JSON.stringify(previousIds) !== JSON.stringify(this._ids)) {
+      for (const id of ['map', 'graph']) {
+        const container = this.shadowRoot.getElementById(id);
+        if (container) container.replaceChildren();
+      }
+      this._children = null;
+      this._extraReady = false;
+    }
     const top = hass.states[this._ids.top5];
     const home = hass.states[this._ids.home];
-    const sig = [top && top.last_updated, home && home.last_updated, top && top.state, home && home.state].join('|');
+    const sig = [JSON.stringify(this._ids), top && top.last_updated, home && home.last_updated, top && top.state, home && home.state].join('|');
     if (sig !== this._sig) {
       this._sig = sig;
       this._renderTexts();
@@ -92,9 +101,22 @@ class CenyPalivCard extends HTMLElement {
   // Find one configuration's sensors by their attributes, not by entity-id suffix alone.
   _resolve(hass) {
     const c = this._ids;
-    const valid = c && c.top5 && hass.states[c.top5] && (!c.home || hass.states[c.home]) && c.pos.every((id) => !id || hass.states[id]);
+    const matches = (state, role, fuel, configId) => {
+      if (!state) return false;
+      const a = state.attributes || {};
+      if (a.cp_role) {
+        return a.cp_role === role && a.cp_fuel === fuel && (!configId || a.cp_config_id === configId);
+      }
+      return !configId && role !== 'home_archive';
+    };
+    const topState = c && c.top5 && hass.states[c.top5];
+    const cachedTopConfig = topState && (topState.attributes || {}).cp_config_id;
+    const cachedHome = c && c.home && hass.states[c.home];
+    const valid = c && matches(topState, 'top5', this._config.fuel, this._config.config_id)
+      && (!c.home || matches(cachedHome, 'home', this._config.fuel, cachedTopConfig))
+      && c.pos.every((id) => !id || hass.states[id]);
     const now = Date.now();
-    if (valid && (c.home || now - this._scanAt < 10000)) return c;
+    if (valid && (c.home || (!topState.attributes.home && now - this._scanAt < 10000))) return c;
     this._scanAt = now;
     const fuel = this._config.fuel;
     const ids = { top5: null, home: null, pos: [] };
@@ -119,10 +141,11 @@ class CenyPalivCard extends HTMLElement {
     for (const id of Object.keys(hass.states)) {
       if (!id.startsWith('sensor.ceny_paliv_')) continue;
       const a = hass.states[id].attributes || {};
+      if (a.cp_role === 'home_archive') continue;
       if (selectedConfig && a.cp_config_id !== selectedConfig) continue;
       let role = null; let idx = 0;
       if (a.cp_fuel) {
-        if (a.cp_fuel !== fuel) continue;
+        if (a.cp_fuel !== fuel || (selectedConfig && a.cp_config_id !== selectedConfig)) continue;
         role = a.cp_role; idx = a.cp_index || 0;
       } else {
         const m = id.match(/_([a-z0-9]+)_(top5|home|[1-5])$/);
@@ -130,7 +153,7 @@ class CenyPalivCard extends HTMLElement {
         role = m[2] === 'top5' ? 'top5' : m[2] === 'home' ? 'home' : 'position';
         idx = /^\d$/.test(m[2]) ? Number(m[2]) : 0;
       }
-      if (role === 'home') ids.home = id;
+      if (role === 'home' && (!selectedConfig || a.cp_config_id === selectedConfig)) ids.home = id;
       else if (role === 'position' && idx >= 1 && idx <= 5) ids.pos[idx - 1] = id;
     }
     return ids;
@@ -521,6 +544,21 @@ class CenyPalivCardEditor extends HTMLElement {
       this._form = document.createElement('ha-form');
       this._form.addEventListener('value-changed', (e) => {
         const config = Object.assign({}, this._config, e.detail.value);
+        const selectedFuel = config.fuel;
+        const availableConfigurations = CenyPalivCard.configurations(this._hass, selectedFuel);
+        const selectedConfigIsValid = availableConfigurations.some(
+          (item) => item.value === config.config_id
+        );
+        const fuelChanged = selectedFuel !== this._config.fuel;
+        if (!selectedConfigIsValid && (fuelChanged || config.config_id)) {
+          if (availableConfigurations.length === 1) {
+            config.config_id = availableConfigurations[0].value;
+          } else {
+            delete config.config_id;
+          }
+        } else if (fuelChanged && availableConfigurations.length === 1) {
+          config.config_id = availableConfigurations[0].value;
+        }
         for (const k of Object.keys(config)) {
           const v = config[k];
           if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length) || (k === 'map_height' && !v)) delete config[k];

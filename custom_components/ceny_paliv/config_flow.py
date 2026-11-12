@@ -189,16 +189,9 @@ class _FuelStationSteps:
                             if gps
                             else station_options(markers, self._city)
                         )
-                        station_markers[fuel] = (
-                            [marker for marker in markers if isinstance(marker, dict)]
-                            if gps
-                            else [
-                                marker
-                                for marker in markers
-                                if isinstance(marker, dict)
-                                and city_of(marker) == self._city
-                            ]
-                        )
+                        station_markers[fuel] = [
+                            marker for marker in markers if isinstance(marker, dict)
+                        ]
                         chains |= {
                             m.get("chain")
                             if isinstance(m.get("chain"), str)
@@ -461,12 +454,28 @@ class _FuelStationSteps:
         if user_input is not None:
             choice = user_input.get(CONF_STATION, NONE_VALUE)
             previous_choice = self._defaults_homes.get(fuel, NONE_VALUE)
-            previous_identity = self._canonical_station_identity(fuel, previous_choice)
-            selected_identity = self._canonical_station_identity(fuel, choice)
+            previous_identity = getattr(self, "_home_identities", {}).get(fuel) or (
+                self._canonical_station_identity(
+                    fuel,
+                    previous_choice,
+                    city=(
+                        self._original_city
+                        if getattr(self, "_defaults_area_mode", AREA_MODE_CITY) == AREA_MODE_CITY
+                        else None
+                    ),
+                )
+                if previous_choice != NONE_VALUE
+                else None
+            )
+            selected_identity = self._canonical_station_identity(
+                fuel,
+                choice,
+                city=self._city if self._area_mode == AREA_MODE_CITY else None,
+            )
             if (
                 getattr(self, "_options_flow", False)
-                and previous_choice != choice
                 and previous_identity != selected_identity
+                and (previous_choice != choice or previous_identity is not None or selected_identity is not None)
             ):
                 if previous_choice != NONE_VALUE:
                     identity = previous_identity or previous_choice
@@ -484,10 +493,13 @@ class _FuelStationSteps:
                         self._home_identities.pop(fuel, None)
                     else:
                         self._home_identities[fuel] = selected_identity
+                elif choice == NONE_VALUE:
+                    self._home_identities.pop(fuel, None)
             if choice != NONE_VALUE:
                 self._homes[fuel] = choice
             else:
                 self._homes.pop(fuel, None)
+                self._home_identities.pop(fuel, None)
             self._queue.pop(0)
             if self._queue:
                 return await self.async_step_station()
@@ -556,14 +568,24 @@ class _FuelStationSteps:
             description_placeholders={"fuel": FUELS[fuel][0], "city": pretty(self._city)},
         )
 
-    def _canonical_station_identity(self, fuel: str, choice: str) -> str | None:
+    def _canonical_station_identity(
+        self, fuel: str, choice: str, *, city: str | None = None
+    ) -> str | None:
         if choice == NONE_VALUE:
             return None
-        matching = [
-            marker
-            for marker in self._station_markers.get(fuel, [])
-            if marker.get("url") == choice or _station_slug(marker) == choice
-        ]
+        markers = self._station_markers.get(fuel, [])
+        if "/" in choice:
+            matching = [
+                marker for marker in markers
+                if marker.get("url") == choice and _station_slug(marker) is not None
+            ]
+        else:
+            matching = [
+                marker
+                for marker in markers
+                if (city is None or city_of(marker) == city)
+                and _station_slug(marker) == choice
+            ]
         if len(matching) != 1:
             return None
         url = matching[0].get("url")
@@ -698,6 +720,7 @@ class CenyPalivOptionsFlow(_FuelStationSteps, OptionsFlow):
         self._options_flow = True
         self._key = entry.data[CONF_KEY]
         self._city = entry.options.get(CONF_CITY, entry.data.get(CONF_CITY, ""))
+        self._original_city = self._city
         self._defaults_city = self._city
         self._defaults_fuels = list(entry.options.get(CONF_FUELS, DEFAULT_FUELS))
         self._defaults_homes = dict(entry.options.get(CONF_HOMES, {}))

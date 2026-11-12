@@ -527,7 +527,8 @@ def build_payload(
     candidate_markers = region_markers if gps_mode else in_city
 
     def history_key(marker: dict[str, Any]) -> str:
-        return str(marker.get("url") or station_slug(marker)) if gps_mode else station_slug(marker)
+        url = marker.get("url")
+        return url if isinstance(url, str) else station_slug(marker)
 
     home_matches: list[dict[str, Any]] = []
     if home_slug:
@@ -557,6 +558,24 @@ def build_payload(
     home_marker = home_matches[0] if home_matches else None
 
     cutoff = (today - dt.timedelta(days=HISTORY_DAYS)).isoformat()
+    # Prune expired URL-keyed histories regardless of current area; retain inactive
+    # station samples until their 35-day window expires. Legacy City slug keys are
+    # deliberately left untouched because their physical station is ambiguous.
+    for key in list(history):
+        if not isinstance(key, str) or not key.startswith("/Ceny-benzinu-a-nafty/"):
+            continue
+        log = [
+            item
+            for item in history.get(key, [])
+            if isinstance(item, (list, tuple))
+            and len(item) == 2
+            and isinstance(item[0], str)
+            and item[0] >= cutoff
+        ]
+        if log:
+            history[key] = log
+        else:
+            history.pop(key, None)
     if not gps_mode:
         for m in candidate_markers:
             key = history_key(m)
@@ -615,17 +634,14 @@ def build_payload(
         )
     )
     if gps_mode:
-        retained = [m for m, _ in kept[:TOP]]
-        if home_marker is not None and home_marker not in retained:
-            retained.append(home_marker)
-        retained_keys = {history_key(marker) for marker in retained}
-        # GPS trend logs are limited to currently displayed cheapest stations and
-        # the selected favourite. City histories use slugs and are left untouched.
-        for key in list(history):
-            if isinstance(key, str) and key.startswith("/Ceny-benzinu-a-nafty/") and key not in retained_keys:
-                history.pop(key, None)
+        retained = list(kept[:TOP])
+        if home_marker is not None and all(
+            history_key(marker) != history_key(home_marker) for marker, _ in retained
+        ):
+            home_date = parse_fresh(home_marker.get("fresh"), sample_day)
+            retained.append((home_marker, home_date))
         sample_date = sample_day.isoformat()
-        for m in retained:
+        for m, _ in retained:
             key = history_key(m)
             log = [e for e in history.get(key, []) if e[0] >= cutoff]
             if not log or sample_date >= log[-1][0]:

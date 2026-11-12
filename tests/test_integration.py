@@ -1,10 +1,12 @@
 """Home Assistant configuration, coordinator and sensor regressions."""
+import hashlib
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -313,6 +315,67 @@ async def test_changing_favourite_archives_old_statistics_identity(
         ]
 
 
+async def test_city_change_same_slug_uses_distinct_station_urls_and_statistics(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    prague_station = {
+        **marker("Shared", 30, city="Praha"),
+        "url": "/Ceny-benzinu-a-nafty/Praha/Shared/101",
+    }
+    brno_station = {
+        **marker("Shared", 40, city="Brno"),
+        "url": "/Ceny-benzinu-a-nafty/Brno/Shared/202",
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": "Praha"},
+        options={"fuels": ["n95"], "homes": {"n95": "Shared"}},
+        unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.ceny_paliv.config_flow.async_fetch_markers",
+            new=AsyncMock(return_value=[prague_station, brno_station]),
+        ),
+        patch("custom_components.ceny_paliv.config_flow.async_fetch_index", new=AsyncMock(return_value=None)),
+    ):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"area_mode": "city"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"city": "Brno"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"fuels": ["n95"], "language": "en"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"station": "Shared"}
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["city"] == "Brno"
+    assert entry.options["homes"]["n95"] == "Shared"
+    assert entry.options["home_identities"]["n95"] == brno_station["url"]
+    assert entry.options["home_history"]["n95"] == [
+        {"identity": prague_station["url"], "legacy": True}
+    ]
+
+    from custom_components.ceny_paliv.coordinator import CenyPalivCoordinator
+    from custom_components.ceny_paliv.sensor import CenyPalivArchivedHomeSensor, CenyPalivHomeSensor
+
+    coordinator = CenyPalivCoordinator(hass, entry)
+    active = CenyPalivHomeSensor(coordinator, entry, "n95")
+    archived = CenyPalivArchivedHomeSensor(
+        coordinator, entry, "n95", prague_station["url"], True
+    )
+    assert active.unique_id != archived.unique_id
+    assert active.unique_id.endswith(
+        hashlib.sha256(brno_station["url"].encode()).hexdigest()[:12]
+    )
+
+
 async def test_favourite_identity_cycles_modes_and_reloads_without_collisions(
     hass, enable_custom_integrations, mock_frontend, marker
 ):
@@ -414,6 +477,24 @@ async def test_favourite_identity_cycles_modes_and_reloads_without_collisions(
         assert active.unique_id == f"{entry.entry_id}_n95_home"
         assert all(archived.unique_id != active.unique_id for archived in archives)
         assert len({archived.unique_id for archived in archives}) == len(archives)
+
+        await choose_favourite("city", "__none__")
+        assert "n95" not in entry.options["homes"]
+        assert "home_identities" not in entry.options
+        active, archives = assert_active_and_archived_ids_are_safe()
+        assert all(archive.available is False for archive in archives)
+        assert active.unique_id not in {archive.unique_id for archive in archives}
+
+        await choose_favourite("city", "Beta")
+        assert entry.options["home_identities"]["n95"] == stations[1]["url"]
+        beta_id = assert_active_and_archived_ids_are_safe()[0].unique_id
+        assert beta_id != f"{entry.entry_id}_n95_home"
+
+        await choose_favourite("city", "Alpha")
+        assert "home_identities" not in entry.options
+        active, archives = assert_active_and_archived_ids_are_safe()
+        assert active.unique_id == f"{entry.entry_id}_n95_home"
+        assert len({active.unique_id, *(archive.unique_id for archive in archives)}) == len(archives) + 1
 
     snapshot = MarkerSnapshot(markers=stations, fetched_at=dt_util.now())
     with patch(
@@ -530,6 +611,64 @@ async def test_home_sensor_ids_keep_legacy_and_separate_changed_station_statisti
     assert archived.available is False
 
 
+async def test_removed_legacy_favourite_reuses_only_its_original_registry_identity(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    station = marker("Alpha", 30)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": "Praha"},
+        options={
+            "fuels": ["n95"],
+            "homes": {},
+            "home_history": {
+                "n95": [{"identity": station["url"], "legacy": True}]
+            },
+        },
+        unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+    snapshot = MarkerSnapshot(markers=[station], fetched_at=dt_util.now())
+    with patch(
+        "custom_components.ceny_paliv.coordinator.async_fetch_snapshot",
+        new=AsyncMock(return_value=snapshot),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert entry.runtime_data.home_history["n95"] == [
+            {"identity": station["url"], "legacy": True}
+        ]
+        registry = er.async_get(hass)
+        archived_id = registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{entry.entry_id}_n95_home"
+        )
+        assert archived_id is not None
+        assert hass.states.get(archived_id).state == "unavailable"
+        assert not any(
+            state.attributes.get("cp_config_id") == entry.entry_id
+            and state.attributes.get("cp_role") == "home"
+            for state in hass.states.async_all("sensor")
+        )
+
+        hass.config_entries.async_update_entry(
+            entry, options={**entry.options, "homes": {"n95": "Alpha"}}
+        )
+        await hass.async_block_till_done()
+        active = hass.states.get(archived_id)
+        assert active is not None
+        assert active.state == "30"
+        assert active.attributes["cp_role"] == "home"
+        assert len(
+            [
+                entity
+                for entity in hass.states.async_all("sensor")
+                if entity.attributes.get("cp_config_id") == entry.entry_id
+                and entity.attributes.get("cp_role") in {"home", "home_archive"}
+            ]
+        ) == 1
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
 async def test_coordinator_sensors_and_failed_refresh(hass, enable_custom_integrations, mock_frontend, marker):
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -555,7 +694,7 @@ async def test_coordinator_sensors_and_failed_refresh(hass, enable_custom_integr
         assert position.state == "33"
         assert position.attributes["latitude"] == 50.1
         saved = await entry.runtime_data._store.async_load()
-        assert saved["n95"]["Oblibena"][-1][1] == 35
+        assert saved["n95"][markers[0]["url"]][-1][1] == 35
 
         async def partial_failure(session, key, fuel, *, cache=None):
             if fuel == "n95":
