@@ -118,7 +118,32 @@ def test_options_filter_cities_and_stations(marker):
 
 def test_distance_km_zero_and_known_distance():
     assert distance_km(50.1, 14.4, 50.1, 14.4) == 0
-    assert distance_km(0, 0, 0, 1) == pytest.approx(111.1950802335)
+    assert distance_km(0, 0, 0, 1) == pytest.approx(111.1950802335, abs=1e-9)
+    assert distance_km(0, 179.9, 0, -179.9) == pytest.approx(22.2390160467, abs=1e-8)
+    assert distance_km(90, 0, 0, 0) == pytest.approx(10007.55722101796, abs=1e-8)
+    assert distance_km(-90, 0, 0, 0) == pytest.approx(10007.55722101796, abs=1e-8)
+    assert distance_km(0, 0, 0, 180) == pytest.approx(20015.11444203592, abs=1e-8)
+    assert distance_km(50.0755, 14.4378, 49.1951, 16.6068) == pytest.approx(186.4, abs=1)
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ((90, -180), (90, 180)),
+        ((-90, -180), (-90, 180)),
+        ((0, -180), (0, 180)),
+        ((89.999999, 179.999999), (89.999999, 179.999999)),
+    ],
+)
+def test_distance_edge_coordinates_and_identity(first, second):
+    assert distance_km(*first, *second) == pytest.approx(0, abs=1e-8)
+
+
+def test_distance_symmetry_and_near_identical_coordinates():
+    first = (50.0755, 14.4378)
+    second = (49.1951, 16.6068)
+    assert distance_km(*first, *second) == pytest.approx(distance_km(*second, *first), abs=1e-10)
+    assert 0 < distance_km(50.1, 14.4, 50.1000000001, 14.4) < 0.0001
 
 
 def test_stations_inside_outside_and_exactly_on_radius(marker):
@@ -134,6 +159,33 @@ def test_stations_inside_outside_and_exactly_on_radius(marker):
 
     assert [station["name"] for station in result] == ["inside", "boundary"]
     assert result[1]["distance_km"] == pytest.approx(radius)
+
+
+@pytest.mark.parametrize("radius", [5, 50])
+def test_radius_includes_exact_boundary_but_not_just_outside(marker, radius):
+    boundary_lat = math.degrees(radius / EARTH_RADIUS_KM)
+    inside_lat = math.degrees((radius - 1e-8) / EARTH_RADIUS_KM)
+    outside_lat = math.degrees((radius + 1e-8) / EARTH_RADIUS_KM)
+    markers = [
+        {**marker("inside", 30), "lat": inside_lat, "lng": 0},
+        {**marker("boundary", 31), "lat": boundary_lat, "lng": 0},
+        {**marker("outside", 32), "lat": outside_lat, "lng": 0},
+    ]
+
+    assert [station["name"] for station in stations_within_radius(markers, 0, 0, radius)] == [
+        "inside", "boundary",
+    ]
+
+
+def test_boundary_tolerance_does_not_admit_points_outside_by_a_fraction_of_a_micrometer(marker):
+    outside_lat = math.degrees((5 + 1e-10) / EARTH_RADIUS_KM)
+
+    assert stations_within_radius(
+        [{**marker("just-outside", 30), "lat": outside_lat, "lng": 0}],
+        0,
+        0,
+        5,
+    ) == []
 
 
 @pytest.mark.parametrize(
@@ -182,6 +234,19 @@ def test_invalid_station_coordinates_are_skipped(marker):
     assert [station["name"] for station in stations_within_radius(markers, 50.1, 14.4)] == ["valid"]
 
 
+def test_malformed_markers_are_skipped_without_affecting_valid_stations(marker):
+    markers = [
+        None,
+        [],
+        "not a marker",
+        10,
+        {"lat": None, "lng": 14.4},
+        marker("valid", 34),
+    ]
+
+    assert [station["name"] for station in stations_within_radius(markers, 50.1, 14.4)] == ["valid"]
+
+
 def test_cheapest_and_nearest_have_deterministic_order(marker):
     stations = [
         {**marker("far-cheap", 20), "lat": 50.12, "lng": 14.4, "fresh": "Včera"},
@@ -216,6 +281,17 @@ def test_equal_price_and_distance_uses_stable_url_order(marker):
     ]
 
 
+def test_sort_order_is_invariant_to_input_permutation_even_when_tie_fields_match(marker):
+    first = {**marker("Same", 20), "chain": "Chain B", "fresh": "Včera"}
+    second = {**marker("Same", 20), "chain": "Chain A", "fresh": "Dnes"}
+    stations = [first, second]
+
+    for selector in (stations_within_radius, cheapest_stations_within_radius, nearest_stations_within_radius):
+        forward = selector(stations, 50.1, 14.4)
+        reverse = selector(list(reversed(stations)), 50.1, 14.4)
+        assert forward == reverse
+
+
 def test_same_slug_in_different_cities_are_distinct_markers(marker):
     stations = [
         {**marker("Same-slug", 30, city="Praha"), "lat": 50.1, "lng": 14.4},
@@ -245,6 +321,35 @@ def test_invalid_station_prices_are_excluded_from_cheapest(marker, price):
     assert [station["name"] for station in cheapest_stations_within_radius(stations, 50.1, 14.4)] == [
         "valid",
     ]
+
+
+def test_zero_price_remains_valid_and_nearest_does_not_require_a_price(marker):
+    stations = [
+        {**marker("zero", 0), "lat": 50.101, "lng": 14.4},
+        {**marker("missing-price", 20), "lat": 50.101, "lng": 14.4},
+        {
+            key: value
+            for key, value in {**marker("no-price", 20), "lat": 50.101}.items()
+            if key != "price"
+        },
+    ]
+
+    assert [station["name"] for station in cheapest_stations_within_radius(stations, 50.1, 14.4)] == [
+        "zero", "missing-price",
+    ]
+    assert [station["name"] for station in nearest_stations_within_radius(stations, 50.1, 14.4)] == [
+        "zero", "missing-price", "no-price",
+    ]
+
+
+def test_geographic_ranking_preserves_but_does_not_filter_stale_price(marker):
+    stale = {**marker("stale-cheapest", 10, fresh="před 30 dny"), "lat": 50.1, "lng": 14.4}
+    fresh = {**marker("fresh", 20, fresh="Dnes"), "lat": 50.101, "lng": 14.4}
+
+    result = cheapest_stations_within_radius([fresh, stale], 50.1, 14.4)
+
+    assert [station["name"] for station in result] == ["stale-cheapest", "fresh"]
+    assert result[0]["fresh"] == "před 30 dny"
 
 
 def test_geographic_helpers_do_not_change_city_payload_or_history(marker, now):
