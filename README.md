@@ -24,7 +24,7 @@ A HACS integration that shows the cheapest stations of **your city** for the fue
 mBenzin blocks plain scraping with a browser check, but they give a **personal access key** to Home Assistant users. E-mail **reklama@mbenzin.cz** and tell them what the prices are for, which city/stations, and how often you load them. (For me the answer came quickly and the key worked immediately.)
 
 - The key is **personal — never share it or publish it**. Everyone requests their own.
-- The provider has not confirmed a request limit for this integration. Automatic refreshes remain every **6 hours**, and requests for the same key and fuel are shared across configurations. The integration does not retry immediately; after HTTP 429 it waits for a valid `Retry-After` value or 6 hours when none is provided.
+- The provider has not confirmed a request limit for this integration. Automatic refreshes remain every **6 hours**, and requests for the same key and fuel are shared across configurations. This deduplication and the temporary HTTP 429 cooldown are not a per-key request quota. After HTTP 429, all fuels for that key wait for a valid `Retry-After` value or 6 hours when none is provided; this in-memory cooldown is cleared by a Home Assistant restart.
 - The key is sent in an HTTP header, not in the request URL.
 - It uses mBenzin's price-map data, which is not a documented public API: be gentle and respect their conditions.
 
@@ -53,7 +53,7 @@ For each fuel `<fuel>` (`n95`, `benzinplus`, `diesel`, `dieselplus`, `lpg`, `cng
 | `sensor.ceny_paliv_<fuel>_home` | price at your favourite station (only if you chose one); trends, rank, statistics |
 | `sensor.ceny_paliv_<fuel>_1` … `_5` | the 5 cheapest stations, with latitude/longitude for the map card |
 
-The sensors are named after the station they currently show (for example `1 · Orlen – Bratri Stefanu 69`); the entity ids never change. Prices refresh every 6 hours. If a refresh fails (for example HTTP 429) the last data is kept and the attribute `fetch_error` says why. Nationwide data is shared between configurations with the same key and fuel for up to 6 hours. Manual refreshes and integration reloads reuse this in-memory cache; restarting Home Assistant clears it.
+The sensors are named after the station they currently show (for example `1 · Orlen – Bratri Stefanu 69`); the entity ids never change. Prices refresh every 6 hours. If a refresh fails (for example HTTP 429) the last data is kept and the attribute `fetch_error` says why. Nationwide data is shared between configurations with the same key and fuel for up to 6 hours. Manual refreshes and integration reloads reuse this in-memory cache; restarting Home Assistant clears it. Cached relative freshness labels are interpreted against the original response time in the Czech timezone, not the later cache-use time.
 
 ## 3. The dashboard card (included, nothing else to install)
 

@@ -5,6 +5,7 @@ from email.utils import format_datetime
 import math
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from zoneinfo import ZoneInfo
 
 import aiohttp
 import pytest
@@ -20,6 +21,7 @@ from custom_components.ceny_paliv.api import (
     CannotConnect,
     InvalidAuth,
     RateLimited,
+    async_fetch_snapshot,
     SharedMarkerCache,
     async_fetch_markers,
     build_payload,
@@ -27,6 +29,7 @@ from custom_components.ceny_paliv.api import (
     parse_fresh,
     shared_marker_cache,
     station_options,
+    _retry_after_seconds,
 )
 
 
@@ -440,6 +443,18 @@ async def test_fetch_network_errors(error):
         await async_fetch_markers(session, "dummy", "n95")
 
 
+async def test_request_failures_do_not_expose_api_key():
+    key = "private-test-key"
+    session = MagicMock()
+    session.get.side_effect = aiohttp.ClientError(f"request failed for {key}")
+
+    with pytest.raises(CannotConnect) as err:
+        await async_fetch_markers(session, key, "n95")
+
+    assert key not in str(err.value)
+    assert key not in repr(err.value)
+
+
 async def test_fetch_429_parses_retry_after():
     session = session_with_response(status=429, headers={"Retry-After": "120"})
 
@@ -451,15 +466,11 @@ async def test_fetch_429_parses_retry_after():
 
 
 async def test_fetch_429_parses_retry_after_http_date():
-    retry_at = datetime.now(timezone.utc) + timedelta(seconds=120)
-    session = session_with_response(
-        status=429, headers={"Retry-After": format_datetime(retry_at, usegmt=True)}
-    )
-
-    with pytest.raises(RateLimited) as err:
-        await async_fetch_markers(session, "key", "n95")
-
-    assert 0 < err.value.retry_after <= 120
+    now = datetime(2025, 1, 15, 12, 0, tzinfo=timezone.utc)
+    retry_at = now + timedelta(seconds=120)
+    header = format_datetime(retry_at, usegmt=True)
+    assert _retry_after_seconds(header, now) == 120
+    assert _retry_after_seconds("invalid", now) is None
 
 
 async def test_shared_cache_hits_are_scoped_by_key_and_fuel(marker):
@@ -509,6 +520,100 @@ async def test_shared_cache_data_remains_national_and_city_results_are_independe
     assert session.get.call_count == 1
 
 
+async def test_cached_relative_freshness_stays_anchored_across_midnight(marker):
+    timezone = ZoneInfo("Europe/Prague")
+    fetched_at = datetime(2025, 1, 15, 23, 50, tzinfo=timezone)
+    processed_at = datetime(2025, 1, 16, 0, 10, tzinfo=timezone)
+    marker_data = marker("Praha", 30, fresh="Dnes")
+    original = [dict(marker_data)]
+    cache = SharedMarkerCache(max_entries=20, clock=lambda: fetched_at)
+    session = session_with_response(data={"markers": original})
+
+    snapshot = await async_fetch_snapshot(session, "key", "n95", cache=cache)
+    history = {"Praha": [["2025-01-14", 31]]}
+    result = build_payload(
+        snapshot.markers,
+        fuel="n95",
+        city="Praha",
+        home_slug="Praha",
+        history=history,
+        now=processed_at,
+        fetched_at=snapshot.fetched_at,
+        language="cs",
+    )
+
+    assert snapshot.fetched_at == fetched_at
+    assert result["fetched_at"] == "2025-01-15T23:50:00+01:00"
+    assert result["last_attempt"] == "2025-01-16T00:10:00+01:00"
+    assert result["stations"][0]["updated_date"] == "2025-01-15"
+    assert result["home"]["age_days"] == 1
+    assert history["Praha"] == [["2025-01-14", 31], ["2025-01-15", 30]]
+    assert snapshot.markers == original
+    assert marker_data["fresh"] == "Dnes"
+    assert session.get.call_count == 1
+
+
+@pytest.mark.parametrize(
+    ("fresh", "expected", "age_days", "included"),
+    [
+        ("Dnes", "2025-03-30", 0, True),
+        ("Včera", "2025-03-29", 1, True),
+        ("před 3 dny", "2025-03-27", 3, False),
+        ("29. 3. 2025", "2025-03-29", 1, True),
+        ("20. 3. 2025", "2025-03-20", 10, False),
+    ],
+)
+async def test_relative_and_absolute_freshness_use_captured_prague_date(
+    marker, fresh, expected, age_days, included
+):
+    timezone = ZoneInfo("Europe/Prague")
+    fetched_at = datetime(2025, 3, 30, 0, 30, tzinfo=timezone)
+    processed_at = datetime(2025, 3, 30, 1, 0, tzinfo=timezone)
+    snapshot = await async_fetch_snapshot(
+        session_with_response(data={"markers": [marker("Station", 30, fresh=fresh)]}),
+        "key",
+        "n95",
+        cache=SharedMarkerCache(max_entries=20, clock=lambda: fetched_at),
+    )
+
+    result = build_payload(
+        snapshot.markers,
+        fuel="n95",
+        city="Praha",
+        home_slug="Station",
+        history={},
+        now=processed_at,
+        fetched_at=snapshot.fetched_at,
+    )
+
+    assert result["home"]["updated_date"] == expected
+    assert result["home"]["age_days"] == age_days
+    assert bool(result["stations"]) is included
+
+
+@pytest.mark.parametrize(
+    ("utc_time", "expected_local_date", "expected_offset"),
+    [
+        ("2025-03-30T01:30:00+00:00", "2025-03-30", "+02:00"),
+        ("2025-10-26T01:30:00+00:00", "2025-10-26", "+01:00"),
+    ],
+)
+async def test_snapshot_uses_prague_timezone_through_dst(marker, utc_time, expected_local_date, expected_offset):
+    fetched_at_utc = datetime.fromisoformat(utc_time)
+    cache = SharedMarkerCache(max_entries=20, clock=lambda: fetched_at_utc)
+
+    snapshot = await async_fetch_snapshot(
+        session_with_response(data={"markers": [marker("Station", 30)]}),
+        "key",
+        "n95",
+        cache=cache,
+    )
+
+    assert snapshot.fetched_at.date().isoformat() == expected_local_date
+    assert snapshot.fetched_at.strftime("%z") in ("+0200", "+0100")
+    assert snapshot.fetched_at.isoformat().endswith(expected_offset)
+
+
 async def test_shared_cache_single_flight(marker):
     cache = SharedMarkerCache(max_entries=20)
     session = session_with_response(data={"markers": [marker("Shared", 31)]})
@@ -532,12 +637,17 @@ async def test_shared_cache_single_flight(marker):
 
 
 async def test_shared_cache_expires_successful_markers(marker):
-    cache = SharedMarkerCache(max_entries=20, ttl=timedelta(milliseconds=10))
+    monotonic = [100.0]
+    cache = SharedMarkerCache(
+        max_entries=20,
+        ttl=timedelta(seconds=10),
+        monotonic=lambda: monotonic[0],
+    )
     first = session_with_response(data={"markers": [marker("Old", 31)]})
     fresh = session_with_response(data={"markers": [marker("New", 30)]})
 
     assert await async_fetch_markers(first, "key", "n95", cache=cache) == [marker("Old", 31)]
-    await asyncio.sleep(0.02)
+    monotonic[0] += 11
     assert await async_fetch_markers(fresh, "key", "n95", cache=cache) == [marker("New", 30)]
     assert first.get.call_count == fresh.get.call_count == 1
 
@@ -560,24 +670,127 @@ async def test_shared_cache_failed_flight_clears_and_allows_later_request(marker
     assert session.get.call_count == 2
 
 
-async def test_shared_cache_respects_retry_after_and_fallback_backoff():
-    cache = SharedMarkerCache(max_entries=20, ttl=timedelta(seconds=30))
+async def test_429_blocks_other_fuels_for_same_key_but_not_other_keys(marker):
+    monotonic = [100.0]
+    clock = lambda: datetime(2025, 1, 15, 23, 50, tzinfo=ZoneInfo("Europe/Prague"))
+    cache = SharedMarkerCache(
+        max_entries=1,
+        ttl=timedelta(seconds=30),
+        clock=clock,
+        monotonic=lambda: monotonic[0],
+    )
     limited = session_with_response(status=429, headers={"Retry-After": "60"})
 
     with pytest.raises(RateLimited) as err:
         await async_fetch_markers(limited, "key", "n95", cache=cache)
     assert err.value.retry_after == 60
+
+    other_key = session_with_response(data={"markers": [marker("Other-key", 40)]})
+    assert await async_fetch_markers(other_key, "other-key", "diesel", cache=cache) == [
+        marker("Other-key", 40)
+    ]
+    evictor = session_with_response(data={"markers": [marker("Evictor", 41)]})
+    assert await async_fetch_markers(evictor, "third-key", "n95", cache=cache) == [marker("Evictor", 41)]
+
+    blocked_diesel = session_with_response(data={"markers": [marker("Wrongly-requested", 30)]})
     with pytest.raises(RateLimited):
-        await async_fetch_markers(session_with_response(), "key", "n95", cache=cache)
+        await async_fetch_markers(blocked_diesel, "key", "diesel", cache=cache)
+    assert blocked_diesel.get.call_count == 0
+    assert "key" not in repr(cache._key_backoffs)
+    assert len(cache._entries) == 1
     assert limited.get.call_count == 1
 
-    fallback = session_with_response(status=429)
+    monotonic[0] += 61
+    recovered = session_with_response(data={"markers": [marker("Recovered", 32)]})
+    assert await async_fetch_markers(recovered, "key", "diesel", cache=cache) == [
+        marker("Recovered", 32)
+    ]
+    assert recovered.get.call_count == 1
+
+
+async def test_429_without_valid_retry_after_uses_fallback_for_every_fuel(marker):
+    monotonic = [0.0]
+    cache = SharedMarkerCache(
+        max_entries=20,
+        ttl=timedelta(seconds=30),
+        monotonic=lambda: monotonic[0],
+    )
+    fallback = session_with_response(status=429, headers={"Retry-After": "not-valid"})
     with pytest.raises(RateLimited) as err:
-        await async_fetch_markers(fallback, "key", "diesel", cache=cache)
+        await async_fetch_markers(fallback, "key", "n95", cache=cache)
     assert err.value.retry_after is None
-    with pytest.raises(RateLimited):
-        await async_fetch_markers(session_with_response(), "key", "diesel", cache=cache)
+    other_fuel = session_with_response(data={"markers": [marker("Blocked", 33)]})
+    with pytest.raises(RateLimited) as err:
+        await async_fetch_markers(other_fuel, "key", "diesel", cache=cache)
+    assert err.value.retry_after == 30
+    assert other_fuel.get.call_count == 0
     assert fallback.get.call_count == 1
+
+
+async def test_concurrent_different_fuels_are_blocked_after_first_429(marker):
+    cache = SharedMarkerCache(max_entries=20, ttl=timedelta(seconds=60))
+    n95_session = session_with_response(status=429)
+    diesel_session = session_with_response(data={"markers": [marker("Diesel", 39)]})
+    n95_entered, diesel_entered = asyncio.Event(), asyncio.Event()
+    release_n95, release_diesel = asyncio.Event(), asyncio.Event()
+
+    n95_context = n95_session.get.return_value
+    diesel_context = diesel_session.get.return_value
+
+    async def delayed_n95_enter():
+        n95_entered.set()
+        await release_n95.wait()
+        return n95_context.__aenter__.return_value
+
+    async def delayed_diesel_enter():
+        diesel_entered.set()
+        await release_diesel.wait()
+        return diesel_context.__aenter__.return_value
+
+    n95_context.__aenter__.side_effect = delayed_n95_enter
+    diesel_context.__aenter__.side_effect = delayed_diesel_enter
+    n95_task = asyncio.create_task(async_fetch_markers(n95_session, "key", "n95", cache=cache))
+    diesel_task = asyncio.create_task(async_fetch_markers(diesel_session, "key", "diesel", cache=cache))
+    await asyncio.gather(n95_entered.wait(), diesel_entered.wait())
+
+    release_n95.set()
+    with pytest.raises(RateLimited):
+        await n95_task
+    release_diesel.set()
+    with pytest.raises(RateLimited):
+        await diesel_task
+    blocked_lpg = session_with_response(data={"markers": [marker("LPG", 20)]})
+    with pytest.raises(RateLimited):
+        await async_fetch_markers(blocked_lpg, "key", "lpg", cache=cache)
+
+    assert n95_session.get.call_count == diesel_session.get.call_count == 1
+    assert blocked_lpg.get.call_count == 0
+
+
+async def test_cancelled_waiter_does_not_cancel_shared_request(marker):
+    cache = SharedMarkerCache(max_entries=20)
+    session = session_with_response(data={"markers": [marker("Shared", 31)]})
+    context = session.get.return_value
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def delayed_enter():
+        entered.set()
+        await release.wait()
+        return context.__aenter__.return_value
+
+    context.__aenter__.side_effect = delayed_enter
+    cancelled_waiter = asyncio.create_task(async_fetch_markers(session, "key", "n95", cache=cache))
+    await entered.wait()
+    surviving_waiter = asyncio.create_task(async_fetch_markers(session, "key", "n95", cache=cache))
+    await asyncio.sleep(0)
+    cancelled_waiter.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await cancelled_waiter
+    release.set()
+
+    assert await surviving_waiter == [marker("Shared", 31)]
+    assert session.get.call_count == 1
+    assert not cache._inflight
 
 
 async def test_shared_cache_has_bounded_entry_count(marker):
@@ -619,3 +832,32 @@ async def test_shared_cache_survives_reload_but_starts_empty_after_restart(marke
         marker("Fresh", 29)
     ]
     assert response.get.call_count == fresh_response.get.call_count == 1
+
+
+async def test_key_backoff_survives_reload_but_not_home_assistant_restart(marker):
+    def fake_hass():
+        return SimpleNamespace(
+            data={},
+            config_entries=SimpleNamespace(async_entries=lambda domain: []),
+        )
+
+    hass = fake_hass()
+    cache = shared_marker_cache(hass)
+    with pytest.raises(RateLimited):
+        await async_fetch_markers(
+            session_with_response(status=429, headers={"Retry-After": "60"}),
+            "key",
+            "n95",
+            cache=cache,
+        )
+
+    assert shared_marker_cache(hass) is cache
+    with pytest.raises(RateLimited):
+        await async_fetch_markers(session_with_response(), "key", "diesel", cache=cache)
+
+    restarted_cache = shared_marker_cache(fake_hass())
+    fresh = session_with_response(data={"markers": [marker("After restart", 30)]})
+    assert await async_fetch_markers(fresh, "key", "diesel", cache=restarted_cache) == [
+        marker("After restart", 30)
+    ]
+    assert fresh.get.call_count == 1
