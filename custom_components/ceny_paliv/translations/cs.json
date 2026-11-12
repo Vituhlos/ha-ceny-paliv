@@ -47,7 +47,7 @@
     "error": {
       "invalid_auth": "mBenzin klíč nepřijal. Zkontrolujte, že je zkopírovaný celý a bez mezer.",
       "cannot_connect": "Nepodařilo se spojit s mBenzin.cz. Zkuste to prosím znovu.",
-      "rate_limited": "mBenzin vrátil chybu 429 (limit je 20 stránek za hodinu). Zkuste to za chvíli.",
+      "rate_limited": "mBenzin dočasně omezil požadavky (HTTP 429). Před dalším pokusem prosím počkejte.",
       "no_fuel": "Vyberte alespoň jedno palivo."
     },
     "abort": {
@@ -85,7 +85,7 @@
     "error": {
       "invalid_auth": "mBenzin klíč nepřijal. Zkontrolujte, že je zkopírovaný celý a bez mezer.",
       "cannot_connect": "Nepodařilo se spojit s mBenzin.cz. Zkuste to prosím znovu.",
-      "rate_limited": "mBenzin vrátil chybu 429 (limit je 20 stránek za hodinu). Zkuste to za chvíli.",
+      "rate_limited": "mBenzin dočasně omezil požadavky (HTTP 429). Před dalším pokusem prosím počkejte.",
       "no_fuel": "Vyberte alespoň jedno palivo."
     }
   }

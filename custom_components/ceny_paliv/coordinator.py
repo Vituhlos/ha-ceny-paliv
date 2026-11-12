@@ -12,7 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .logos import logo_dir, scan_logos
-from .api import MBenzinError, async_fetch_markers, build_payload
+from .api import MBenzinError, async_fetch_markers, build_payload, shared_marker_cache
 from .const import (
     CONF_CITY,
     CONF_FUELS,
@@ -65,7 +65,9 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
         for fuel in self.fuels:
             try:
-                markers = await async_fetch_markers(session, key, fuel)
+                markers = await async_fetch_markers(
+                    session, key, fuel, cache=shared_marker_cache(self.hass)
+                )
             except MBenzinError as err:
                 err_name = type(err).__name__
                 errors.append(f"{fuel}: {err_name}")

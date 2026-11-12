@@ -25,7 +25,7 @@ CONF_LOGOS = "logos"  # logo ids ticked in the setup
 
 NONE_VALUE = "__none__"
 
-URL = "https://www.mbenzin.cz/Mapa-cen/data?fuel={fuel}&ccs=0&klic={key}"
+URL = "https://www.mbenzin.cz/Mapa-cen/data"
 USER_AGENT = "HomeAssistant-ceny-paliv"
 
 # fuel code -> (label, unit)
@@ -49,7 +49,7 @@ HISTORY_DAYS = 35
 FLAT = 0.005  # |delta| below this = stable price
 PERIODS = (1, 2, 7, 14, 30)  # trend windows in days
 
-# 4 refreshes a day per fuel. mBenzin allows 20 pages per hour per key.
+# Automatic refreshes remain six-hourly; no unconfirmed provider limit is assumed.
 UPDATE_INTERVAL = timedelta(hours=6)
 
 MAPS = "https://www.google.com/maps/search/?api=1&query={lat},{lng}"

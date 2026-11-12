@@ -1,14 +1,24 @@
 """mBenzin.cz price-map client and data processing."""
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
+import hashlib
+import math
 import re
+from collections import OrderedDict
+from copy import deepcopy
+from dataclasses import dataclass
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import aiohttp
 
+from homeassistant.core import HomeAssistant
+
 from .const import (
     DEFAULT_LANGUAGE,
+    DOMAIN,
     FLAT,
     FUELS,
     HISTORY_DAYS,
@@ -37,32 +47,191 @@ class InvalidAuth(MBenzinError):
 
 
 class RateLimited(MBenzinError):
-    """HTTP 429: more than 20 pages per hour."""
+    """HTTP 429: the provider is temporarily limiting requests."""
+
+    def __init__(self, retry_after: float | None = None) -> None:
+        super().__init__()
+        self.retry_after = retry_after
 
 
-async def async_fetch_markers(session: aiohttp.ClientSession, key: str, fuel: str) -> list[dict[str, Any]]:
+def _retry_after_seconds(value: str | None) -> float | None:
+    """Parse a valid Retry-After header as a non-negative delay."""
+    if not value:
+        return None
+    value = value.strip()
+    if value.isdecimal():
+        try:
+            delay = float(int(value))
+        except (OverflowError, ValueError):
+            return None
+        return delay if math.isfinite(delay) else None
+    try:
+        retry_at = parsedate_to_datetime(value)
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=dt.timezone.utc)
+        return max(0.0, (retry_at - dt.datetime.now(dt.timezone.utc)).total_seconds())
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+async def _async_fetch_markers(
+    session: aiohttp.ClientSession, key: str, fuel: str
+) -> list[dict[str, Any]]:
     """Download the price-map markers of one fuel (all of the Czech Republic)."""
-    url = URL.format(fuel=fuel, key=key)
     try:
         async with session.get(
-            url, headers={"User-Agent": USER_AGENT}, timeout=aiohttp.ClientTimeout(total=60)
+            URL,
+            params={"fuel": fuel, "ccs": "0"},
+            headers={"User-Agent": USER_AGENT, "X-Mbenzin-Klic": key},
+            timeout=aiohttp.ClientTimeout(total=60),
         ) as resp:
             if resp.status == 429:
-                raise RateLimited
+                raise RateLimited(_retry_after_seconds(resp.headers.get("Retry-After")))
             if resp.status in (401, 403):
                 raise InvalidAuth
             if resp.status != 200:
                 raise CannotConnect(f"HTTP {resp.status}")
             try:
                 data = await resp.json(content_type=None)
-            except ValueError as err:  # an HTML "browser check" page = key not accepted
-                raise InvalidAuth from err
+            except ValueError:  # an HTML "browser check" page = key not accepted
+                data = None
     except (aiohttp.ClientError, TimeoutError) as err:
-        raise CannotConnect(type(err).__name__) from err
+        error_name = type(err).__name__
+    else:
+        error_name = None
+    if error_name is not None:
+        raise CannotConnect(error_name)
     markers = data.get("markers") if isinstance(data, dict) else None
     if not isinstance(markers, list):
         raise InvalidAuth
     return markers
+
+
+@dataclass
+class _MarkerCacheEntry:
+    expires_at: float
+    markers: list[dict[str, Any]] | None = None
+    error_type: type[MBenzinError] | None = None
+    retry_after: float | None = None
+
+
+def _consume_task_exception(task: asyncio.Task[Any]) -> None:
+    """Prevent abandoned single-flight tasks from emitting unhandled exceptions."""
+    if not task.cancelled():
+        task.exception()
+
+
+class SharedMarkerCache:
+    """Short-lived, bounded cache shared across this HA instance's config entries."""
+
+    def __init__(self, max_entries: int, ttl: dt.timedelta = UPDATE_INTERVAL) -> None:
+        self.max_entries = max(1, max_entries)
+        self.ttl = ttl.total_seconds()
+        self._entries: OrderedDict[tuple[str, str], _MarkerCacheEntry] = OrderedDict()
+        self._inflight: dict[tuple[str, str], asyncio.Task[list[dict[str, Any]]]] = {}
+        self._lock = asyncio.Lock()
+
+    async def async_get(
+        self, session: aiohttp.ClientSession, key: str, fuel: str
+    ) -> list[dict[str, Any]]:
+        """Return cached markers or join the one in-flight request for this key and fuel."""
+        cache_key = (hashlib.sha256(key.encode()).hexdigest(), fuel)
+        async with self._lock:
+            now = asyncio.get_running_loop().time()
+            self._prune(now)
+            entry = self._entries.get(cache_key)
+            if entry is not None:
+                self._entries.move_to_end(cache_key)
+                if entry.error_type is not None:
+                    if entry.error_type is RateLimited:
+                        raise RateLimited(entry.retry_after)
+                    raise entry.error_type()
+                assert entry.markers is not None
+                return deepcopy(entry.markers)
+
+            task = self._inflight.get(cache_key)
+            if task is None:
+                task = asyncio.create_task(self._async_load(cache_key, session, key, fuel))
+                task.add_done_callback(_consume_task_exception)
+                self._inflight[cache_key] = task
+
+        return deepcopy(await asyncio.shield(task))
+
+    async def _async_load(
+        self,
+        cache_key: tuple[str, str],
+        session: aiohttp.ClientSession,
+        key: str,
+        fuel: str,
+    ) -> list[dict[str, Any]]:
+        try:
+            markers = await _async_fetch_markers(session, key, fuel)
+        except MBenzinError as err:
+            delay = (
+                err.retry_after
+                if isinstance(err, RateLimited) and err.retry_after is not None
+                else self.ttl
+            )
+            async with self._lock:
+                self._entries[cache_key] = _MarkerCacheEntry(
+                    asyncio.get_running_loop().time() + delay,
+                    error_type=type(err),
+                    retry_after=err.retry_after if isinstance(err, RateLimited) else None,
+                )
+                self._entries.move_to_end(cache_key)
+                self._trim()
+            if isinstance(err, RateLimited):
+                raise RateLimited(err.retry_after)
+            raise type(err)(*err.args)
+        else:
+            async with self._lock:
+                self._entries[cache_key] = _MarkerCacheEntry(
+                    asyncio.get_running_loop().time() + self.ttl,
+                    markers=deepcopy(markers),
+                )
+                self._entries.move_to_end(cache_key)
+                self._trim()
+            return markers
+        finally:
+            async with self._lock:
+                self._inflight.pop(cache_key, None)
+
+    def _prune(self, now: float) -> None:
+        for cache_key, entry in tuple(self._entries.items()):
+            if entry.expires_at <= now:
+                self._entries.pop(cache_key, None)
+
+    def _trim(self) -> None:
+        while len(self._entries) > self.max_entries:
+            self._entries.popitem(last=False)
+
+
+_SHARED_CACHE_KEY = f"{DOMAIN}_shared_marker_cache"
+
+
+def shared_marker_cache(hass: HomeAssistant) -> SharedMarkerCache:
+    """Return the cache shared by this HA instance; a restart naturally starts empty."""
+    cache = hass.data.get(_SHARED_CACHE_KEY)
+    if cache is None:
+        cache = SharedMarkerCache(max_entries=len(FUELS))
+        hass.data[_SHARED_CACHE_KEY] = cache
+    entry_count = len(hass.config_entries.async_entries(DOMAIN))
+    cache.max_entries = max(1, (entry_count + 1) * len(FUELS))
+    cache._trim()
+    return cache
+
+
+async def async_fetch_markers(
+    session: aiohttp.ClientSession,
+    key: str,
+    fuel: str,
+    *,
+    cache: SharedMarkerCache | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch markers, optionally sharing cached and in-flight results."""
+    if cache is not None:
+        return await cache.async_get(session, key, fuel)
+    return await _async_fetch_markers(session, key, fuel)
 
 
 def city_of(marker: dict[str, Any]) -> str | None:

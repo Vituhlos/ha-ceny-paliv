@@ -24,7 +24,8 @@ A HACS integration that shows the cheapest stations of **your city** for the fue
 mBenzin blocks plain scraping with a browser check, but they give a **personal access key** to Home Assistant users. E-mail **reklama@mbenzin.cz** and tell them what the prices are for, which city/stations, and how often you load them. (For me the answer came quickly and the key worked immediately.)
 
 - The key is **personal — never share it or publish it**. Everyone requests their own.
-- Limit: **20 pages per hour** per key. This integration makes 4 calls a day per fuel.
+- The provider has not confirmed a request limit for this integration. Automatic refreshes remain every **6 hours**; requests for the same key and fuel are shared across configurations, and the integration does not retry aggressively.
+- The key is sent in an HTTP header, not in the request URL.
 - It uses mBenzin's price-map data, which is not a documented public API: be gentle and respect their conditions.
 
 ## 2. Install with HACS
@@ -52,7 +53,7 @@ For each fuel `<fuel>` (`n95`, `benzinplus`, `diesel`, `dieselplus`, `lpg`, `cng
 | `sensor.ceny_paliv_<fuel>_home` | price at your favourite station (only if you chose one); trends, rank, statistics |
 | `sensor.ceny_paliv_<fuel>_1` … `_5` | the 5 cheapest stations, with latitude/longitude for the map card |
 
-The sensors are named after the station they currently show (for example `1 · Orlen – Bratri Stefanu 69`); the entity ids never change. Prices refresh every 6 hours. If a refresh fails (for example HTTP 429) the last data is kept and the attribute `fetch_error` says why.
+The sensors are named after the station they currently show (for example `1 · Orlen – Bratri Stefanu 69`); the entity ids never change. Prices refresh every 6 hours. If a refresh fails (for example HTTP 429) the last data is kept and the attribute `fetch_error` says why. Nationwide data is shared between configurations with the same key and fuel for up to 6 hours. Manual refreshes and integration reloads reuse this in-memory cache; restarting Home Assistant clears it.
 
 ## 3. The dashboard card (included, nothing else to install)
 

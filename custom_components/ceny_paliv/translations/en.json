@@ -47,7 +47,7 @@
     "error": {
       "invalid_auth": "mBenzin did not accept the key. Check that it is pasted whole and without spaces.",
       "cannot_connect": "Cannot reach mBenzin.cz. Please try again.",
-      "rate_limited": "mBenzin returned HTTP 429 (limit: 20 pages per hour). Try again in a moment.",
+      "rate_limited": "mBenzin temporarily rate-limited the request (HTTP 429). Please wait before trying again.",
       "no_fuel": "Pick at least one fuel."
     },
     "abort": {
@@ -85,7 +85,7 @@
     "error": {
       "invalid_auth": "mBenzin did not accept the key. Check that it is pasted whole and without spaces.",
       "cannot_connect": "Cannot reach mBenzin.cz. Please try again.",
-      "rate_limited": "mBenzin returned HTTP 429 (limit: 20 pages per hour). Try again in a moment.",
+      "rate_limited": "mBenzin temporarily rate-limited the request (HTTP 429). Please wait before trying again.",
       "no_fuel": "Pick at least one fuel."
     }
   }

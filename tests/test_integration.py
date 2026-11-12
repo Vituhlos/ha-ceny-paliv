@@ -112,7 +112,7 @@ async def test_coordinator_sensors_and_failed_refresh(hass, enable_custom_integr
         saved = await entry.runtime_data._store.async_load()
         assert saved["n95"]["Oblibena"][-1][1] == 35
 
-        async def partial_failure(session, key, fuel):
+        async def partial_failure(session, key, fuel, *, cache=None):
             if fuel == "n95":
                 raise CannotConnect()
             return [marker("Levna", 32)]
