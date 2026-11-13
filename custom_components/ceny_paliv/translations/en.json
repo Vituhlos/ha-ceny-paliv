@@ -212,5 +212,21 @@
       "invalid_radius": "Choose a radius from 5 to 50 km.",
       "already_configured": "This city is already set up in another configuration."
     }
+  },
+  "selector": {
+    "area_mode": {
+      "options": {
+        "city": "City",
+        "gps": "GPS area"
+      }
+    },
+    "location_method": {
+      "options": {
+        "home": "Home location",
+        "zone": "Saved Home Assistant zone",
+        "map": "Choose a point on the map",
+        "manual": "Manual coordinates (advanced)"
+      }
+    }
   }
 }

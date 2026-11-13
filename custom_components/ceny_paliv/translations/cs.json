@@ -212,5 +212,21 @@
       "invalid_radius": "Zvolte poloměr od 5 do 50 km.",
       "already_configured": "Toto město už má jiná konfigurace."
     }
+  },
+  "selector": {
+    "area_mode": {
+      "options": {
+        "city": "Město",
+        "gps": "GPS okolí"
+      }
+    },
+    "location_method": {
+      "options": {
+        "home": "Poloha domácnosti",
+        "zone": "Uložená zóna Home Assistantu",
+        "map": "Vybrat bod na mapě",
+        "manual": "Ruční souřadnice (pokročilé)"
+      }
+    }
   }
 }
