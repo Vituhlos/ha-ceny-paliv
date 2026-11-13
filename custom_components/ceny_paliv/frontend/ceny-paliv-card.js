@@ -108,8 +108,8 @@ const STYLE = `
     letter-spacing: var(--ha-tile-info-secondary-letter-spacing, 0.4px); line-height: 16px;
     color: var(--ha-tile-info-secondary-color, var(--cp-muted));
   }
-  /* header texts wrap instead of cutting "GPS area" or "price from … — may be outdated" on a phone */
-  .head > .info .primary, .home .head > .info .secondary { white-space: normal; }
+  /* header texts wrap instead of cutting "GPS area", "price from … — may be outdated" or "5 stations at this price" */
+  .head > .info .primary, .head > .info .secondary { white-space: normal; }
   /* an outdated price is flagged by an icon too: some themes (Fluvy dark) use status colours close to the text */
   .secondary .flag { --mdc-icon-size: 14px; vertical-align: -2px; margin-inline-end: 4px; }
   .value { flex: none; display: flex; align-items: baseline; gap: var(--ha-space-1, 4px); line-height: var(--ha-line-height-condensed, 1.2); }
