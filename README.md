@@ -125,7 +125,7 @@ The logos are trademarks of their owners, used only to identify the stations; th
 
 ## 5. Without the card: standard cards
 
-Every sensor is named after what it currently shows (for example `1 · Orlen – Bratri Stefanu 69`), so any standard card displays the station without a template. The names follow the ranking and update at each refresh; the entity ids never change.
+Every sensor is named after what it currently shows (for example `1 · Orlen – Bratri Stefanu 69`), so any standard card displays the station without a template. The names follow the ranking and update at each refresh; the entity ids stay the same. The one exception is the favourite sensor: choosing a different favourite station creates a new one (for example `_home_2`), so the statistics of two stations are never mixed (see Notes).
 
 An **Entities** card with the 5 cheapest stations (the sensor state is the price):
 
@@ -170,6 +170,8 @@ The tests use simulated data and block network sockets; no mBenzin key is needed
 CI also tests Python 3.14 with `requirements_test_latest.txt`. These requirements pin
 the test framework, which in turn pins Home Assistant 2025.1.0 and 2026.10.4 respectively.
 The Home Assistant frontend and HTTP server are mocked in integration tests.
+The card has its own tests without dependencies: `node --test tests/test_card.js` (Node 22+).
+CI additionally runs hassfest, the HACS validation, ruff and a check that the manifest and card versions match.
 
 ## 🇨🇿 Česky
 
