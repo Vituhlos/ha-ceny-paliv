@@ -96,7 +96,15 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         return self.config_entry.options.get(CONF_LANGUAGE, DEFAULT_LANGUAGE)
 
     async def _async_zone_state_changed(self, event: Event) -> None:
-        """Refresh immediately when the configured zone changes or is removed."""
+        """Refresh when the configured zone moves, is resized, appears or is removed.
+
+        The state of a zone is the number of people in it: arrivals and departures alone are ignored.
+        """
+        old, new = event.data.get("old_state"), event.data.get("new_state")
+        if old is not None and new is not None and all(
+            old.attributes.get(attr) == new.attributes.get(attr) for attr in ("latitude", "longitude", "radius")
+        ):
+            return
         await self.async_refresh()
 
     def _gps_location(self) -> tuple[tuple[float, float] | None, str | None]:

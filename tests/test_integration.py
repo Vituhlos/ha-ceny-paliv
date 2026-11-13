@@ -591,7 +591,9 @@ async def test_gps_map_options_and_city_switch_preserve_entry_identity(
         )
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert entry.entry_id == original_entry_id
-        assert entry.unique_id == "Praha"
+        # the entry's identity and automatic title follow the new area
+        assert entry.unique_id.startswith("gps-")
+        assert entry.title == "Mock Title"  # not an automatic title, so it is kept
         assert entry.options["area_mode"] == "gps"
         assert entry.options["location"] == {"latitude": 50.1, "longitude": 14.4}
         assert entry.options["gps_radius_km"] == 50
@@ -1338,6 +1340,103 @@ async def test_refused_key_starts_reauth(
             if flow["context"]["source"] == "reauth"
         ]
 
+
+async def test_options_area_change_frees_the_old_city_and_refuses_a_taken_one(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Ceny paliv Praha", data={"key": "dummy", "city": "Praha"},
+        options={"fuels": ["n95"], "homes": {}}, unique_id="Praha",
+    )
+    brno = MockConfigEntry(
+        domain=DOMAIN, title="Moje Brno", data={"key": "dummy", "city": "Brno"},
+        options={"fuels": ["n95"], "homes": {}}, unique_id="Brno",
+    )
+    entry.add_to_hass(hass)
+    brno.add_to_hass(hass)
+    markers = [marker("Praha-A", 33), marker("Brno-A", 32, city="Brno"), marker("Ostrava-A", 31, city="Ostrava")]
+    with (
+        patch("custom_components.ceny_paliv.config_flow.async_fetch_markers", new=AsyncMock(return_value=markers)),
+        patch("custom_components.ceny_paliv.config_flow.async_fetch_index", new=AsyncMock(return_value=None)),
+        patch("custom_components.ceny_paliv.async_setup_entry", new=AsyncMock(return_value=True)),
+    ):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {"area_mode": "city"})
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {"city": "Brno"})
+        assert result["errors"] == {"city": "already_configured"}
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {"city": "Ostrava"})
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"fuels": ["n95"], "language": "en"}
+        )
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert entry.unique_id == "Ostrava"
+        assert entry.title == "Ceny paliv Ostrava"
+
+        # Praha is free again for a new configuration
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"key": "dummy"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"area_mode": "city"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"city": "Praha"})
+        assert result["step_id"] == "fuels"
+
+        # a title typed by the user is kept
+        result = await hass.config_entries.options.async_init(brno.entry_id)
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {"area_mode": "gps"})
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {"location_method": "home"})
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {"gps_radius_km": 20})
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"fuels": ["n95"], "language": "en"}
+        )
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+        assert brno.title == "Moje Brno"
+        assert brno.unique_id.startswith("gps-")
+
+
+async def test_archived_favourite_is_disabled_and_reenabled_when_chosen_again(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    old, new = marker("Oblibena", 33), marker("Nova", 32)
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={"key": "dummy", "city": "Praha"},
+        options={"fuels": ["n95"], "homes": {"n95": "Oblibena"}, "language": "en"}, unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    legacy = registry.async_get_or_create("sensor", DOMAIN, f"{entry.entry_id}_n95_home", config_entry=entry)
+
+    async def choose(station):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {"area_mode": "city"})
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {"city": "Praha"})
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"fuels": ["n95"], "language": "en"}
+        )
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {"station": station})
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+
+    with (
+        patch("custom_components.ceny_paliv.config_flow.async_fetch_markers", new=AsyncMock(return_value=[old, new])),
+        patch("custom_components.ceny_paliv.config_flow.async_fetch_index", new=AsyncMock(return_value=None)),
+        patch("custom_components.ceny_paliv.async_setup_entry", new=AsyncMock(return_value=True)),
+        patch("custom_components.ceny_paliv.async_unload_entry", new=AsyncMock(return_value=True)),
+    ):
+        await choose("Nova")
+        assert registry.async_get(legacy.entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+        await choose("Oblibena")
+        assert registry.async_get(legacy.entity_id).disabled_by is None
+
+
+async def test_zone_occupancy_changes_do_not_refresh(hass, enable_custom_integrations, mock_frontend, marker):
+    hass.states.async_set("zone.work", "0", {"latitude": 50.1, "longitude": 14.4, "radius": 100})
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={"key": "dummy", "city": ""},
+        options={"area_mode": "gps", "location_method": "zone", "zone_entity": "zone.work",
+                 "gps_radius_km": 5, "fuels": ["n95"]},
+        unique_id="gps-zone",
+    )
+    entry.add_to_hass(hass)
+    snapshot = MarkerSnapshot(markers=[marker("Nearby", 30)], fetched_at=dt_util.now())
     with patch(
         "custom_components.ceny_paliv.coordinator.async_fetch_snapshot", new=AsyncMock(return_value=snapshot)
     ) as fetch:
@@ -1375,3 +1474,38 @@ async def test_one_refused_fuel_does_not_ask_for_a_new_key(hass, enable_custom_i
         assert not [f for f in hass.config_entries.flow.async_progress() if f["context"]["source"] == "reauth"]
         assert hass.states.get("sensor.ceny_paliv_n95_top5").state == "33"
         assert await hass.config_entries.async_unload(entry.entry_id)
+
+        hass.states.async_set("zone.work", "2", {"latitude": 50.1, "longitude": 14.4, "radius": 100})
+        await hass.async_block_till_done()
+        assert fetch.await_count == 1  # people arriving is not a new area
+        hass.states.async_set("zone.work", "2", {"latitude": 50.1, "longitude": 14.4, "radius": 300})
+        await hass.async_block_till_done()
+        assert fetch.await_count == 2
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_remove_entry_deletes_history_and_last_unload_releases_cache(
+    hass, hass_storage, enable_custom_integrations, mock_frontend, marker
+):
+    from custom_components.ceny_paliv.api import shared_marker_cache
+    from custom_components.ceny_paliv.sensor import CenyPalivHomeSensor, CenyPalivTop5Sensor
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={"key": "dummy", "city": "Praha"},
+        options={"fuels": ["n95"], "homes": {}}, unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+    snapshot = MarkerSnapshot(markers=[marker("Levna", 33)], fetched_at=dt_util.now())
+    with patch("custom_components.ceny_paliv.coordinator.async_fetch_snapshot", new=AsyncMock(return_value=snapshot)):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        shared_marker_cache(hass)
+        assert any(key.endswith("shared_marker_cache") for key in hass.data)
+        assert f"{DOMAIN}.{entry.entry_id}" in hass_storage
+        assert await hass.config_entries.async_remove(entry.entry_id)
+        await hass.async_block_till_done()
+    assert f"{DOMAIN}.{entry.entry_id}" not in hass_storage
+    assert not any(key.endswith("shared_marker_cache") for key in hass.data)
+    # big, display-only attributes stay out of the recorder
+    assert {"stations", "labels", "logos", "gps_area"} <= CenyPalivTop5Sensor._unrecorded_attributes
+    assert "trends" in CenyPalivHomeSensor._unrecorded_attributes

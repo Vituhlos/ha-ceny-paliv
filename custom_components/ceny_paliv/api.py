@@ -297,6 +297,11 @@ def shared_marker_cache(hass: HomeAssistant) -> SharedMarkerCache:
     return cache
 
 
+def release_shared_marker_cache(hass: HomeAssistant) -> None:
+    """Drop the shared snapshots (and any cooldown) once no entry is loaded."""
+    hass.data.pop(_SHARED_CACHE_KEY, None)
+
+
 async def async_fetch_markers(
     session: aiohttp.ClientSession,
     key: str,

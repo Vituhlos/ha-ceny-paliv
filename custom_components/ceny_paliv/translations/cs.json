@@ -209,7 +209,8 @@
       "no_fuel": "Vyberte alespoň jedno palivo.",
       "invalid_zone": "Vyberte existující zónu s platnými souřadnicemi.",
       "invalid_coordinates": "Zadejte platnou zeměpisnou šířku a délku.",
-      "invalid_radius": "Zvolte poloměr od 5 do 50 km."
+      "invalid_radius": "Zvolte poloměr od 5 do 50 km.",
+      "already_configured": "Toto město už má jiná konfigurace."
     }
   }
 }

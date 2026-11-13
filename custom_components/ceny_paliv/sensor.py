@@ -117,6 +117,10 @@ class CenyPalivEntity(CoordinatorEntity[CenyPalivCoordinator], SensorEntity):
 
 class CenyPalivTop5Sensor(CenyPalivEntity):
     _attr_icon = "mdi:gas-station"
+    # read by the card from the live state; recording them every refresh only fills the database
+    _unrecorded_attributes = frozenset(
+        {"stations", "home", "gps_area", "gps_nearest_stations", "labels", "logos"}
+    )
 
     def __init__(self, coordinator, entry, fuel) -> None:
         super().__init__(coordinator, entry, fuel, "top5")
@@ -142,6 +146,7 @@ class CenyPalivHomeSensor(CenyPalivEntity):
 
     _attr_icon = "mdi:gas-station-in-use"
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _unrecorded_attributes = frozenset({"trends", "maps"})
 
     def __init__(self, coordinator, entry, fuel) -> None:
         super().__init__(
