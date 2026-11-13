@@ -11,6 +11,49 @@
           "key": "The key mBenzin.cz sent you. Paste it whole, without spaces."
         }
       },
+      "area_mode": {
+        "title": "Search area",
+        "description": "Choose the original city list or a GPS circle. GPS uses only Home Assistant's configured location, a saved zone, a point selected on the map, or manually entered coordinates.",
+        "data": {
+          "area_mode": "Search area"
+        }
+      },
+      "location_method": {
+        "title": "GPS area centre",
+        "description": "Choose how to set the centre of the search area. No phone location or GPS tracker is used.",
+        "data": {
+          "location_method": "Location source"
+        }
+      },
+      "location_zone": {
+        "title": "Saved Home Assistant zone",
+        "description": "Select an existing zone. Its coordinates are read again when the zone changes; deleting the zone leaves the GPS results empty until it is restored or another method is selected.",
+        "data": {
+          "zone_entity": "Zone"
+        }
+      },
+      "location_map": {
+        "title": "Choose a point on the map",
+        "description": "Tap or drag the marker to choose the centre. The map is prefilled with the saved point or Home Assistant's configured home location.",
+        "data": {
+          "location": "GPS centre"
+        }
+      },
+      "location_manual": {
+        "title": "Manual GPS coordinates",
+        "description": "Advanced option. Latitude must be between −90 and 90; longitude between −180 and 180.",
+        "data": {
+          "latitude": "Latitude",
+          "longitude": "Longitude"
+        }
+      },
+      "gps_radius": {
+        "title": "GPS search radius",
+        "description": "Choose a radius from 5 to 50 km. The default is 40 km.",
+        "data": {
+          "gps_radius_km": "Radius (km)"
+        }
+      },
       "city": {
         "title": "City",
         "description": "Choose your city. Only the stations of this city are shown, not those of the whole region.",
@@ -48,7 +91,11 @@
       "invalid_auth": "mBenzin did not accept the key. Check that it is pasted whole and without spaces.",
       "cannot_connect": "Cannot reach mBenzin.cz. Please try again.",
       "rate_limited": "mBenzin temporarily rate-limited the request (HTTP 429). Please wait before trying again.",
-      "no_fuel": "Pick at least one fuel."
+      "no_cities": "No cities were returned by mBenzin. Check the connection and try again.",
+      "no_fuel": "Pick at least one fuel.",
+      "invalid_zone": "Choose an existing zone with valid coordinates.",
+      "invalid_coordinates": "Enter valid latitude and longitude coordinates.",
+      "invalid_radius": "Choose a radius from 5 to 50 km."
     },
     "abort": {
       "already_configured": "This city is already configured."
@@ -56,6 +103,56 @@
   },
   "options": {
     "step": {
+      "area_mode": {
+        "title": "Search area",
+        "description": "Choose the original city list or a GPS circle. Existing entries without this setting continue to use city mode.",
+        "data": {
+          "area_mode": "Search area"
+        }
+      },
+      "location_method": {
+        "title": "GPS area centre",
+        "description": "Choose how to set the centre. No phone location or GPS tracker is used.",
+        "data": {
+          "location_method": "Location source"
+        }
+      },
+      "location_zone": {
+        "title": "Saved Home Assistant zone",
+        "description": "The zone is resolved again as it changes. A deleted or invalid zone produces no GPS-area stations.",
+        "data": {
+          "zone_entity": "Zone"
+        }
+      },
+      "location_map": {
+        "title": "Choose a point on the map",
+        "description": "Tap or drag the marker to choose the centre. The previous point or Home Assistant home location is suggested.",
+        "data": {
+          "location": "GPS centre"
+        }
+      },
+      "location_manual": {
+        "title": "Manual GPS coordinates",
+        "description": "Advanced option. Latitude: −90 to 90; longitude: −180 to 180.",
+        "data": {
+          "latitude": "Latitude",
+          "longitude": "Longitude"
+        }
+      },
+      "gps_radius": {
+        "title": "GPS search radius",
+        "description": "Choose a radius from 5 to 50 km. The default is 40 km.",
+        "data": {
+          "gps_radius_km": "Radius (km)"
+        }
+      },
+      "city": {
+        "title": "City",
+        "description": "Choose the city to use in city mode.",
+        "data": {
+          "city": "City"
+        }
+      },
       "fuels": {
         "title": "Fuels and language",
         "description": "Pick one or more fuels – for example Natural 95 and LPG for a dual-fuel car. Each fuel gets its own sensors. Note that mBenzin does not distinguish E10: the Natural 95 price applies to all 95-octane petrol.",
@@ -86,7 +183,11 @@
       "invalid_auth": "mBenzin did not accept the key. Check that it is pasted whole and without spaces.",
       "cannot_connect": "Cannot reach mBenzin.cz. Please try again.",
       "rate_limited": "mBenzin temporarily rate-limited the request (HTTP 429). Please wait before trying again.",
-      "no_fuel": "Pick at least one fuel."
+      "no_cities": "No cities were returned by mBenzin. Check the connection and try again.",
+      "no_fuel": "Pick at least one fuel.",
+      "invalid_zone": "Choose an existing zone with valid coordinates.",
+      "invalid_coordinates": "Enter valid latitude and longitude coordinates.",
+      "invalid_radius": "Choose a radius from 5 to 50 km."
     }
   }
 }

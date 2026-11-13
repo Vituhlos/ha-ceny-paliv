@@ -10,6 +10,7 @@ station they currently describe ("1 · Orlen – Bratri Stefanu 69"), so standar
 """
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
@@ -24,6 +25,8 @@ from .coordinator import CenyPalivConfigEntry, CenyPalivCoordinator
 TOP_ATTRIBUTES = (
     "stations",
     "home",
+    "gps_area",
+    "gps_nearest_stations",
     "fetched_at",
     "last_attempt",
     "fetch_error",
@@ -39,7 +42,18 @@ TOP_ATTRIBUTES = (
     "next_update",
     "logos",
 )
-HOME_ATTRIBUTES = ("updated", "updated_date", "age_days", "rank", "fresh_count", "vs_cheapest", "cheapest_name", "trends", "maps")
+HOME_ATTRIBUTES = (
+    "updated",
+    "updated_date",
+    "age_days",
+    "rank",
+    "fresh_count",
+    "vs_cheapest",
+    "cheapest_name",
+    "trends",
+    "maps",
+    "distance_km",
+)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: CenyPalivConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
@@ -49,6 +63,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: CenyPalivConfigEntry, as
         entities.append(CenyPalivTop5Sensor(coordinator, entry, fuel))
         if coordinator.homes.get(fuel):
             entities.append(CenyPalivHomeSensor(coordinator, entry, fuel))
+        existing_ids = {entity.unique_id for entity in entities}
+        for record in coordinator.home_history.get(fuel, []):
+            archived = CenyPalivArchivedHomeSensor(
+                coordinator,
+                entry,
+                fuel,
+                str(record.get("identity", "unknown")),
+                bool(record.get("legacy")),
+            )
+            if archived.unique_id not in existing_ids:
+                entities.append(archived)
+                existing_ids.add(archived.unique_id)
         entities.extend(CenyPalivPositionSensor(coordinator, entry, fuel, i) for i in range(TOP))
     async_add_entities(entities)
 
@@ -58,10 +84,19 @@ class CenyPalivEntity(CoordinatorEntity[CenyPalivCoordinator], SensorEntity):
 
     _attr_has_entity_name = False  # keeps the entity ids predictable: sensor.ceny_paliv_<fuel>_...
 
-    def __init__(self, coordinator: CenyPalivCoordinator, entry: CenyPalivConfigEntry, fuel: str, suffix: str) -> None:
+    def __init__(
+        self,
+        coordinator: CenyPalivCoordinator,
+        entry: CenyPalivConfigEntry,
+        fuel: str,
+        suffix: str,
+        *,
+        identity: str | None = None,
+    ) -> None:
         super().__init__(coordinator)
         self._fuel = fuel
-        self._attr_unique_id = f"{entry.entry_id}_{fuel}_{suffix}"
+        self._entry_id = entry.entry_id
+        self._attr_unique_id = _sensor_unique_id(entry.entry_id, fuel, suffix, identity)
         self._attr_name = f"Ceny paliv {fuel} {suffix}"
         self.entity_id = f"sensor.ceny_paliv_{fuel}_{suffix}"  # suggestion for new installs
         self._attr_native_unit_of_measurement = FUELS.get(fuel, (fuel, "Kč/l"))[1]
@@ -98,7 +133,7 @@ class CenyPalivTop5Sensor(CenyPalivEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs = {k: self._payload.get(k) for k in TOP_ATTRIBUTES}
-        attrs.update(cp_fuel=self._fuel, cp_role="top5")
+        attrs.update(cp_fuel=self._fuel, cp_role="top5", cp_config_id=self._entry_id)
         return attrs
 
 
@@ -109,7 +144,13 @@ class CenyPalivHomeSensor(CenyPalivEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, coordinator, entry, fuel) -> None:
-        super().__init__(coordinator, entry, fuel, "home")
+        super().__init__(
+            coordinator,
+            entry,
+            fuel,
+            "home",
+            identity=coordinator.home_identities.get(fuel),
+        )
 
     @property
     def name(self) -> str:
@@ -135,8 +176,43 @@ class CenyPalivHomeSensor(CenyPalivEntity):
         home = self._home or {}
         attrs = {"station": home.get("address"), "latitude": home.get("lat"), "longitude": home.get("lng")}
         attrs.update({k: home.get(k) for k in HOME_ATTRIBUTES})
-        attrs.update(cp_fuel=self._fuel, cp_role="home")
+        attrs.update(cp_fuel=self._fuel, cp_role="home", cp_config_id=self._entry_id)
         return attrs
+
+
+class CenyPalivArchivedHomeSensor(CenyPalivEntity):
+    """Keep retired favourite sensor identities registered without mixing station statistics."""
+
+    _attr_icon = "mdi:archive"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator, entry, fuel: str, identity: str, legacy: bool) -> None:
+        super().__init__(
+            coordinator,
+            entry,
+            fuel,
+            "home",
+            identity=None if legacy else identity,
+        )
+        self._identity = identity
+        self._attr_name = f"Ceny paliv {fuel} · archived favourite"
+
+    @property
+    def available(self) -> bool:
+        return False
+
+    @property
+    def native_value(self) -> None:
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "cp_fuel": self._fuel,
+            "cp_role": "home_archive",
+            "cp_config_id": self._entry_id,
+            "archived_station_identity": self._identity,
+        }
 
 
 class CenyPalivPositionSensor(CenyPalivEntity):
@@ -171,7 +247,12 @@ class CenyPalivPositionSensor(CenyPalivEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         s = self._station
-        attrs: dict[str, Any] = {"cp_fuel": self._fuel, "cp_role": "position", "cp_index": self._index + 1}
+        attrs: dict[str, Any] = {
+            "cp_fuel": self._fuel,
+            "cp_role": "position",
+            "cp_index": self._index + 1,
+            "cp_config_id": self._entry_id,
+        }
         if s:
             # the favourite station is drawn by its own sensor on the map: no coordinates here
             attrs.update(
@@ -180,3 +261,14 @@ class CenyPalivPositionSensor(CenyPalivEntity):
                 longitude=None if s["home"] else s["lng"],
             )
         return attrs
+
+
+def _sensor_unique_id(
+    entry_id: str, fuel: str, suffix: str, identity: str | None = None
+) -> str:
+    """Keep the original home ID until a station is explicitly changed."""
+    unique_id = f"{entry_id}_{fuel}_{suffix}"
+    if identity is not None and suffix == "home":
+        digest = hashlib.sha256(identity.encode()).hexdigest()[:12]
+        unique_id += f"_{digest}"
+    return unique_id

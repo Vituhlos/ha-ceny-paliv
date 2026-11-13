@@ -11,6 +11,49 @@
           "key": "Klíč, který jste dostali e-mailem od mBenzin.cz. Zkopírujte ho celý, bez mezer."
         }
       },
+      "area_mode": {
+        "title": "Oblast vyhledávání",
+        "description": "Vyberte původní seznam měst nebo GPS kruh. GPS používá pouze polohu nastavenou v Home Assistantu, uloženou zónu, bod z mapy nebo ručně zadané souřadnice.",
+        "data": {
+          "area_mode": "Oblast vyhledávání"
+        }
+      },
+      "location_method": {
+        "title": "Střed GPS oblasti",
+        "description": "Vyberte způsob určení středu oblasti. Nepoužívá se poloha telefonu ani GPS tracker.",
+        "data": {
+          "location_method": "Zdroj polohy"
+        }
+      },
+      "location_zone": {
+        "title": "Uložená zóna Home Assistantu",
+        "description": "Vyberte existující zónu. Souřadnice se znovu načtou při změně zóny; po jejím odstranění budou výsledky GPS prázdné, dokud ji neobnovíte nebo nevyberete jiný způsob.",
+        "data": {
+          "zone_entity": "Zóna"
+        }
+      },
+      "location_map": {
+        "title": "Výběr bodu na mapě",
+        "description": "Klepnutím nebo přetažením značky zvolte střed. Mapa se předvyplní uloženým bodem nebo konfigurační polohou domácnosti v Home Assistantu.",
+        "data": {
+          "location": "Střed GPS oblasti"
+        }
+      },
+      "location_manual": {
+        "title": "Ruční GPS souřadnice",
+        "description": "Pokročilá možnost. Zeměpisná šířka musí být −90 až 90, délka −180 až 180.",
+        "data": {
+          "latitude": "Zeměpisná šířka",
+          "longitude": "Zeměpisná délka"
+        }
+      },
+      "gps_radius": {
+        "title": "Poloměr GPS oblasti",
+        "description": "Zvolte poloměr 5–50 km. Výchozí hodnota je 40 km.",
+        "data": {
+          "gps_radius_km": "Poloměr (km)"
+        }
+      },
       "city": {
         "title": "Město",
         "description": "Vyberte město. Zobrazí se pouze čerpací stanice z tohoto města, nikoli z celého kraje.",
@@ -48,7 +91,11 @@
       "invalid_auth": "mBenzin klíč nepřijal. Zkontrolujte, že je zkopírovaný celý a bez mezer.",
       "cannot_connect": "Nepodařilo se spojit s mBenzin.cz. Zkuste to prosím znovu.",
       "rate_limited": "mBenzin dočasně omezil požadavky (HTTP 429). Před dalším pokusem prosím počkejte.",
-      "no_fuel": "Vyberte alespoň jedno palivo."
+      "no_cities": "mBenzin nevrátil žádná města. Zkontrolujte připojení a zkuste to znovu.",
+      "no_fuel": "Vyberte alespoň jedno palivo.",
+      "invalid_zone": "Vyberte existující zónu s platnými souřadnicemi.",
+      "invalid_coordinates": "Zadejte platnou zeměpisnou šířku a délku.",
+      "invalid_radius": "Zvolte poloměr od 5 do 50 km."
     },
     "abort": {
       "already_configured": "Toto město je již nastaveno."
@@ -56,6 +103,56 @@
   },
   "options": {
     "step": {
+      "area_mode": {
+        "title": "Oblast vyhledávání",
+        "description": "Vyberte původní seznam měst nebo GPS kruh. Stávající konfigurace bez této volby zůstávají v městském režimu.",
+        "data": {
+          "area_mode": "Oblast vyhledávání"
+        }
+      },
+      "location_method": {
+        "title": "Střed GPS oblasti",
+        "description": "Vyberte způsob určení středu. Poloha telefonu ani GPS tracker se nepoužívají.",
+        "data": {
+          "location_method": "Zdroj polohy"
+        }
+      },
+      "location_zone": {
+        "title": "Uložená zóna Home Assistantu",
+        "description": "Poloha zóny se načítá znovu při její změně. Odstraněná nebo neplatná zóna nemá žádné stanice GPS oblasti.",
+        "data": {
+          "zone_entity": "Zóna"
+        }
+      },
+      "location_map": {
+        "title": "Výběr bodu na mapě",
+        "description": "Klepnutím nebo přetažením značky zvolte střed. Nabídne se předchozí bod nebo poloha domácnosti v Home Assistantu.",
+        "data": {
+          "location": "Střed GPS oblasti"
+        }
+      },
+      "location_manual": {
+        "title": "Ruční GPS souřadnice",
+        "description": "Pokročilá možnost. Šířka: −90 až 90; délka: −180 až 180.",
+        "data": {
+          "latitude": "Zeměpisná šířka",
+          "longitude": "Zeměpisná délka"
+        }
+      },
+      "gps_radius": {
+        "title": "Poloměr GPS oblasti",
+        "description": "Zvolte poloměr 5–50 km. Výchozí hodnota je 40 km.",
+        "data": {
+          "gps_radius_km": "Poloměr (km)"
+        }
+      },
+      "city": {
+        "title": "Město",
+        "description": "Vyberte město pro městský režim.",
+        "data": {
+          "city": "Město"
+        }
+      },
       "fuels": {
         "title": "Paliva a jazyk",
         "description": "Vyberte jedno nebo více paliv – například Natural 95 a LPG pro vůz na dvě paliva. Pro každé palivo se vytvoří samostatné senzory. Nezapomeňte, že mBenzin nerozlišuje benzín E10, cena Natural 95 platí pro všechny 95oktanové benzíny.",
@@ -86,7 +183,11 @@
       "invalid_auth": "mBenzin klíč nepřijal. Zkontrolujte, že je zkopírovaný celý a bez mezer.",
       "cannot_connect": "Nepodařilo se spojit s mBenzin.cz. Zkuste to prosím znovu.",
       "rate_limited": "mBenzin dočasně omezil požadavky (HTTP 429). Před dalším pokusem prosím počkejte.",
-      "no_fuel": "Vyberte alespoň jedno palivo."
+      "no_cities": "mBenzin nevrátil žádná města. Zkontrolujte připojení a zkuste to znovu.",
+      "no_fuel": "Vyberte alespoň jedno palivo.",
+      "invalid_zone": "Vyberte existující zónu s platnými souřadnicemi.",
+      "invalid_coordinates": "Zadejte platnou zeměpisnou šířku a délku.",
+      "invalid_radius": "Zvolte poloměr od 5 do 50 km."
     }
   }
 }

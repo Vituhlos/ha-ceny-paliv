@@ -4,7 +4,7 @@
 
 **English** · [Česky](README.cs.md)
 
-A HACS integration that shows the cheapest stations of **your city** for the fuel(s) you use — **Natural 95, Diesel, LPG, CNG** and more — plus **your favourite station** with price history and trends. Everything is configured from the Home Assistant UI.
+A HACS integration that shows the cheapest stations in **your city** or a **5–50 km GPS area** for the fuel(s) you use — **Natural 95, Diesel, LPG, CNG** and more — plus **your favourite station** with price history and trends. Everything is configured from the Home Assistant UI.
 
 ![Dashboard](docs/screenshot.webp)
 
@@ -13,6 +13,7 @@ A HACS integration that shows the cheapest stations of **your city** for the fue
 ## Features
 
 - Pick your **city**, one or **several fuels** (e.g. Natural 95 + LPG for a dual-fuel car) and a **favourite station per fuel**
+- Or choose a GPS area centred on Home Assistant's configured home location, a saved `zone.*`, a point selected on Home Assistant's map, or (advanced) manually entered coordinates; choose a **5–50 km** radius (default **40 km**). No phone location, GPS tracker, geocoder, or extra mBenzin request is used
 - Per fuel: the **top 5 cheapest** stations in the city (only that city, not the region), with a Google Maps link, and a **map**
 - Favourite station: price, **trends vs 1/2/7/14/30 days ago**, rank in town, long-term statistics (the 30-day graph)
 - A ready-made **dashboard card** (`ceny-paliv-card`) shipped with the integration — add it from the card picker, no YAML to copy — in **English or Czech** (your choice during setup). It is **flexible**: two columns on a wide dashboard, one on a phone, a compact version, and every part (favourite station, list, map, graph) can be placed as its own card
@@ -34,12 +35,13 @@ mBenzin blocks plain scraping with a browser check, but they give a **personal a
 2. Search for **Ceny paliv**, download it, **restart** Home Assistant.
 3. Settings → Devices & services → **Add integration** → **Ceny paliv**, then:
    1. paste your **access key**
-   2. choose your **city**
-   3. choose your **fuel(s)** and the **language** of the dashboard texts (English / Čeština)
-   4. for each fuel, choose your **favourite station** from the list of stations of your city (or "—" for none)
-   5. optionally tick the **logos** of the chains to show (the chains of your city are preselected; see [Station logos](#4-station-logos-optional))
+   2. choose **City** (the original behavior) or **GPS area**
+   3. for GPS, choose Home Assistant's home location, a saved zone, a point on the built-in map, or advanced manual coordinates; set a 5–50 km radius (40 km by default)
+   4. choose your **city** (City mode), **fuel(s)** and the **language** of the dashboard texts (English / Čeština)
+   5. for each fuel, choose a **favourite station** (City mode lists the city; GPS mode lists stations in the selected circle first and retains an already-saved favourite outside it)
+   6. optionally tick the **logos** of the chains to show (chains in the selected area are preselected; see [Station logos](#4-station-logos-optional))
 
-You can change the fuels, the language, the favourite stations and the logos later: the integration's **Configure** button.
+You can change the area mode, location method or point, radius, fuels, language, favourite stations and logos later: the integration's **Configure** button. Existing entries without an area mode remain in City mode. Home Assistant home coordinates are read at refresh time; zone changes trigger a refresh, while a deleted zone produces an empty GPS result until it is restored or replaced.
 
 > The setup screens follow Home Assistant's own language (English and Czech are provided). The language chosen in step 3 only sets the labels of the dashboard card.
 
@@ -49,11 +51,11 @@ For each fuel `<fuel>` (`n95`, `benzinplus`, `diesel`, `dieselplus`, `lpg`, `cng
 
 | Entity | What |
 |---|---|
-| `sensor.ceny_paliv_<fuel>_top5` | price of the cheapest station; attributes: the 5 stations (name, address, price, coordinates, Google Maps link, trends…) |
+| `sensor.ceny_paliv_<fuel>_top5` | price of the cheapest station; attributes: the 5 cheapest stations (name, address, price, coordinates, Google Maps link, trends…). GPS mode also provides `gps_area` metadata and at most 10 compact `gps_nearest_stations` summaries ordered by distance |
 | `sensor.ceny_paliv_<fuel>_home` | price at your favourite station (only if you chose one); trends, rank, statistics |
 | `sensor.ceny_paliv_<fuel>_1` … `_5` | the 5 cheapest stations, with latitude/longitude for the map card |
 
-The sensors are named after the station they currently show (for example `1 · Orlen – Bratri Stefanu 69`); the entity ids never change. Prices refresh every 6 hours. If a refresh fails (for example HTTP 429) the last data is kept and the attribute `fetch_error` says why. Nationwide data is shared between configurations with the same key and fuel for up to 6 hours. Manual refreshes and integration reloads reuse this in-memory cache; restarting Home Assistant clears it. Cached relative freshness labels are interpreted against the original response time in the Czech timezone, not the later cache-use time.
+The position sensors are named after the station they currently show (for example `1 · Orlen – Bratri Stefanu 69`); existing entity IDs remain stable when changing area mode. Prices refresh every 6 hours. If a refresh fails (for example HTTP 429) the last data is kept and the attribute `fetch_error` says why. Nationwide data is shared between configurations with the same key and fuel for up to 6 hours. GPS filtering and the in-area favourite selector use that same snapshot; changing the area does not create another mBenzin request. Manual refreshes and integration reloads reuse this in-memory cache; restarting Home Assistant clears it. Cached relative freshness labels are interpreted against the original response time in the Czech timezone, not the later cache-use time.
 
 ## 3. The dashboard card (included, nothing else to install)
 
@@ -69,11 +71,12 @@ type: custom:ceny-paliv-card
 fuel: n95            # n95 | benzinplus | diesel | dieselplus | lpg | cng | adblue
 ```
 
-One card per fuel: for a dual-fuel car add a second card with `fuel: lpg`. The card has four parts: your favourite station (price, trends, rank), the top 5 with a Google Maps link on tap, a map and the 30-day graph. Everything below is also in the card's visual editor.
+One card per fuel: for a dual-fuel car add a second card with `fuel: lpg`. The card has four parts: your favourite station (price, trends, rank), the top 5 with a Google Maps link on tap, a map and the 30-day graph. Everything below is also in the card's visual editor. If the same fuel has multiple Ceny paliv configurations, select the intended configuration in the visual editor (or set `config_id` from the top5 sensor's `cp_config_id` in YAML); a card without an explicit configuration will not mix entities from different areas.
 
 | Option | Default | |
 |---|---|---|
 | `fuel` | – | required |
+| `config_id` | automatic when unambiguous | choose one configuration when the same fuel is configured more than once |
 | `show` | `[home, list, map, graph]` | the parts to draw: `home` (favourite station), `list` (cheapest stations), `map`, `graph` (30 days) |
 | `layout` | `auto` | `auto`: two columns (station and list on the left, map and graph on the right) when the card is wide, one column when it is narrow, as on a phone; `columns`: always two; `stack`: always one |
 | `stations` | `5` | how many stations in the list (1–5, also on the map) |
@@ -147,12 +150,16 @@ content: |-
   {% endfor %}
 ```
 
-Each station in the `stations` attribute of `sensor.ceny_paliv_<fuel>_top5` has: `rank`, `name`, `street`, `address`, `price`, `lat`, `lng`, `updated`, `maps`, `home` and `trends`. Use the `_home` sensor for your favourite station (its attributes include `rank`, `vs_cheapest` and `trends`).
+Each station in `stations` has `rank`, `name`, `street`, `address`, `price`, `lat`, `lng`, `updated`, `maps`, `home` and `trends`; GPS entries also include `distance_km`. The top5 sensor's `gps_area` attribute contains the method, centre, radius, selected zone (if any), any location error, and the total number of markers with valid coordinates in the circle. `gps_nearest_stations` is a separate, compact list of at most 10 nearby stations; it does not duplicate map links or trend histories. Provider-controlled text in GPS station attributes is capped to keep the complete state attributes below Home Assistant Recorder's 16 KiB limit. Use the `_home` sensor for your favourite station (its attributes include `rank`, `vs_cheapest`, `trends`, and—when inside the GPS area—`distance_km`).
+
+Changing a favourite to a different station gives it a station-specific statistics identity. The previous home sensor remains registered as an unavailable archived entity so its Home Assistant long-term statistics are not combined with a different station; returning to a previously selected station reuses only that station's verified identity. GPS trend history uses full marker URLs and records new samples only for the current five cheapest stations and selected favourite. Samples for stations that temporarily leave the displayed five are retained until the existing 35-day expiry and can be used again if the station returns; expired or empty URL-keyed logs are pruned on refresh. New City trend history is also keyed by full marker URL so equal slugs in different cities cannot share prices. Legacy City slug-keyed logs are left untouched and are not assigned to a physical station automatically. If a saved favourite cannot be uniquely resolved in nationwide markers, it is retained until you explicitly choose a station.
+
+After an explicit favourite change, Home Assistant may give the new home sensor a suffixed entity ID because the old ID remains attached to its archived statistics. The dashboard card resolves the current sensor automatically; standard YAML cards that refer directly to the old `_home` entity should be updated to the new home sensor entity ID.
 
 ## Notes
 
 - **E10** is not distinguished by mBenzin: "Natural 95" is the price shown for 95-octane petrol.
-- Entity ids are `sensor.ceny_paliv_<fuel>_…`. A second city would get a `_2` suffix.
+- Entity ids are `sensor.ceny_paliv_<fuel>_…`; a second configuration for the same fuel receives distinct Home Assistant entity IDs. Use `config_id` to bind a dashboard card to one area.
 - The daily price log used for the trends is stored by Home Assistant and fills up over time (a `*` next to a trend in the card marks a trend computed from a shorter history).
 
 ## Development tests

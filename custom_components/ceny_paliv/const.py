@@ -6,7 +6,7 @@ from datetime import timedelta
 DOMAIN = "ceny_paliv"
 
 CARD_URL = "/ceny_paliv_static/ceny-paliv-card.js"
-CARD_VERSION = "0.4.1"
+CARD_VERSION = "0.4.2"
 
 # Optional station logos (pack in the GitHub repository, downloaded on request, see logos.py)
 LOGO_URL = "/ceny_paliv_static/logos"  # served from <config>/ceny_paliv_logos/
@@ -17,8 +17,22 @@ LOGO_RAW_URL = _PACK + "/{id}.png"
 
 CONF_KEY = "key"
 CONF_CITY = "city"
+CONF_AREA_MODE = "area_mode"
+CONF_LOCATION_METHOD = "location_method"
+CONF_LOCATION = "location"
+CONF_ZONE_ENTITY = "zone_entity"
+CONF_GPS_RADIUS_KM = "gps_radius_km"
+AREA_MODE_CITY = "city"
+AREA_MODE_GPS = "gps"
+LOCATION_HOME = "home"
+LOCATION_ZONE = "zone"
+LOCATION_MAP = "map"
+LOCATION_MANUAL = "manual"
+DEFAULT_GPS_RADIUS_KM = 40
 CONF_FUELS = "fuels"
 CONF_HOMES = "homes"  # {fuel: station slug}
+CONF_HOME_IDENTITIES = "home_identities"  # {fuel: exact station URL after an explicit favourite change}
+CONF_HOME_HISTORY = "home_history"  # retired favourite sensor identities, retained to isolate HA statistics
 CONF_LANGUAGE = "language"
 CONF_STATION = "station"
 CONF_LOGOS = "logos"  # logo ids ticked in the setup

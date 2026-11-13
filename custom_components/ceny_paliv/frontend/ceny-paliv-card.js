@@ -19,7 +19,7 @@
  *
  * Texts come from the language chosen in the integration setup (attribute `labels` of the top5 sensor).
  */
-const CARD_VERSION = '0.4.1';
+const CARD_VERSION = '0.4.2';
 
 const PARTS = ['home', 'list', 'map', 'graph'];
 
@@ -46,6 +46,22 @@ const STYLE = `
   .map.fixed > * { position: absolute; inset: 0; display: block; }
   ha-icon { display: inline-block; }
 `;
+
+// TOP 5 sensors of one fuel (legacy entities are matched by entity id).
+function topCandidates(hass, fuel) {
+  const tops = [];
+  for (const id in hass.states) {
+    if (!id.startsWith('sensor.ceny_paliv_')) continue;
+    const a = hass.states[id].attributes || {};
+    if (a.cp_fuel) {
+      if (a.cp_fuel === fuel && a.cp_role === 'top5') tops.push({ id, attributes: a });
+    } else {
+      const m = id.match(/_([a-z0-9]+)_(top5|home|[1-5])$/);
+      if (m && m[1] === fuel && m[2] === 'top5') tops.push({ id, attributes: a });
+    }
+  }
+  return tops;
+}
 
 class CenyPalivCard extends HTMLElement {
   constructor() {
@@ -78,10 +94,19 @@ class CenyPalivCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (!this._config) return;
+    const previousIds = this._ids;
     this._ids = this._resolve(hass);
+    if (previousIds && JSON.stringify(previousIds) !== JSON.stringify(this._ids)) {
+      for (const id of ['map', 'graph']) {
+        const container = this.shadowRoot.getElementById(id);
+        if (container) container.replaceChildren();
+      }
+      this._children = null;
+      this._extraReady = false;
+    }
     const top = hass.states[this._ids.top5];
     const home = hass.states[this._ids.home];
-    const sig = [top && top.last_updated, home && home.last_updated, top && top.state, home && home.state].join('|');
+    const sig = [JSON.stringify(this._ids), top && top.last_updated, home && home.last_updated, top && top.state, home && home.state].join('|');
     if (sig !== this._sig) {
       this._sig = sig;
       this._renderTexts();
@@ -89,33 +114,79 @@ class CenyPalivCard extends HTMLElement {
     if (this._children) this._children.forEach((c) => { c.hass = hass; });
   }
 
-  // Find this fuel's sensors by their attributes, so the card does not depend on how Home Assistant names the
-  // entities (device name prefix, renamed entities, second city...). Older installs without the attributes are
-  // matched on the entity id suffix (..._<fuel>_top5, _home, _1 .. _5).
+  // Find one configuration's sensors by their attributes, not by entity-id suffix alone.
   _resolve(hass) {
     const c = this._ids;
-    const valid = c && c.top5 && hass.states[c.top5] && (!c.home || hass.states[c.home]) && c.pos.every((id) => !id || hass.states[id]);
+    const matches = (state, role, fuel, configId) => {
+      if (!state) return false;
+      const a = state.attributes || {};
+      if (a.cp_role) {
+        return a.cp_role === role
+          && a.cp_fuel === fuel
+          && typeof a.cp_config_id === 'string'
+          && a.cp_config_id === configId
+          && (role !== 'home' || !['unavailable', 'unknown'].includes(state.state));
+      }
+      return !configId && role !== 'home_archive'
+        && (role !== 'home' || !['unavailable', 'unknown'].includes(state.state));
+    };
+    const topState = c && c.top5 && hass.states[c.top5];
+    const cachedTopConfig = topState && (topState.attributes || {}).cp_config_id;
+    const expectedTopConfig = this._config.config_id || cachedTopConfig;
+    const cachedHome = c && c.home && hass.states[c.home];
+    const valid = c && matches(topState, 'top5', this._config.fuel, expectedTopConfig)
+      && (!c.home || matches(cachedHome, 'home', this._config.fuel, expectedTopConfig))
+      && c.pos.every((id, index) => {
+        if (!id) return true;
+        const state = hass.states[id];
+        const attributes = state && state.attributes || {};
+        return matches(state, 'position', this._config.fuel, cachedTopConfig)
+          && (!attributes.cp_index || attributes.cp_index === index + 1);
+      });
+    // Without an explicit config_id the binding is only safe while exactly one area offers this fuel.
+    const sole = !this._config.config_id && valid ? topCandidates(hass, this._config.fuel) : null;
     const now = Date.now();
-    if (valid && (c.home || now - this._scanAt < 10000)) return c;
+    if (sole && sole.length !== 1) return { top5: null, home: null, pos: [] };
+    if (valid && (!sole || sole[0].id === c.top5) && (c.home || (!topState.attributes.home && now - this._scanAt < 10000))) return c;
     this._scanAt = now;
     const fuel = this._config.fuel;
     const ids = { top5: null, home: null, pos: [] };
+    const tops = topCandidates(hass, this._config.fuel);
+    const candidates = this._config.config_id
+      ? tops.filter((top) => top.attributes.cp_config_id === this._config.config_id)
+      : tops;
+    if (candidates.length !== 1) return ids;
+    const selected = candidates[0];
+    const selectedConfig = selected.attributes.cp_config_id;
+    ids.top5 = selected.id;
+    const homes = [];
     for (const id of Object.keys(hass.states)) {
       if (!id.startsWith('sensor.ceny_paliv_')) continue;
       const a = hass.states[id].attributes || {};
+      if (a.cp_role === 'home_archive') continue;
+      if (a.cp_role && (
+        typeof a.cp_config_id !== 'string'
+        || a.cp_config_id !== selectedConfig
+      )) continue;
+      if (selectedConfig && a.cp_config_id !== selectedConfig) continue;
       let role = null; let idx = 0;
       if (a.cp_fuel) {
-        if (a.cp_fuel !== fuel) continue;
+        if (a.cp_fuel !== fuel || (selectedConfig && a.cp_config_id !== selectedConfig)) continue;
         role = a.cp_role; idx = a.cp_index || 0;
       } else {
         const m = id.match(/_([a-z0-9]+)_(top5|home|[1-5])$/);
         if (!m || m[1] !== fuel) continue;
-        role = m[2] === 'top5' ? 'top5' : m[2] === 'home' ? 'home' : 'position'; idx = /^\d$/.test(m[2]) ? Number(m[2]) : 0;
+        role = m[2] === 'top5' ? 'top5' : m[2] === 'home' ? 'home' : 'position';
+        idx = /^\d$/.test(m[2]) ? Number(m[2]) : 0;
       }
-      if (role === 'top5') ids.top5 = id;
-      else if (role === 'home') ids.home = id;
+      if (
+        role === 'home'
+        && !['unavailable', 'unknown'].includes(hass.states[id].state)
+        && (!selectedConfig || a.cp_config_id === selectedConfig)
+      ) homes.push(id);
       else if (role === 'position' && idx >= 1 && idx <= 5) ids.pos[idx - 1] = id;
     }
+    ids.home = homes.length === 1 ? homes[0] : null;
     return ids;
   }
 
@@ -148,6 +219,22 @@ class CenyPalivCard extends HTMLElement {
       const isTop = a.cp_role === 'top5' || (!a.cp_role && /_top5$/.test(id) && a.fuel);
       if (isTop && a.fuel && !out.some((o) => o.value === a.fuel)) out.push({ value: a.fuel, label: a.fuel_label || a.fuel });
     }
+    return out;
+  }
+  static configurations(hass, fuel) {
+    const configs = [];
+    for (const [id, state] of Object.entries((hass && hass.states) || {})) {
+      const a = state.attributes || {};
+      if (!id.startsWith('sensor.ceny_paliv_') || a.cp_fuel !== fuel || a.cp_role !== 'top5' || !a.cp_config_id) continue;
+      if (!configs.some((item) => item.value === a.cp_config_id)) {
+        const label = a.city_name || 'GPS area';
+        configs.push({
+          value: a.cp_config_id,
+          label: `${label} (${a.cp_config_id.slice(0, 8)})`,
+        });
+      }
+    }
+    return configs.sort((a, b) => a.label.localeCompare(b.label));
     return out;
   }
   static getStubConfig(hass) {
@@ -294,7 +381,7 @@ class CenyPalivCard extends HTMLElement {
     const root = this.shadowRoot;
     const slot = (p, html) => { const el = root.getElementById(p); if (el) el.innerHTML = html; };
     if (!top || top.state === 'unavailable') {
-      const msg = `<div class="card" style="color:#9aa1ad;font-size:14px">Ceny paliv (${esc(this._config.fuel)}): sensor not found or unavailable — is the fuel set up in the integration?</div>`;
+      const msg = `<div class="card" style="color:#9aa1ad;font-size:14px">Ceny paliv (${esc(this._config.fuel)}): sensor not found, unavailable, or ambiguous — choose its configuration in the card editor.</div>`;
       const first = this._show.find((p) => p === 'home' || p === 'list') || this._show[0];
       this._show.forEach((p) => slot(p, p === first ? msg : ''));
       return;
@@ -465,13 +552,13 @@ class CenyPalivCard extends HTMLElement {
 // ------------------------------------------------------------------ visual editor
 const EDITOR_TEXT = {
   en: {
-    fuel: 'Fuel', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
+    fuel: 'Fuel', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
     map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
     home: 'My station', list: 'Cheapest stations', map: 'Map', graph: '30-day graph',
     auto: 'Automatic: 2 columns when the card is wide', columns: 'Always 2 columns', stack: 'Always 1 column',
   },
   cs: {
-    fuel: 'Palivo', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
+    fuel: 'Palivo', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
     map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
     home: 'Moje stanice', list: 'Nejlevnější stanice', map: 'Mapa', graph: 'Graf za 30 dní',
     auto: 'Automaticky: 2 sloupce, je-li karta široká', columns: 'Vždy 2 sloupce', stack: 'Vždy 1 sloupec',
@@ -488,6 +575,21 @@ class CenyPalivCardEditor extends HTMLElement {
       this._form = document.createElement('ha-form');
       this._form.addEventListener('value-changed', (e) => {
         const config = Object.assign({}, this._config, e.detail.value);
+        const selectedFuel = config.fuel;
+        const availableConfigurations = CenyPalivCard.configurations(this._hass, selectedFuel);
+        const selectedConfigIsValid = availableConfigurations.some(
+          (item) => item.value === config.config_id
+        );
+        const fuelChanged = selectedFuel !== this._config.fuel;
+        if (!selectedConfigIsValid && (fuelChanged || config.config_id)) {
+          if (availableConfigurations.length === 1) {
+            config.config_id = availableConfigurations[0].value;
+          } else {
+            delete config.config_id;
+          }
+        } else if (fuelChanged && availableConfigurations.length === 1) {
+          config.config_id = availableConfigurations[0].value;
+        }
         for (const k of Object.keys(config)) {
           const v = config[k];
           if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length) || (k === 'map_height' && !v)) delete config[k];
@@ -499,10 +601,14 @@ class CenyPalivCardEditor extends HTMLElement {
     const lang = ((this._hass.language || 'en').split('-')[0] in EDITOR_TEXT) ? this._hass.language.split('-')[0] : 'en';
     const L = EDITOR_TEXT[lang];
     const options = CenyPalivCard.fuels(this._hass);
+    const configurations = CenyPalivCard.configurations(this._hass, this._config.fuel);
     this._form.hass = this._hass;
     this._form.data = Object.assign({ show: PARTS, layout: 'auto', stations: 5, compact: false, show_footer: !this._config.compact, map_height: 0 }, this._config);
     this._form.schema = [
       { name: 'fuel', required: true, selector: { select: { options, mode: 'dropdown' } } },
+      ...(configurations.length > 1
+        ? [{ name: 'config_id', selector: { select: { options: configurations, mode: 'dropdown' } } }]
+        : []),
       { name: 'show', selector: { select: { multiple: true, mode: 'list', options: PARTS.map((p) => ({ value: p, label: L[p] })) } } },
       { name: 'layout', selector: { select: { mode: 'dropdown', options: ['auto', 'columns', 'stack'].map((p) => ({ value: p, label: L[p] })) } } },
       { name: 'stations', selector: { number: { min: 1, max: 5, step: 1, mode: 'slider' } } },
