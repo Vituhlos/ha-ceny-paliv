@@ -1509,3 +1509,19 @@ async def test_remove_entry_deletes_history_and_last_unload_releases_cache(
     # big, display-only attributes stay out of the recorder
     assert {"stations", "labels", "logos", "gps_area"} <= CenyPalivTop5Sensor._unrecorded_attributes
     assert "trends" in CenyPalivHomeSensor._unrecorded_attributes
+
+
+async def test_first_refresh_without_any_data_retries_setup(hass, enable_custom_integrations, mock_frontend):
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={"key": "dummy", "city": "Praha"},
+        options={"fuels": ["n95", "diesel"], "homes": {}}, unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.ceny_paliv.coordinator.async_fetch_snapshot",
+        new=AsyncMock(side_effect=CannotConnect("HTTP 503")),
+    ):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    assert hass.states.get("sensor.ceny_paliv_n95_top5") is None
