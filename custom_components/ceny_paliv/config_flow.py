@@ -213,12 +213,13 @@ class _FuelStationSteps:
                     self._pending_fuels = None
                     self._pending_language = None
                     return await self.async_step_station()
+        pending_fuels = getattr(self, "_pending_fuels", None)
         default_fuels = (
-            self._pending_fuels
-            if self._pending_fuels is not None
-            else self._defaults_fuels
+            pending_fuels if pending_fuels is not None else self._defaults_fuels
         )
-        default_language = self._pending_language or self._default_language()
+        default_language = (
+            getattr(self, "_pending_language", None) or self._default_language()
+        )
         schema = vol.Schema(
             {
                 vol.Required(CONF_FUELS, default=default_fuels): SelectSelector(
