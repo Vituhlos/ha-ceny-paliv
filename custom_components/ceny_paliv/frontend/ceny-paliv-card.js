@@ -327,8 +327,10 @@ class CenyPalivCard extends HTMLElement {
     const hasHome = !!this._hass.states[this._ids.home];
     const kids = [];
     if (this._show.includes('map')) {
-      const entities = this._ids.pos.slice(0, this._n).filter(Boolean).map((id) => ({ entity: id, label_mode: 'state', focus: true }));
-      if (hasHome) entities.push({ entity: this._ids.home, label_mode: 'state', focus: true });
+      // The marker is too narrow for the state with its unit ("37,9 Kč/l" showed as "7,9 Kč"): show the bare price.
+      const marker = (id) => ({ entity: id, label_mode: 'attribute', attribute: 'price', focus: true });
+      const entities = this._ids.pos.slice(0, this._n).filter(Boolean).map(marker);
+      if (hasHome) entities.push(marker(this._ids.home));
       kids.push({ id: 'map', cls: this._mapHeight ? 'map fixed' : 'map', config: { type: 'map', theme_mode: 'dark', auto_fit: true, default_zoom: 12, hours_to_show: 0, entities } });
     }
     if (this._show.includes('graph') && hasHome) {

@@ -1082,6 +1082,9 @@ async def test_coordinator_sensors_and_failed_refresh(hass, enable_custom_integr
         assert home.attributes["rank"] == 2
         assert position.state == "33"
         assert position.attributes["latitude"] == 50.1
+        # the map card labels its markers with the bare price
+        assert position.attributes["price"] == 33
+        assert home.attributes["price"] == 35
         # a position without a station keeps its identity attributes for the card (unknown, not unavailable)
         empty_position = hass.states.get("sensor.ceny_paliv_n95_3")
         assert empty_position.state == "unknown"

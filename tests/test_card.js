@@ -148,6 +148,32 @@ test("a missing active favourite produces no statistics graph", async () => {
   assert.equal(card._children.length, 0);
 });
 
+test("map markers show the bare price attribute, not the state with its unit", async () => {
+  const configs = [];
+  context.window.loadCardHelpers = async () => ({
+    createCardElement: (config) => { configs.push(config); return new Element(); },
+  });
+  const card = {
+    _extraReady: false,
+    _hass: { states: { "sensor.home": {} } },
+    _ids: { home: "sensor.home", pos: ["sensor.p1", "sensor.p2"] },
+    _show: ["map"],
+    _n: 5,
+    _mapHeight: 0,
+    _children: null,
+    shadowRoot: { getElementById: () => ({ replaceChildren() {} }) },
+  };
+
+  await CenyPalivCard.prototype._buildExtra.call(card);
+
+  const map = configs.find((c) => c.type === "map");
+  assert.deepEqual(map.entities.map((e) => [e.entity, e.label_mode, e.attribute]), [
+    ["sensor.p1", "attribute", "price"],
+    ["sensor.p2", "attribute", "price"],
+    ["sensor.home", "attribute", "price"],
+  ]);
+});
+
 test("editor clears an incompatible area on fuel change and keeps a valid choice", () => {
   const top = (fuel, configId) => [
     `sensor.ceny_paliv_${fuel}_${configId}_top5`,
