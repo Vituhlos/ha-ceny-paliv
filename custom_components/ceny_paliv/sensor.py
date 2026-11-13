@@ -19,7 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import station_title
-from .const import FUELS, TOP
+from .const import ATTRIBUTION, FUELS, TOP
 from .coordinator import CenyPalivConfigEntry, CenyPalivCoordinator
 
 TOP_ATTRIBUTES = (
@@ -83,6 +83,7 @@ class CenyPalivEntity(CoordinatorEntity[CenyPalivCoordinator], SensorEntity):
     """Base: one fuel of one city."""
 
     _attr_has_entity_name = False  # keeps the entity ids predictable: sensor.ceny_paliv_<fuel>_...
+    _attr_attribution = ATTRIBUTION  # shown by Home Assistant with the state (condition of the mBenzin key)
 
     def __init__(
         self,
