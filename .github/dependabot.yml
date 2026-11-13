@@ -1,0 +1,8 @@
+# Keeps the pinned GitHub Actions (commit SHAs) current; the test requirements are pinned to Home Assistant
+# releases on purpose and are updated by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

@@ -30,7 +30,6 @@ from homeassistant.helpers.selector import (
 )
 
 from .api import (
-    CannotConnect,
     InvalidAuth,
     MBenzinError,
     RateLimited,

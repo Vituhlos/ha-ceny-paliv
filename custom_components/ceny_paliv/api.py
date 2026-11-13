@@ -242,10 +242,11 @@ class SharedMarkerCache:
                     self._key_backoffs[key_hash] = max(
                         proposed_until, self._key_backoffs.get(key_hash, proposed_until)
                     )
-                raise RateLimited(err.retry_after)
+                # fresh errors for every waiter, deliberately not chained to the shared one
+                raise RateLimited(err.retry_after) from None
             if isinstance(err, InvalidAuth):
-                raise InvalidAuth(*err.args, definite=err.definite)
-            raise type(err)(*err.args)
+                raise InvalidAuth(*err.args, definite=err.definite) from None
+            raise type(err)(*err.args) from None
         else:
             fetched_at = self._clock()
             if fetched_at.tzinfo is None:
