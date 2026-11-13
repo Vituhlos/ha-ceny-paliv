@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.1
+
+### Changed
+
+- **Price source shown with the prices** (#19): mBenzin.cz gives the access key on condition that the prices are
+  shown with the visible source „Ceny: mbenzin.cz“ (as a link on the web). The card now shows it as a link to
+  mbenzin.cz in both footers, and under your station when the favourite card is shown alone. Tapping the link opens
+  only the link. Every sensor also carries it as its `attribution`, so Home Assistant shows it in the entity details.
+
+### Known limitations
+
+- Not verified against a live Home Assistant instance or in a browser before release; validated with offline tests
+  and CI only.
+
 ## 0.5.0
 
 ### New
