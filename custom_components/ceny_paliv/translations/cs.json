@@ -85,6 +85,26 @@
         "data": {
           "logos": "Loga"
         }
+      },
+      "reauth_confirm": {
+        "title": "Nový přístupový klíč mBenzin",
+        "description": "mBenzin.cz už nepřijímá přístupový klíč této konfigurace. Zadejte platný klíč: nastavení, historie cen i senzory zůstanou zachovány.",
+        "data": {
+          "key": "Přístupový klíč"
+        },
+        "data_description": {
+          "key": "Klíč, který jste dostali e-mailem od mBenzin.cz. Zkopírujte ho celý, bez mezer."
+        }
+      },
+      "reconfigure": {
+        "title": "Změna přístupového klíče mBenzin",
+        "description": "Zadejte nový přístupový klíč. Nastavení, historie cen i senzory zůstanou zachovány.",
+        "data": {
+          "key": "Přístupový klíč"
+        },
+        "data_description": {
+          "key": "Klíč, který jste dostali e-mailem od mBenzin.cz. Zkopírujte ho celý, bez mezer."
+        }
       }
     },
     "error": {
@@ -98,7 +118,9 @@
       "invalid_radius": "Zvolte poloměr od 5 do 50 km."
     },
     "abort": {
-      "already_configured": "Toto město je již nastaveno."
+      "already_configured": "Toto město je již nastaveno.",
+      "reauth_successful": "Přístupový klíč byl aktualizován.",
+      "reconfigure_successful": "Přístupový klíč byl aktualizován."
     }
   },
   "options": {

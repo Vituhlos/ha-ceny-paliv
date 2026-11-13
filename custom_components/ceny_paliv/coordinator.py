@@ -6,6 +6,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -14,6 +15,7 @@ from homeassistant.util import dt as dt_util
 
 from .logos import logo_dir, scan_logos
 from .api import (
+    InvalidAuth,
     MBenzinError,
     async_fetch_snapshot,
     build_payload,
@@ -58,6 +60,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         super().__init__(hass, _LOGGER, name=DOMAIN, config_entry=entry, update_interval=UPDATE_INTERVAL)
         self._store: Store[dict[str, dict]] = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}")
         self._history: dict[str, dict[str, list[list]]] | None = None
+        self._key_rejections = 0  # consecutive refreshes in which every fuel was refused for the key
         if (
             entry.options.get(CONF_AREA_MODE) == AREA_MODE_GPS
             and entry.options.get(CONF_LOCATION_METHOD) == LOCATION_ZONE
@@ -142,6 +145,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         homes = self.homes
         result: dict[str, dict[str, Any]] = {}
         errors: list[str] = []
+        auth_errors: list[InvalidAuth] = []
 
         for fuel in self.fuels:
             try:
@@ -152,6 +156,8 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 now = dt_util.now()
                 err_name = type(err).__name__
                 errors.append(f"{fuel}: {err_name}")
+                if isinstance(err, InvalidAuth):
+                    auth_errors.append(err)
                 previous = (self.data or {}).get(fuel)
                 if previous is None:
                     continue
@@ -180,6 +186,15 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 gps_error=gps_error,
                 legacy_city=self.config_entry.data.get(CONF_CITY),
             )
+
+        if self.fuels and len(auth_errors) == len(self.fuels):
+            self._key_rejections += 1
+            # 401/403 is certain; an HTML answer only after it repeats (6 h later), so an outage page cannot
+            # ask for a new key. Home Assistant then shows the "Reauthenticate" prompt.
+            if any(err.definite for err in auth_errors) or self._key_rejections >= 2:
+                raise ConfigEntryAuthFailed("mBenzin.cz no longer accepts the access key")
+        else:
+            self._key_rejections = 0
 
         logos = await self.hass.async_add_executor_job(scan_logos, logo_dir(self.hass))
         for payload in result.values():

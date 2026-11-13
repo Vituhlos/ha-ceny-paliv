@@ -1343,3 +1343,23 @@ def test_city_payload_skips_a_malformed_marker_instead_of_failing(broken, marker
 @pytest.mark.parametrize("value", [5, None, "před 99999999 dny"])
 def test_parse_fresh_rejects_unusable_values(value):
     assert parse_fresh(value, date(2025, 1, 15)) is None
+
+
+async def test_refused_key_is_definite_only_for_401_and_403():
+    with pytest.raises(InvalidAuth) as err:
+        await async_fetch_markers(session_with_response(status=401), "key", "n95")
+    assert err.value.definite is True
+    with pytest.raises(InvalidAuth) as err:
+        await async_fetch_markers(session_with_response(json_error=ValueError("html")), "key", "n95")
+    assert err.value.definite is False
+    # the shared cache re-raises a fresh error that keeps the flag
+    with pytest.raises(InvalidAuth) as err:
+        await async_fetch_markers(session_with_response(status=403), "key", "n95", cache=SharedMarkerCache(max_entries=2))
+    assert err.value.definite is True
+
+
+async def test_key_that_aiohttp_refuses_as_header_is_invalid_auth():
+    session = MagicMock()
+    session.get.side_effect = ValueError("Newline or carriage return character detected in HTTP header")
+    with pytest.raises(InvalidAuth):
+        await async_fetch_markers(session, "bad\nkey", "n95")

@@ -1277,3 +1277,101 @@ async def test_gps_zone_updates_and_missing_zone_empty_area(
         assert top.attributes["stations"] == []
         assert fetch.await_count == 3
         assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_reauth_and_reconfigure_replace_only_the_key(hass, enable_custom_integrations, mock_frontend, marker):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "old-key", "city": "Praha"},
+        options={"fuels": ["n95"], "homes": {}, "language": "cs"},
+        unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+    entry_id = entry.entry_id
+    with (
+        patch(
+            "custom_components.ceny_paliv.config_flow.async_fetch_markers",
+            new=AsyncMock(return_value=[marker("Oblibena", 33)]),
+        ) as fetch,
+        patch("custom_components.ceny_paliv.async_setup_entry", new=AsyncMock(return_value=True)),
+    ):
+        result = await entry.start_reauth_flow(hass)
+        assert result["step_id"] == "reauth_confirm"
+        # a key with a line break can never be sent as a header: refused without a request
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"key": "bad\nkey"})
+        assert result["errors"] == {"base": "invalid_auth"}
+        assert fetch.await_count == 0
+        fetch.side_effect = InvalidAuth
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"key": "still-wrong"})
+        assert result["errors"] == {"base": "invalid_auth"}
+        fetch.side_effect = None
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"key": " new-key "})
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "reauth_successful"
+        assert entry.data == {"key": "new-key", "city": "Praha"}
+        assert entry.entry_id == entry_id
+
+        result = await entry.start_reconfigure_flow(hass)
+        assert result["step_id"] == "reconfigure"
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"key": "third-key"})
+        assert result["reason"] == "reconfigure_successful"
+        assert entry.data["key"] == "third-key"
+        assert entry.options["fuels"] == ["n95"]
+
+
+@pytest.mark.parametrize(("definite", "refreshes_until_reauth"), [(True, 1), (False, 2)])
+async def test_refused_key_starts_reauth(
+    hass, enable_custom_integrations, mock_frontend, marker, definite, refreshes_until_reauth
+):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": "Praha"},
+        options={"fuels": ["n95", "diesel"], "homes": {}, "language": "cs"},
+        unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+    snapshot = MarkerSnapshot(markers=[marker("Levna", 33)], fetched_at=dt_util.now())
+
+    def reauth_flows():
+        return [
+            flow for flow in hass.config_entries.flow.async_progress()
+            if flow["context"]["source"] == "reauth"
+        ]
+
+    with patch(
+        "custom_components.ceny_paliv.coordinator.async_fetch_snapshot", new=AsyncMock(return_value=snapshot)
+    ) as fetch:
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        # 401/403 is certain; an HTML page (definite=False) only counts when it repeats
+        fetch.side_effect = InvalidAuth(definite=definite)
+        for refresh in range(1, refreshes_until_reauth + 1):
+            await entry.runtime_data.async_refresh()
+            await hass.async_block_till_done()
+            assert bool(reauth_flows()) is (refresh == refreshes_until_reauth)
+        assert hass.states.get("sensor.ceny_paliv_n95_top5").state == "unavailable"
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_one_refused_fuel_does_not_ask_for_a_new_key(hass, enable_custom_integrations, mock_frontend, marker):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": "Praha"},
+        options={"fuels": ["n95", "diesel"], "homes": {}, "language": "cs"},
+        unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+
+    async def fetch(session, key, fuel, *, cache=None):
+        if fuel == "diesel":
+            raise InvalidAuth(definite=True)
+        return MarkerSnapshot(markers=[marker("Levna", 33)], fetched_at=dt_util.now())
+
+    with patch("custom_components.ceny_paliv.coordinator.async_fetch_snapshot", new=fetch):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        await entry.runtime_data.async_refresh()
+        await hass.async_block_till_done()
+        assert not [f for f in hass.config_entries.flow.async_progress() if f["context"]["source"] == "reauth"]
+        assert hass.states.get("sensor.ceny_paliv_n95_top5").state == "33"
+        assert await hass.config_entries.async_unload(entry.entry_id)
