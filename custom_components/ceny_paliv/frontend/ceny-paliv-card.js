@@ -397,6 +397,12 @@ class CenyPalivCard extends HTMLElement {
     return best ? `/ceny_paliv_static/logos/${encodeURIComponent(best)}.png` : '';
   }
 
+  // Condition of the mBenzin.cz access key: "Ceny: mbenzin.cz" shown visibly with the prices, as a link on the web.
+  _source() {
+    const text = this._labels().source || 'Ceny: mbenzin.cz';
+    return `<a href="https://www.mbenzin.cz" target="_blank" rel="noopener noreferrer" style="color:inherit">${esc(text)}</a>`;
+  }
+
   _initials(name) {
     const w = String(name || '?').trim();
     return (w.length <= 3 ? w : w.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2)).toUpperCase();
@@ -517,6 +523,7 @@ class CenyPalivCard extends HTMLElement {
         ${note ? `<span style="font-size:11px;color:#5b6270;margin-top:-4px">${esc(note)}</span>` : ''}`}
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;font-weight:600">${pos}
           ${cp ? '' : `<span style="color:#5b6270;font-weight:500;white-space:nowrap">${esc(T('tap_history'))}</span>`}</div>
+        ${this._show.includes('list') ? '' : `<span style="font-size:11px;color:#5b6270">${this._source()}</span>`}
       </div></div>`;
   }
 
@@ -581,8 +588,8 @@ class CenyPalivCard extends HTMLElement {
     if (at.fetch_error) lines.push(`<span style="font-size:12px;color:#f5c26b">${esc(T('refresh_failed', { at: la ? T('at') + when(la) : '', err: at.fetch_error }))}</span>`);
     if (at.city_total) lines.push(`<span style="font-size:12px;color:#9aa1ad">${esc(T('hidden', { h: hidden, t: at.city_total, age: maxAge >= 1 ? T('yesterday_l') : T('today_l') }))}</span>`);
     lines.push(`<span style="font-size:11px;color:#9aa1ad">${esc(T('arrows'))} · <span style="color:#5fd39a">▼ ${esc(T('down'))}</span> · <span style="color:#f5c26b">— ${esc(T('stable'))}</span> · <span style="color:#ff7a6b">▲ ${esc(T('up'))}</span> · ${esc(T('longpress'))}</span>`);
-    lines.push(`<span style="font-size:11px;color:#5b6270">mBenzin.cz · ${esc(at.fuel_label || '')}${at.fuel === 'n95' ? ' ' + esc(T('e10_note')) : ''} · ${esc(T('tap_station'))}</span>`);
-    const foot = !this._footer ? `<div style="padding-top:6px;font-size:11px;color:#5b6270;text-align:left">mBenzin.cz${at.fetch_error ? ' · ' + esc(T('refresh_failed', { at: '', err: at.fetch_error })) : ''}</div>` : `<div style="display:flex;flex-direction:column;gap:3px;text-align:left;border-top:1px solid #23272f;padding-top:12px">${lines.join('')}</div>`;
+    lines.push(`<span style="font-size:11px;color:#5b6270">${this._source()} · ${esc(at.fuel_label || '')}${at.fuel === 'n95' ? ' ' + esc(T('e10_note')) : ''} · ${esc(T('tap_station'))}</span>`);
+    const foot = !this._footer ? `<div style="padding-top:6px;font-size:11px;color:#5b6270;text-align:left">${this._source()}${at.fetch_error ? ' · ' + esc(T('refresh_failed', { at: '', err: at.fetch_error })) : ''}</div>` : `<div style="display:flex;flex-direction:column;gap:3px;text-align:left;border-top:1px solid #23272f;padding-top:12px">${lines.join('')}</div>`;
     return `<div class="card${cp ? ' compact' : ''}" data-more-info="${esc(this._ids.home || this._ids.top5)}">${head}${rows}${foot}</div>`;
   }
 
@@ -620,6 +627,7 @@ class CenyPalivCard extends HTMLElement {
   }
 
   _click(e) {
+    if (e.composedPath && e.composedPath().some((n) => n.tagName === 'A')) return;
     const t = this._entityId(e);
     if (!t) return;
     if (this._long) { this._long = false; return; }

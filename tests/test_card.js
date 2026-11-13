@@ -450,3 +450,34 @@ test("a long press is cancelled when the pointer moves away, and Enter opens a f
   CenyPalivCard.prototype._key.call(card, { key: "Enter", preventDefault() {}, composedPath: () => [row] });
   assert.equal(context.window.opened.at(-1), row.dataset.maps);
 });
+
+test("prices always show the required source 'Ceny: mbenzin.cz' as a link", () => {
+  const top = {
+    state: "30", last_updated: "x",
+    attributes: {
+      stations: [{ name: "Orlen", address: "Orlen Praha", price: 30, updated_date: new Date().toISOString().slice(0, 10), trends: {} }],
+      fuel: "n95", fuel_label: "Natural 95", labels: { source: "Ceny: mbenzin.cz" }, max_age_days: 1,
+    },
+  };
+  const home = { state: "31", last_updated: "x", attributes: { trends: {}, unit_of_measurement: "Kč/l" } };
+  const card = Object.create(CenyPalivCard.prototype);
+  Object.assign(card, {
+    _hass: { states: { "sensor.t": top, "sensor.h": home } },
+    _ids: { top5: "sensor.t", home: "sensor.h", pos: [] },
+    _config: { fuel: "n95" }, _n: 5, _compact: false, _footer: true, _show: ["home", "list"],
+  });
+  const link = /<a href="https:\/\/www\.mbenzin\.cz"[^>]*>Ceny: mbenzin\.cz<\/a>/;
+  assert.match(card._listHtml(), link);
+  card._footer = false; // the short footer keeps it too
+  assert.match(card._listHtml(), link);
+  assert.doesNotMatch(card._homeHtml(), link); // shown once, under the list
+  card._show = ["home"]; // the favourite card on its own carries it
+  assert.match(card._homeHtml(), link);
+
+  // a tap on the link opens only the link: no more-info, no map
+  const opened = context.window.opened.length;
+  card._entityId = () => ({ dataset: { moreInfo: "sensor.t" } });
+  card._moreInfo = () => assert.fail("more-info must not open");
+  card._click({ composedPath: () => [{ tagName: "A" }, { dataset: { moreInfo: "sensor.t" } }] });
+  assert.equal(context.window.opened.length, opened);
+});

@@ -1075,6 +1075,9 @@ async def test_coordinator_sensors_and_failed_refresh(hass, enable_custom_integr
         position = hass.states.get("sensor.ceny_paliv_n95_1")
         assert top.state == "33"
         assert top.attributes["city_total"] == 2
+        # condition of the mBenzin key: the source is shown with the prices
+        assert top.attributes["attribution"] == "Ceny: mbenzin.cz"
+        assert home.attributes["attribution"] == "Ceny: mbenzin.cz"
         assert home.state == "35"
         assert home.attributes["rank"] == 2
         assert position.state == "33"

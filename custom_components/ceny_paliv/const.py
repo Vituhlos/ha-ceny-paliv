@@ -74,6 +74,10 @@ MAX_RETRY_AFTER = timedelta(hours=24)
 
 MAPS = "https://www.google.com/maps/search/?api=1&query={lat},{lng}"
 
+# Condition of the mBenzin.cz access key: show "Ceny: mbenzin.cz" visibly with the prices (as a link on the web).
+SOURCE_URL = "https://www.mbenzin.cz"
+ATTRIBUTION = "Ceny: mbenzin.cz"
+
 LANGUAGES = {"en": "English", "cs": "Čeština"}
 DEFAULT_LANGUAGE = "en"
 
@@ -114,6 +118,7 @@ LABELS: dict[str, dict[str, str]] = {
         "vs_yesterday": "vs yesterday",
         "name_cheapest": "cheapest",
         "name_home": "favourite station",
+        "source": "Ceny: mbenzin.cz",
     },
     "cs": {
         "locale": "cs-CZ",
@@ -149,5 +154,6 @@ LABELS: dict[str, dict[str, str]] = {
         "vs_yesterday": "oproti včerejšku",
         "name_cheapest": "nejlevnější",
         "name_home": "oblíbená stanice",
+        "source": "Ceny: mbenzin.cz",
     },
 }
