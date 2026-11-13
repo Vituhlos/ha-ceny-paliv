@@ -1,4 +1,5 @@
 """Home Assistant configuration, coordinator and sensor regressions."""
+from datetime import timedelta
 import hashlib
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -1091,6 +1092,35 @@ async def test_coordinator_sensors_and_failed_refresh(hass, enable_custom_integr
         assert top.state == "33"
         assert top.attributes["fetch_error"] == "CannotConnect"
         assert hass.states.get("sensor.ceny_paliv_diesel_top5").state == "32"
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_upgrade_keeps_legacy_city_trend_history(
+    hass, hass_storage, enable_custom_integrations, mock_frontend, marker
+):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": "Praha"},
+        options={"fuels": ["n95"], "homes": {"n95": "Oblibena"}, "language": "cs"},
+        unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+    yesterday = (dt_util.now().date() - timedelta(days=1)).isoformat()
+    # history as written by 0.4.1: keyed by station slug
+    hass_storage[f"{DOMAIN}.{entry.entry_id}"] = {
+        "version": 1, "minor_version": 1, "key": f"{DOMAIN}.{entry.entry_id}",
+        "data": {"n95": {"Oblibena": [[yesterday, 34]]}},
+    }
+    station = marker("Oblibena", 35)
+    snapshot = MarkerSnapshot(markers=[station], fetched_at=dt_util.now())
+    with patch("custom_components.ceny_paliv.coordinator.async_fetch_snapshot", new=AsyncMock(return_value=snapshot)):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        home = hass.states.get("sensor.ceny_paliv_n95_home")
+        assert home.attributes["trends"]["1"]["ref_price"] == 34
+        saved = await entry.runtime_data._store.async_load()
+        assert "Oblibena" not in saved["n95"]
+        assert saved["n95"][station["url"]][0] == [yesterday, 34]
         assert await hass.config_entries.async_unload(entry.entry_id)
 
 
