@@ -1234,3 +1234,35 @@ async def test_key_backoff_survives_reload_but_not_home_assistant_restart(marker
         marker("After restart", 30)
     ]
     assert fresh.get.call_count == 1
+
+
+async def test_shared_cache_expires_before_the_next_scheduled_refresh(marker):
+    """HA schedules the next refresh at int(loop.time()) + 0.05..0.5 s + interval after the previous one."""
+    import math
+
+    from custom_components.ceny_paliv.const import UPDATE_INTERVAL
+
+    monotonic = [100.9]  # the snapshot is stored late in a second...
+    cache = SharedMarkerCache(max_entries=20, monotonic=lambda: monotonic[0])
+    first = session_with_response(data={"markers": [marker("Old", 31)]})
+    fresh = session_with_response(data={"markers": [marker("New", 30)]})
+
+    assert await async_fetch_markers(first, "key", "n95", cache=cache) == [marker("Old", 31)]
+    # ...and the refresh finishes a moment later, so the next one is scheduled before t_store + interval
+    monotonic[0] = math.floor(100.95) + 0.05 + UPDATE_INTERVAL.total_seconds()
+    assert await async_fetch_markers(fresh, "key", "n95", cache=cache) == [marker("New", 30)]
+    assert first.get.call_count == fresh.get.call_count == 1
+
+
+def test_retry_after_is_capped():
+    now = datetime(2025, 1, 15, 12, 0, tzinfo=timezone.utc)
+    assert _retry_after_seconds("99999999999", now) == 24 * 3600
+    assert _retry_after_seconds(format_datetime(datetime(2030, 1, 1, tzinfo=timezone.utc)), now) == 24 * 3600
+
+
+def test_next_update_counts_elapsed_time_across_dst(marker):
+    prague = ZoneInfo("Europe/Prague")
+    result = payload([marker("A", 30)], datetime(2025, 3, 30, 0, 30, tzinfo=prague))
+    assert result["next_update"] == "2025-03-30T07:30:00+02:00"
+    result = payload([marker("A", 30)], datetime(2025, 10, 26, 0, 30, tzinfo=prague))
+    assert result["next_update"] == "2025-10-26T05:30:00+01:00"

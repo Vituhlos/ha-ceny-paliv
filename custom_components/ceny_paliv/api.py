@@ -27,6 +27,8 @@ from .const import (
     HISTORY_DAYS,
     LABELS,
     MAPS,
+    MARKER_CACHE_TTL,
+    MAX_RETRY_AFTER,
     MAX_AGE_DAYS_BY_FUEL,
     MAX_AGE_DAYS_DEFAULT,
     PERIODS,
@@ -70,6 +72,13 @@ def _now_prague() -> dt.datetime:
     return dt.datetime.now(_CZECH_TIMEZONE)
 
 
+def next_update_at(now: dt.datetime) -> dt.datetime:
+    """`now` + the refresh interval in elapsed time (correct across DST changes), in now's timezone."""
+    if now.tzinfo is None:
+        return now + UPDATE_INTERVAL
+    return (now.astimezone(timezone.utc) + UPDATE_INTERVAL).astimezone(now.tzinfo)
+
+
 def _retry_after_seconds(value: str | None, now: dt.datetime | None = None) -> float | None:
     """Parse a valid Retry-After header as a non-negative delay."""
     if not value:
@@ -80,7 +89,7 @@ def _retry_after_seconds(value: str | None, now: dt.datetime | None = None) -> f
             delay = float(int(value))
         except (OverflowError, ValueError):
             return None
-        return delay if math.isfinite(delay) else None
+        return min(delay, MAX_RETRY_AFTER.total_seconds()) if math.isfinite(delay) else None
     try:
         retry_at = parsedate_to_datetime(value)
         if retry_at.tzinfo is None:
@@ -88,7 +97,8 @@ def _retry_after_seconds(value: str | None, now: dt.datetime | None = None) -> f
         current = now or dt.datetime.now(timezone.utc)
         if current.tzinfo is None:
             current = current.replace(tzinfo=timezone.utc)
-        return max(0.0, (retry_at - current.astimezone(timezone.utc)).total_seconds())
+        delay = (retry_at - current.astimezone(timezone.utc)).total_seconds()
+        return min(max(0.0, delay), MAX_RETRY_AFTER.total_seconds())
     except (TypeError, ValueError, OverflowError):
         return None
 
@@ -158,7 +168,7 @@ class SharedMarkerCache:
     def __init__(
         self,
         max_entries: int,
-        ttl: dt.timedelta = UPDATE_INTERVAL,
+        ttl: dt.timedelta = MARKER_CACHE_TTL,
         clock: Callable[[], dt.datetime] = _now_prague,
         monotonic: Callable[[], float] | None = None,
     ) -> None:
@@ -696,7 +706,7 @@ def build_payload(
         "city_name": pretty(city) if not gps_mode else ("GPS area" if language != "cs" else "GPS okolí"),
         "language": language,
         "labels": LABELS.get(language, LABELS[DEFAULT_LANGUAGE]),
-        "next_update": (now + UPDATE_INTERVAL).isoformat(timespec="seconds"),
+        "next_update": next_update_at(now).isoformat(timespec="seconds"),
     }
     if not gps_mode:
         result["city_total"] = len(in_city)
