@@ -53,6 +53,7 @@ from .const import (
     CONF_LOCATION_METHOD,
     CONF_LANGUAGE,
     CONF_LOGOS,
+    CONF_MAX_AGE_DAYS,
     CONF_STATION,
     CONF_ZONE_ENTITY,
     AREA_MODE_CITY,
@@ -67,6 +68,8 @@ from .const import (
     LOCATION_MANUAL,
     LOCATION_MAP,
     LOCATION_ZONE,
+    MAX_AGE_CHOICES,
+    MAX_AGE_DAYS_DEFAULT,
     NONE_VALUE,
 )
 from .geography import MAX_RADIUS_KM, MIN_RADIUS_KM, stations_within_radius
@@ -145,6 +148,8 @@ class _FuelStationSteps:
     _defaults_language: str | None = None
     _defaults_homes: dict[str, str] = {}
     _defaults_logos: list[str] | None = None
+    _defaults_max_age_days: int = MAX_AGE_DAYS_DEFAULT
+    _max_age_days: int = MAX_AGE_DAYS_DEFAULT
     _area_mode: str
     _location_method: str
     _gps_location: dict[str, float] | None
@@ -192,6 +197,7 @@ class _FuelStationSteps:
             fuels = user_input[CONF_FUELS]
             self._pending_fuels = list(fuels)
             self._pending_language = user_input[CONF_LANGUAGE]
+            self._pending_max_age_days = int(user_input.get(CONF_MAX_AGE_DAYS, MAX_AGE_DAYS_DEFAULT))
             if not fuels:
                 errors[CONF_FUELS] = "no_fuel"
             else:
@@ -251,6 +257,7 @@ class _FuelStationSteps:
                     self._fuels, self._stations, self._chains = fuels, stations, chains
                     self._station_markers = station_markers
                     self._language = user_input[CONF_LANGUAGE]
+                    self._max_age_days = self._pending_max_age_days
                     self._queue, self._homes = list(fuels), {}
                     self._pending_fuels = None
                     self._pending_language = None
@@ -262,6 +269,9 @@ class _FuelStationSteps:
         default_language = (
             getattr(self, "_pending_language", None) or self._default_language()
         )
+        default_max_age = getattr(self, "_pending_max_age_days", None) or self._defaults_max_age_days
+        if default_max_age not in MAX_AGE_CHOICES:
+            default_max_age = MAX_AGE_DAYS_DEFAULT
         schema = vol.Schema(
             {
                 vol.Required(CONF_FUELS, default=default_fuels): SelectSelector(
@@ -275,6 +285,13 @@ class _FuelStationSteps:
                     SelectSelectorConfig(
                         options=[{"value": k, "label": v} for k, v in LANGUAGES.items()],
                         mode=SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(CONF_MAX_AGE_DAYS, default=str(default_max_age)): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[str(days) for days in MAX_AGE_CHOICES],
+                        mode=SelectSelectorMode.DROPDOWN,
+                        translation_key="max_age_days",
                     )
                 ),
             }
@@ -742,6 +759,7 @@ class _FuelStationSteps:
             CONF_HOMES: self._homes,
             CONF_LANGUAGE: self._language,
             CONF_AREA_MODE: self._area_mode,
+            CONF_MAX_AGE_DAYS: self._max_age_days,
         }
         home_identities = getattr(self, "_home_identities", {})
         home_history = getattr(self, "_home_history", {})
@@ -850,6 +868,8 @@ class CenyPalivOptionsFlow(_FuelStationSteps, OptionsFlow):
         }
         self._defaults_language = entry.options.get(CONF_LANGUAGE)
         self._defaults_logos = entry.options.get(CONF_LOGOS)
+        self._defaults_max_age_days = entry.options.get(CONF_MAX_AGE_DAYS, MAX_AGE_DAYS_DEFAULT)
+        self._max_age_days = self._defaults_max_age_days
         self._defaults_area_mode = entry.options.get(CONF_AREA_MODE, AREA_MODE_CITY)
         self._defaults_location_method = entry.options.get(CONF_LOCATION_METHOD, LOCATION_HOME)
         self._defaults_gps_location = entry.options.get(CONF_LOCATION)
@@ -861,6 +881,7 @@ class CenyPalivOptionsFlow(_FuelStationSteps, OptionsFlow):
         self._pending_area_mode = None
         self._pending_fuels = None
         self._pending_language = None
+        self._pending_max_age_days = None
         return await self.async_step_area_mode()
 
     def _own_entry_id(self) -> str | None:

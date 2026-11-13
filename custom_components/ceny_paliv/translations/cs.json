@@ -66,10 +66,12 @@
         "description": "Vyberte jedno nebo více paliv – například Natural 95 a LPG pro vůz na dvě paliva. Pro každé palivo se vytvoří samostatné senzory. Nezapomeňte, že mBenzin nerozlišuje benzín E10, cena Natural 95 platí pro všechny 95oktanové benzíny.",
         "data": {
           "fuels": "Paliva",
-          "language": "Jazyk textů v dashboardu"
+          "language": "Jazyk textů v dashboardu",
+          "max_age_days": "Zobrazit i starší ceny"
         },
         "data_description": {
-          "language": "Určuje jazyk popisků v hotových pohledech dashboardu (např. „Moje stanice“). Jazyk samotného nastavení se řídí jazykem Home Assistantu."
+          "language": "Určuje jazyk popisků v hotových pohledech dashboardu (např. „Moje stanice“). Jazyk samotného nastavení se řídí jazykem Home Assistantu.",
+          "max_age_days": "Do přehledu se počítají jen takto čerstvé ceny. Menší stanice aktualizují ceny na mBenzin.cz méně často, takže s 1 dnem z přehledu často vypadnou. Starší ceny se zobrazí s datem."
         }
       },
       "station": {
@@ -180,10 +182,12 @@
         "description": "Vyberte jedno nebo více paliv – například Natural 95 a LPG pro vůz na dvě paliva. Pro každé palivo se vytvoří samostatné senzory. Nezapomeňte, že mBenzin nerozlišuje benzín E10, cena Natural 95 platí pro všechny 95oktanové benzíny.",
         "data": {
           "fuels": "Paliva",
-          "language": "Jazyk textů v dashboardu"
+          "language": "Jazyk textů v dashboardu",
+          "max_age_days": "Zobrazit i starší ceny"
         },
         "data_description": {
-          "language": "Určuje jazyk popisků v hotových pohledech dashboardu (např. „Moje stanice“). Jazyk samotného nastavení se řídí jazykem Home Assistantu."
+          "language": "Určuje jazyk popisků v hotových pohledech dashboardu (např. „Moje stanice“). Jazyk samotného nastavení se řídí jazykem Home Assistantu.",
+          "max_age_days": "Do přehledu se počítají jen takto čerstvé ceny. Menší stanice aktualizují ceny na mBenzin.cz méně často, takže s 1 dnem z přehledu často vypadnou. Starší ceny se zobrazí s datem."
         }
       },
       "station": {
@@ -226,6 +230,13 @@
         "zone": "Uložená zóna Home Assistantu",
         "map": "Vybrat bod na mapě",
         "manual": "Ruční souřadnice (pokročilé)"
+      }
+    },
+    "max_age_days": {
+      "options": {
+        "1": "Dnes a včera (výchozí)",
+        "3": "Až 3 dny",
+        "7": "Až 7 dní"
       }
     }
   }
