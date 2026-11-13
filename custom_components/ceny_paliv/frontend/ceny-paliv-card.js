@@ -47,11 +47,14 @@ const STYLE = `
   ha-icon { display: inline-block; }
 `;
 
+// A state Home Assistant restored for an entity no integration provides (yet): it carries no data or attributes.
+const restored = (state) => !!(state && state.attributes && state.attributes.restored);
+
 // TOP 5 sensors of one fuel (legacy entities are matched by entity id).
 function topCandidates(hass, fuel) {
   const tops = [];
   for (const id in hass.states) {
-    if (!id.startsWith('sensor.ceny_paliv_')) continue;
+    if (!id.startsWith('sensor.ceny_paliv_') || restored(hass.states[id])) continue;
     const a = hass.states[id].attributes || {};
     if (a.cp_fuel) {
       if (a.cp_fuel === fuel && a.cp_role === 'top5') tops.push({ id, attributes: a });
@@ -89,6 +92,7 @@ class CenyPalivCard extends HTMLElement {
     this._sig = '';
     this._children = null;
     this._build();
+    if (this._hass) this.hass = this._hass;  // a new config (e.g. the editor preview) renders at once
   }
 
   set hass(hass) {
@@ -101,12 +105,12 @@ class CenyPalivCard extends HTMLElement {
         const container = this.shadowRoot.getElementById(id);
         if (container) container.replaceChildren();
       }
-      this._children = null;
-      this._extraReady = false;
+      this._resetExtra();
     }
     const top = hass.states[this._ids.top5];
     const home = hass.states[this._ids.home];
-    const sig = [JSON.stringify(this._ids), top && top.last_updated, home && home.last_updated, top && top.state, home && home.state].join('|');
+    // the date is part of the signature: "today"/"yesterday" labels and the freshness filter change at midnight
+    const sig = [JSON.stringify(this._ids), top && top.last_updated, home && home.last_updated, top && top.state, home && home.state, new Date().toDateString()].join('|');
     if (sig !== this._sig) {
       this._sig = sig;
       this._renderTexts();
@@ -143,25 +147,38 @@ class CenyPalivCard extends HTMLElement {
         return matches(state, 'position', this._config.fuel, cachedTopConfig)
           && (!attributes.cp_index || attributes.cp_index === index + 1);
       });
-    // Without an explicit config_id the binding is only safe while exactly one area offers this fuel.
-    const sole = !this._config.config_id && valid ? topCandidates(hass, this._config.fuel) : null;
+    // Without an explicit config_id the binding is only safe while exactly one area offers this fuel. Checking that
+    // walks every state, so it is repeated only when the entity registry changed (a new or removed area always
+    // changes it) or every 10 s; without the registry (older frontends) it is checked on every update.
     const now = Date.now();
+    const registry = hass.entities;
+    const recheck = !registry || registry !== this._registry || now - this._scanAt >= 10000;
+    let sole = null;
+    if (!this._config.config_id && valid) {
+      if (recheck || !this._sole) this._sole = topCandidates(hass, this._config.fuel).map((top) => top.id);
+      sole = this._sole;
+    }
+    this._ambiguous = !!(sole && sole.length > 1);
     if (sole && sole.length !== 1) return { top5: null, home: null, pos: [] };
-    if (valid && (!sole || sole[0].id === c.top5) && (c.home || (!topState.attributes.home && now - this._scanAt < 10000))) return c;
+    // a favourite announced by the top5 sensor but not bound yet is looked for on the same schedule
+    if (valid && (!sole || sole[0] === c.top5) && (c.home || !topState.attributes.home || !recheck)) return c;
     this._scanAt = now;
+    this._registry = registry;
+    this._sole = null;
     const fuel = this._config.fuel;
     const ids = { top5: null, home: null, pos: [] };
     const tops = topCandidates(hass, this._config.fuel);
     const candidates = this._config.config_id
       ? tops.filter((top) => top.attributes.cp_config_id === this._config.config_id)
       : tops;
+    this._ambiguous = candidates.length > 1;
     if (candidates.length !== 1) return ids;
     const selected = candidates[0];
     const selectedConfig = selected.attributes.cp_config_id;
     ids.top5 = selected.id;
     const homes = [];
     for (const id of Object.keys(hass.states)) {
-      if (!id.startsWith('sensor.ceny_paliv_')) continue;
+      if (!id.startsWith('sensor.ceny_paliv_') || restored(hass.states[id])) continue;
       const a = hass.states[id].attributes || {};
       if (a.cp_role === 'home_archive') continue;
       if (a.cp_role && (
@@ -235,7 +252,6 @@ class CenyPalivCard extends HTMLElement {
       }
     }
     return configs.sort((a, b) => a.label.localeCompare(b.label));
-    return out;
   }
   static getStubConfig(hass) {
     const found = CenyPalivCard.fuels(hass)[0];
@@ -254,6 +270,7 @@ class CenyPalivCard extends HTMLElement {
     root.addEventListener('pointerdown', (e) => this._down(e));
     ['pointerup', 'pointerleave', 'pointercancel'].forEach((n) => root.addEventListener(n, () => clearTimeout(this._timer)));
     this._extraReady = false;
+    this._gen = (this._gen || 0) + 1;
     this._fit();
   }
 
@@ -276,11 +293,20 @@ class CenyPalivCard extends HTMLElement {
     if (this._ro) this._ro.disconnect();
   }
 
+  // Map and graph are built once per binding; they are rebuilt after this reset.
+  _resetExtra() {
+    this._children = null;
+    this._extraReady = false;
+    this._gen = (this._gen || 0) + 1;
+  }
+
   async _buildExtra() {
     if (this._extraReady || !this._hass) return;
     this._extraReady = true;
+    const gen = this._gen;
     const helpers = window.loadCardHelpers ? await window.loadCardHelpers() : null;
-    if (!helpers) return;
+    // setConfig or a new binding happened while the helpers loaded: that newer build owns the containers
+    if (!helpers || gen !== this._gen) return;
     const hasHome = !!this._hass.states[this._ids.home];
     const kids = [];
     if (this._show.includes('map')) {
@@ -306,7 +332,9 @@ class CenyPalivCard extends HTMLElement {
       wrap.className = k.cls;
       if (k.id === 'map' && this._mapHeight) wrap.style.height = `${this._mapHeight}px`;
       wrap.appendChild(el);
-      this.shadowRoot.getElementById(k.id).appendChild(wrap);
+      const container = this.shadowRoot.getElementById(k.id);
+      if (!container) continue;
+      container.replaceChildren(wrap);
       this._children.push(el);
     }
   }
@@ -380,15 +408,39 @@ class CenyPalivCard extends HTMLElement {
     const top = hass.states[this._ids.top5];
     const root = this.shadowRoot;
     const slot = (p, html) => { const el = root.getElementById(p); if (el) el.innerHTML = html; };
+    const first = this._show.find((p) => p === 'home' || p === 'list') || this._show[0];
     if (!top || top.state === 'unavailable') {
-      const msg = `<div class="card" style="color:#9aa1ad;font-size:14px">Ceny paliv (${esc(this._config.fuel)}): sensor not found, unavailable, or ambiguous — choose its configuration in the card editor.</div>`;
-      const first = this._show.find((p) => p === 'home' || p === 'list') || this._show[0];
-      this._show.forEach((p) => slot(p, p === first ? msg : ''));
+      // the message replaces the map and graph containers' content: rebuild them once the data is back
+      this._resetExtra();
+      const why = !top ? (this._ambiguous ? 'ambiguous' : 'missing') : 'unavailable';
+      this._show.forEach((p) => slot(p, p === first ? this._message(why) : ''));
       return;
     }
     slot('home', this._show.includes('home') ? this._homeHtml() : '');
     slot('list', this._show.includes('list') ? this._listHtml() : '');
+    // only "my station" and its graph were asked for, but no favourite is set: say so instead of an empty card
+    if (!hass.states[this._ids.home] && this._show.every((p) => p === 'home' || p === 'graph')) slot(first, this._message('no_home'));
     this._buildExtra();
+  }
+
+  _message(why) {
+    const lang = ((this._hass && this._hass.language) || 'en').split('-')[0] === 'cs' ? 'cs' : 'en';
+    const fuel = esc(this._config.fuel);
+    const text = {
+      en: {
+        missing: `no sensors found for "${fuel}"${this._config.config_id ? ' in the chosen configuration — pick it again in the card editor' : ''}.`,
+        ambiguous: `several configurations provide "${fuel}" — choose one in the card editor.`,
+        unavailable: 'the sensors are unavailable right now (Home Assistant is starting or mBenzin.cz cannot be reached).',
+        no_home: 'no favourite station is set for this fuel (Configure the integration).',
+      },
+      cs: {
+        missing: `pro „${fuel}“ nebyly nalezeny senzory${this._config.config_id ? ' ve zvolené konfiguraci — vyberte ji znovu v editoru karty' : ''}.`,
+        ambiguous: `„${fuel}“ nabízí více konfigurací — vyberte jednu v editoru karty.`,
+        unavailable: 'senzory jsou teď nedostupné (Home Assistant startuje nebo mBenzin.cz neodpovídá).',
+        no_home: 'pro toto palivo není nastavena oblíbená stanice (nastavení integrace).',
+      },
+    }[lang][why];
+    return `<div class="card" style="color:#9aa1ad;font-size:14px">Ceny paliv: ${text}</div>`;
   }
 
   _homeHtml() {
@@ -485,7 +537,7 @@ class CenyPalivCard extends HTMLElement {
       const addr = a0.startsWith(name) ? a0.slice(name.length).trim() : a0;
       const tr = this._arrow((s.trends || {})['1']);
       const age = this._age(s, today);
-      const when = age <= 0 ? T('today') : `<span style="color:#f5c26b">${esc(age === 1 ? T('yesterday') : (s.updated || '—'))}</span>`;
+      const when = age <= 0 ? esc(T('today')) : `<span style="color:#f5c26b">${esc(age === 1 ? T('yesterday') : (s.updated || '—'))}</span>`;
       const home = s.home ? `<ha-icon icon="mdi:home" title="${esc(T('my_station'))}" style="--mdc-icon-size:14px;color:#4cc3d9;margin-left:6px"></ha-icon>` : '';
       return `<div class="row" data-maps="${esc(s.maps)}">
         ${this._avatar(s, i + 1, best)}

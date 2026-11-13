@@ -301,6 +301,7 @@ test("hass update shows the area picker message once a second area appears", () 
   const card = {
     _config: { fuel: "n95" }, _ids: null, _scanAt: 0, _sig: "", _children: null, rendered: 0,
     _resolve: CenyPalivCard.prototype._resolve,
+    _resetExtra: CenyPalivCard.prototype._resetExtra,
     shadowRoot: { getElementById: () => null },
     _renderTexts() { this.rendered += 1; },
   };
@@ -319,4 +320,49 @@ test("editor offers area choice for several areas and none for one", () => {
   editor.hass = { language: "en", states: { ...area("a"), ...area("b") } };
   assert.ok(editor.children[0].schema.some((field) => field.name === "config_id"));
   assert.equal(CenyPalivCard.configurations({ states: { ...area("a") } }, "n95").length, 1);
+});
+
+test("a restored orphan top5 of a removed area never makes the binding ambiguous", () => {
+  const card = { _ids: null, _config: { fuel: "n95" }, _scanAt: 0 };
+  const hass = {
+    states: {
+      ...area("b"),
+      // what Home Assistant restores at start-up for an entity that no loaded entry provides
+      "sensor.ceny_paliv_n95_top5": { state: "unavailable", attributes: { restored: true, friendly_name: "old" } },
+    },
+  };
+  assert.equal(CenyPalivCard.prototype._resolve.call(card, hass).top5, "sensor.ceny_paliv_n95_top5_b");
+});
+
+test("with the entity registry, the single-area check reruns when the registry changes", () => {
+  const card = { _ids: null, _config: { fuel: "n95" }, _scanAt: 0 };
+  const states = { ...area("a") };
+  const resolve = (hass) => { card._ids = CenyPalivCard.prototype._resolve.call(card, hass); return card._ids; };
+  assert.equal(resolve({ states, entities: { first: 1 } }).top5, "sensor.ceny_paliv_n95_top5_a");
+  // a second area adds entities, so Home Assistant hands over a new registry object
+  Object.assign(states, area("b"));
+  same(resolve({ states, entities: { second: 1 } }), empty);
+  assert.equal(card._ambiguous, true);
+});
+
+test("the unavailable message clears map and graph so they are rebuilt when data returns", () => {
+  const slots = {};
+  const card = {
+    _hass: { language: "cs", states: { "sensor.ceny_paliv_n95_top5": { state: "unavailable", attributes: {} } } },
+    _ids: { top5: "sensor.ceny_paliv_n95_top5", home: null, pos: [] },
+    _config: { fuel: "n95" },
+    _show: ["list", "map", "graph"],
+    _extraReady: true,
+    _children: [{}],
+    _gen: 1,
+    shadowRoot: { getElementById: (id) => (slots[id] = slots[id] || { innerHTML: "" }) },
+    _message: CenyPalivCard.prototype._message,
+    _resetExtra: CenyPalivCard.prototype._resetExtra,
+  };
+  CenyPalivCard.prototype._renderTexts.call(card);
+  assert.equal(card._extraReady, false);
+  assert.equal(card._children, null);
+  assert.equal(card._gen, 2);
+  assert.match(slots.list.innerHTML, /nedostupné/);
+  assert.equal(slots.map.innerHTML, "");
 });
