@@ -273,7 +273,7 @@ def test_gps_payload_skips_malformed_markers(marker, now):
     )
 
     assert [station["name"] for station in result["stations"]] == ["Valid"]
-    assert result["gps_area"]["station_count"] == 2
+    assert result["gps_area"]["station_count"] == 1  # only usable stations are counted
 
 
 @pytest.mark.parametrize(
@@ -1312,3 +1312,34 @@ def test_legacy_slug_history_is_never_assigned_ambiguously_or_in_another_city(ma
                   legacy_city="Praha")
     assert history["Shared"] == [["2025-01-14", 29]]  # the slug belongs to Praha, not to Brno
     assert history[brno["url"]] == [["2025-01-15", 32]]
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        None,
+        {"url": None},
+        {"url": "/Ceny-benzinu-a-nafty/Praha//1", "name": "Bez-slugu", "price": 20, "lat": 50.1, "lng": 14.4},
+        {"name": None},
+        {"name": "Bez-ceny", "price": None},
+        {"name": "Text", "price": "29.5"},
+        {"name": "Nan", "price": float("nan")},
+        {"name": "Zaporna", "price": -1},
+        {"name": "Bez-souradnic", "lat": None},
+        {"fresh": 5},
+        {"fresh": "před 99999999 dny"},
+    ],
+)
+def test_city_payload_skips_a_malformed_marker_instead_of_failing(broken, marker, now):
+    good = marker("Dobra", 35)
+    bad = broken if broken is None or "url" in broken else {**marker("Vadna", 20), **broken}
+    for home in (None, "Dobra", "Bez-slugu"):
+        result = payload([bad, good], now, home=home)
+        names = [station["name"] for station in result["stations"]]
+        # the malformed marker never aborts the refresh; a stale-only one may just be excluded
+        assert "Dobra" in names
+        assert all(station["name"] in {"Dobra", "Vadna"} for station in result["stations"])
+
+
+@pytest.mark.parametrize("value", [5, None, "před 99999999 dny"])
+def test_parse_fresh_rejects_unusable_values(value):
+    assert parse_fresh(value, date(2025, 1, 15)) is None
