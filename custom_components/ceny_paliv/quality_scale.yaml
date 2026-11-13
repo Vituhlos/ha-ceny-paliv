@@ -1,0 +1,150 @@
+# Home Assistant integration quality scale: progress towards Platinum.
+# The official badge exists only for integrations in Home Assistant core, so this is a self-assessment against the
+# same rules (https://developers.home-assistant.io/docs/core/integration-quality-scale/rules). Keep it honest:
+# a rule is `done` only when the code and a test show it; `exempt` needs a reason; everything else is `todo`.
+# Baseline 2026-11-13 (0.5.3 + #27): tests cover 96 % of the integration, the config flow 94 %.
+rules:
+  # Bronze
+  action-setup:
+    status: exempt
+    comment: No service actions yet. The refresh action (0.6) is registered in async_setup.
+  appropriate-polling:
+    status: done
+    comment: One nationwide download per fuel every 6 hours, shared by all entries with the same key.
+  brands:
+    status: done
+    comment: Icons ship in custom_components/ceny_paliv/brand/ (Home Assistant 2026.3+).
+  common-modules:
+    status: todo
+    comment: The coordinator is in coordinator.py; the base entity still lives in sensor.py, not entity.py.
+  config-flow-test-coverage:
+    status: todo
+    comment: config_flow.py is covered at 94 %; the rule needs every path.
+  config-flow:
+    status: todo
+    comment: Setup is UI-only and data/options are split correctly, but most fields lack a data_description.
+  dependency-transparency:
+    status: todo
+    comment: The mBenzin client is inside the integration; it moves to the aiombenzin library on PyPI (0.7).
+  docs-actions:
+    status: exempt
+    comment: No service actions yet.
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions:
+    status: todo
+    comment: The README does not say how to remove the integration and the logo folder.
+  entity-event-setup:
+    status: exempt
+    comment: Entities do not subscribe to events; the coordinator's zone listener is removed with the entry.
+  entity-unique-id: done
+  has-entity-name:
+    status: todo
+    comment: Entities set has_entity_name = False and build their names in code.
+  runtime-data: done
+  test-before-configure:
+    status: done
+    comment: The key is checked with a real download before the entry is created.
+  test-before-setup:
+    status: done
+    comment: async_config_entry_first_refresh raises ConfigEntryNotReady when no fuel can be loaded.
+  unique-config-entry:
+    status: done
+    comment: A city can be configured once; GPS areas get their own id because several areas are a feature.
+  docs-triggers:
+    status: exempt
+    comment: No device triggers.
+  docs-conditions:
+    status: exempt
+    comment: No device conditions.
+
+  # Silver
+  action-exceptions:
+    status: exempt
+    comment: No service actions yet.
+  config-entry-unloading: done
+  docs-configuration-parameters:
+    status: todo
+    comment: The options (area, radius, fuels, older prices, logos) are not described one by one.
+  docs-installation-parameters:
+    status: todo
+    comment: The setup fields are only partly described.
+  entity-unavailable: done
+  integration-owner:
+    status: todo
+    comment: codeowners still names the upstream author.
+  log-when-unavailable:
+    status: todo
+    comment: A partial refresh logs a warning on every refresh instead of once.
+  parallel-updates:
+    status: todo
+    comment: PARALLEL_UPDATES is not set in sensor.py.
+  reauthentication-flow: done
+  test-coverage:
+    status: done
+    comment: 96 % of the integration (pytest --cov, 2026-11-13).
+
+  # Gold
+  devices:
+    status: todo
+    comment: Entities are not grouped under a device.
+  diagnostics:
+    status: todo
+  discovery:
+    status: exempt
+    comment: mBenzin.cz is a web service; there is nothing to discover on the network.
+  discovery-update-info:
+    status: exempt
+    comment: No discovery.
+  docs-data-update:
+    status: todo
+  docs-examples:
+    status: todo
+    comment: examples/price_alert.yaml exists but the README does not present examples.
+  docs-known-limitations:
+    status: todo
+  docs-supported-devices:
+    status: exempt
+    comment: A web service, not devices.
+  docs-supported-functions:
+    status: todo
+    comment: The entities are listed, their attributes are not.
+  docs-troubleshooting:
+    status: todo
+  docs-use-cases:
+    status: todo
+  dynamic-devices:
+    status: todo
+    comment: Comes with devices.
+  entity-category:
+    status: todo
+  entity-device-class:
+    status: exempt
+    comment: Home Assistant has no device class for a price per litre or kilogram.
+  entity-disabled-by-default:
+    status: todo
+  entity-translations:
+    status: todo
+  exception-translations:
+    status: todo
+  icon-translations:
+    status: todo
+    comment: Icons are set in code (_attr_icon).
+  reconfiguration-flow:
+    status: done
+    comment: The access key can be replaced without losing settings or history.
+  repair-issues:
+    status: todo
+  stale-devices:
+    status: todo
+    comment: Comes with devices.
+
+  # Platinum
+  async-dependency:
+    status: todo
+    comment: The client is async but not a separate library yet.
+  inject-websession:
+    status: todo
+    comment: The integration passes Home Assistant's session; the library must accept it too.
+  strict-typing:
+    status: todo
