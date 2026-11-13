@@ -70,7 +70,7 @@ from .const import (
     LOCATION_ZONE,
     NONE_VALUE,
 )
-from .geography import MAX_RADIUS_KM, MIN_RADIUS_KM
+from .geography import MAX_RADIUS_KM, MIN_RADIUS_KM, stations_within_radius
 from .logos import async_fetch_index, async_sync, chains_in, installed_ids, logo_dir
 
 
@@ -225,14 +225,26 @@ class _FuelStationSteps:
                         station_markers[fuel] = [
                             marker for marker in markers if isinstance(marker, dict)
                         ]
+                        # chains of the chosen area only, so the logo step preselects what the area needs
+                        if not gps:
+                            area_markers = [m for m in markers if city_of(m) == self._city]
+                        elif gps_center is None:
+                            area_markers = []
+                        else:
+                            try:
+                                area_markers = stations_within_radius(
+                                    markers, *gps_center,
+                                    getattr(self, "_gps_radius_km", DEFAULT_GPS_RADIUS_KM),
+                                )
+                            except (TypeError, ValueError, OverflowError):
+                                area_markers = []
                         chains |= {
                             m.get("chain")
                             if isinstance(m.get("chain"), str)
                             else m.get("name")
-                            for m in markers
+                            for m in area_markers
                             if isinstance(m, dict)
                             and isinstance(m.get("name"), str)
-                            and (gps or city_of(m) == self._city)
                         }
                 except MBenzinError as err:
                     errors["base"] = _error_key(err)
