@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.2
+
+### New
+
+- **Show older prices too** (#22): small stations update their prices on mbenzin.cz less often, so with the
+  one-day limit for petrol and diesel they often dropped out of the list (in a 20 km area around a small town, 15 of
+  22 stations). A new setting in the integration's **Configure** → "Fuels and language" step keeps prices up to 3 or
+  7 days old in the ranking. Their date is shown in amber. The default stays "today and yesterday", and LPG, CNG
+  and AdBlue keep their longer limits.
+
+### Fixed
+
+- The map showed clipped prices such as „7,9 Kč“: the marker was too narrow for the price with its unit. It now
+  shows just the price, for example „37,9“ (#21).
+
+### Known limitations
+
+- Validated with offline tests and CI before release; checked on a live Home Assistant only after release.
+
 ## 0.5.1
 
 ### Changed
