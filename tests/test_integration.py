@@ -1340,6 +1340,44 @@ async def test_refused_key_starts_reauth(
             if flow["context"]["source"] == "reauth"
         ]
 
+    with patch(
+        "custom_components.ceny_paliv.coordinator.async_fetch_snapshot", new=AsyncMock(return_value=snapshot)
+    ) as fetch:
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        # 401/403 is certain; an HTML page (definite=False) only counts when it repeats
+        fetch.side_effect = InvalidAuth(definite=definite)
+        for refresh in range(1, refreshes_until_reauth + 1):
+            await entry.runtime_data.async_refresh()
+            await hass.async_block_till_done()
+            assert bool(reauth_flows()) is (refresh == refreshes_until_reauth)
+        assert hass.states.get("sensor.ceny_paliv_n95_top5").state == "unavailable"
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_one_refused_fuel_does_not_ask_for_a_new_key(hass, enable_custom_integrations, mock_frontend, marker):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": "Praha"},
+        options={"fuels": ["n95", "diesel"], "homes": {}, "language": "cs"},
+        unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+
+    async def fetch(session, key, fuel, *, cache=None):
+        if fuel == "diesel":
+            raise InvalidAuth(definite=True)
+        return MarkerSnapshot(markers=[marker("Levna", 33)], fetched_at=dt_util.now())
+
+    with patch("custom_components.ceny_paliv.coordinator.async_fetch_snapshot", new=fetch):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        await entry.runtime_data.async_refresh()
+        await hass.async_block_till_done()
+        assert not [f for f in hass.config_entries.flow.async_progress() if f["context"]["source"] == "reauth"]
+        assert hass.states.get("sensor.ceny_paliv_n95_top5").state == "33"
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
 
 async def test_options_area_change_frees_the_old_city_and_refuses_a_taken_one(
     hass, enable_custom_integrations, mock_frontend, marker
@@ -1442,39 +1480,6 @@ async def test_zone_occupancy_changes_do_not_refresh(hass, enable_custom_integra
     ) as fetch:
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
-        # 401/403 is certain; an HTML page (definite=False) only counts when it repeats
-        fetch.side_effect = InvalidAuth(definite=definite)
-        for refresh in range(1, refreshes_until_reauth + 1):
-            await entry.runtime_data.async_refresh()
-            await hass.async_block_till_done()
-            assert bool(reauth_flows()) is (refresh == refreshes_until_reauth)
-        assert hass.states.get("sensor.ceny_paliv_n95_top5").state == "unavailable"
-        assert await hass.config_entries.async_unload(entry.entry_id)
-
-
-async def test_one_refused_fuel_does_not_ask_for_a_new_key(hass, enable_custom_integrations, mock_frontend, marker):
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data={"key": "dummy", "city": "Praha"},
-        options={"fuels": ["n95", "diesel"], "homes": {}, "language": "cs"},
-        unique_id="Praha",
-    )
-    entry.add_to_hass(hass)
-
-    async def fetch(session, key, fuel, *, cache=None):
-        if fuel == "diesel":
-            raise InvalidAuth(definite=True)
-        return MarkerSnapshot(markers=[marker("Levna", 33)], fetched_at=dt_util.now())
-
-    with patch("custom_components.ceny_paliv.coordinator.async_fetch_snapshot", new=fetch):
-        assert await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
-        await entry.runtime_data.async_refresh()
-        await hass.async_block_till_done()
-        assert not [f for f in hass.config_entries.flow.async_progress() if f["context"]["source"] == "reauth"]
-        assert hass.states.get("sensor.ceny_paliv_n95_top5").state == "33"
-        assert await hass.config_entries.async_unload(entry.entry_id)
-
         hass.states.async_set("zone.work", "2", {"latitude": 50.1, "longitude": 14.4, "radius": 100})
         await hass.async_block_till_done()
         assert fetch.await_count == 1  # people arriving is not a new area
