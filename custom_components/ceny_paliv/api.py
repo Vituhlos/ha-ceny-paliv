@@ -501,11 +501,14 @@ def build_payload(
     gps_radius_km: float = 40,
     gps_zone_entity: str | None = None,
     gps_error: str | None = None,
+    legacy_city: str | None = None,
 ) -> dict[str, Any]:
     """Top stations of the city + the favourite station, with trends.
 
-    `history` ({station URL: [[date, price], ...]}) is updated in place. Legacy
-    City slug keys remain untouched because they cannot be safely assigned to URLs.
+    `history` ({station URL: [[date, price], ...]}) is updated in place. Versions up to 0.4.x keyed it by
+    station slug; those logs were always written for `legacy_city` (the entry's original city), so while
+    showing that city a slug log moves to the URL of the one station there with that slug. Ambiguous or
+    unmatched slug logs are never assigned and expire with the 35-day window like any other log.
     """
     today = (
         now.astimezone(_CZECH_TIMEZONE).date()
@@ -572,11 +575,22 @@ def build_payload(
     home_marker = home_matches[0] if home_matches else None
 
     cutoff = (today - dt.timedelta(days=HISTORY_DAYS)).isoformat()
-    # Prune expired URL-keyed histories regardless of current area; retain inactive
-    # station samples until their 35-day window expires. Legacy City slug keys are
-    # deliberately left untouched because their physical station is ambiguous.
+    if not gps_mode and legacy_city and city == legacy_city:
+        slug_counts: dict[str, int] = {}
+        for m in in_city:
+            if (slug := _safe_station_slug(m)) is not None:
+                slug_counts[slug] = slug_counts.get(slug, 0) + 1
+        for m in in_city:
+            slug, url = _safe_station_slug(m), m.get("url")
+            if slug is None or slug_counts[slug] != 1 or slug not in history or not isinstance(url, str):
+                continue
+            merged = {item[0]: item for item in history.pop(slug) if isinstance(item, (list, tuple)) and len(item) == 2}
+            merged.update({item[0]: item for item in history.get(url, [])})
+            history[url] = [list(merged[day]) for day in sorted(merged)]
+    # Prune expired histories regardless of current area; retain inactive station samples until their
+    # 35-day window expires (legacy slug logs included, so unassignable ones disappear in time).
     for key in list(history):
-        if not isinstance(key, str) or not key.startswith("/Ceny-benzinu-a-nafty/"):
+        if not isinstance(key, str):
             continue
         log = [
             item

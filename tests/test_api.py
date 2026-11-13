@@ -1283,3 +1283,32 @@ def test_gps_slug_favourite_only_matches_its_original_city(marker, now):
     assert favourite([brno]) is None
     # an entry that never had a City favourite has no city to resolve a slug against
     assert favourite([praha], city="") is None
+
+def test_legacy_city_slug_history_moves_to_the_unique_station_url(marker, now):
+    station = marker("Oblibena", 35)
+    history = {"Oblibena": [["2025-01-13", 33], ["2025-01-14", 34]], "Gone-for-good": [["2024-11-01", 30]]}
+
+    result = build_payload(
+        [station], fuel="n95", city="Praha", home_slug="Oblibena", history=history, now=now,
+        language="cs", legacy_city="Praha",
+    )
+
+    assert result["home"]["trends"]["1"]["ref_price"] == 34
+    assert history[station["url"]] == [["2025-01-13", 33], ["2025-01-14", 34], ["2025-01-15", 35]]
+    assert "Oblibena" not in history
+    assert "Gone-for-good" not in history  # an expired legacy log is pruned like any other
+
+
+def test_legacy_slug_history_is_never_assigned_ambiguously_or_in_another_city(marker, now):
+    twin_a = {**marker("Shared", 30), "url": "/Ceny-benzinu-a-nafty/Praha/Shared/1"}
+    twin_b = {**marker("Shared", 31), "url": "/Ceny-benzinu-a-nafty/Praha/Shared/2"}
+    history = {"Shared": [["2025-01-14", 29]]}
+    build_payload([twin_a, twin_b], fuel="n95", city="Praha", home_slug=None, history=history, now=now,
+                  legacy_city="Praha")
+    assert history["Shared"] == [["2025-01-14", 29]]  # two stations share the slug: kept, not guessed
+
+    brno = marker("Shared", 32, city="Brno")
+    build_payload([brno], fuel="n95", city="Brno", home_slug=None, history=history, now=now,
+                  legacy_city="Praha")
+    assert history["Shared"] == [["2025-01-14", 29]]  # the slug belongs to Praha, not to Brno
+    assert history[brno["url"]] == [["2025-01-15", 32]]

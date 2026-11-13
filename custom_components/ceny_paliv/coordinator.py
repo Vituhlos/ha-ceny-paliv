@@ -178,6 +178,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 gps_radius_km=gps_radius_km,
                 gps_zone_entity=zone_entity,
                 gps_error=gps_error,
+                legacy_city=self.config_entry.data.get(CONF_CITY),
             )
 
         logos = await self.hass.async_add_executor_job(scan_logos, logo_dir(self.hass))
