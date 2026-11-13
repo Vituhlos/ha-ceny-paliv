@@ -47,6 +47,22 @@ const STYLE = `
   ha-icon { display: inline-block; }
 `;
 
+// TOP 5 sensors of one fuel (legacy entities are matched by entity id).
+function topCandidates(hass, fuel) {
+  const tops = [];
+  for (const id in hass.states) {
+    if (!id.startsWith('sensor.ceny_paliv_')) continue;
+    const a = hass.states[id].attributes || {};
+    if (a.cp_fuel) {
+      if (a.cp_fuel === fuel && a.cp_role === 'top5') tops.push({ id, attributes: a });
+    } else {
+      const m = id.match(/_([a-z0-9]+)_(top5|home|[1-5])$/);
+      if (m && m[1] === fuel && m[2] === 'top5') tops.push({ id, attributes: a });
+    }
+  }
+  return tops;
+}
+
 class CenyPalivCard extends HTMLElement {
   constructor() {
     super();
@@ -127,22 +143,15 @@ class CenyPalivCard extends HTMLElement {
         return matches(state, 'position', this._config.fuel, cachedTopConfig)
           && (!attributes.cp_index || attributes.cp_index === index + 1);
       });
+    // Without an explicit config_id the binding is only safe while exactly one area offers this fuel.
+    const sole = !this._config.config_id && valid ? topCandidates(hass, this._config.fuel) : null;
     const now = Date.now();
-    if (valid && (c.home || (!topState.attributes.home && now - this._scanAt < 10000))) return c;
+    if (sole && sole.length !== 1) return { top5: null, home: null, pos: [] };
+    if (valid && (!sole || sole[0].id === c.top5) && (c.home || (!topState.attributes.home && now - this._scanAt < 10000))) return c;
     this._scanAt = now;
     const fuel = this._config.fuel;
     const ids = { top5: null, home: null, pos: [] };
-    const tops = [];
-    for (const id of Object.keys(hass.states)) {
-      if (!id.startsWith('sensor.ceny_paliv_')) continue;
-      const a = hass.states[id].attributes || {};
-      if (a.cp_fuel) {
-        if (a.cp_fuel === fuel && a.cp_role === 'top5') tops.push({ id, attributes: a });
-      } else {
-        const m = id.match(/_([a-z0-9]+)_(top5|home|[1-5])$/);
-        if (m && m[1] === fuel && m[2] === 'top5') tops.push({ id, attributes: a });
-      }
-    }
+    const tops = topCandidates(hass, this._config.fuel);
     const candidates = this._config.config_id
       ? tops.filter((top) => top.attributes.cp_config_id === this._config.config_id)
       : tops;
