@@ -28,6 +28,7 @@ from .const import (
     CONF_CITY,
     CONF_FUELS,
     CONF_GPS_RADIUS_KM,
+    CONF_MAX_AGE_DAYS,
     CONF_HOMES,
     CONF_HOME_HISTORY,
     CONF_HOME_IDENTITIES,
@@ -193,6 +194,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 gps_zone_entity=zone_entity,
                 gps_error=gps_error,
                 legacy_city=self.config_entry.data.get(CONF_CITY),
+                max_age_days=self.config_entry.options.get(CONF_MAX_AGE_DAYS),
             )
 
         if self.fuels and len(auth_errors) == len(self.fuels):

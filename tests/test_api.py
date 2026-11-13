@@ -319,6 +319,25 @@ def test_freshness_limits_and_stale_home(marker, now, fuel, fresh, expected):
 
 
 @pytest.mark.parametrize(
+    ("fuel", "chosen", "fresh", "expected_age", "kept"),
+    [
+        ("n95", 7, "před 3 dny", 7, True),
+        ("n95", 7, "před 8 dny", 7, False),
+        ("n95", 3, "před 3 dny", 3, True),
+        ("n95", None, "před 3 dny", 1, False),
+        ("lpg", 1, "před 7 dny", 7, True),  # the choice never shortens a fuel's longer window
+    ],
+)
+def test_chosen_max_price_age_widens_the_window(marker, now, fuel, chosen, fresh, expected_age, kept):
+    result = build_payload(
+        [marker("Stanice", 35, fresh=fresh)], fuel=fuel, city="Praha", home_slug=None,
+        history={}, now=now, language="cs", max_age_days=chosen,
+    )
+    assert result["max_age_days"] == expected_age
+    assert bool(result["stations"]) is kept
+
+
+@pytest.mark.parametrize(
     ("value", "expected"),
     [
         ("Dnes", date(2025, 1, 15)), ("Včera", date(2025, 1, 14)),

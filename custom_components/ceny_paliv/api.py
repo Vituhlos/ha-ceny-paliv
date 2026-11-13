@@ -524,6 +524,7 @@ def build_payload(
     gps_zone_entity: str | None = None,
     gps_error: str | None = None,
     legacy_city: str | None = None,
+    max_age_days: int | None = None,
 ) -> dict[str, Any]:
     """Top stations of the city + the favourite station, with trends.
 
@@ -547,7 +548,8 @@ def build_payload(
         sample_day = source_time.astimezone(_CZECH_TIMEZONE).date()
         fetched_stamp = source_time
     label, unit = FUELS.get(fuel, (fuel, "Kč/l"))
-    max_age = MAX_AGE_DAYS_BY_FUEL.get(fuel, MAX_AGE_DAYS_DEFAULT)
+    # the user's choice only widens the window: a fuel updated less often keeps its longer default
+    max_age = max(MAX_AGE_DAYS_BY_FUEL.get(fuel, MAX_AGE_DAYS_DEFAULT), max_age_days or 0)
     gps_mode = gps_method is not None
     in_city = [m for m in markers if city_of(m) == city and _usable_marker(m)] if not gps_mode else []
     in_region = (

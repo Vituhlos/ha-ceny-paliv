@@ -144,13 +144,21 @@ async def test_options_flow_preserves_settings(hass, enable_custom_integrations,
         )
         assert result["step_id"] == "fuels"
         result = await hass.config_entries.options.async_configure(
-            result["flow_id"], {"fuels": ["n95"], "language": "cs"},
+            result["flow_id"], {"fuels": ["n95"], "language": "cs", "max_age_days": "7"},
         )
         assert result["step_id"] == "station"
         result = await hass.config_entries.options.async_configure(result["flow_id"], {"station": "Oblibena"})
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert entry.options["homes"] == {"n95": "Oblibena"}
         assert entry.options["language"] == "cs"
+        assert entry.options["max_age_days"] == 7
+
+        # the next options flow offers the saved choice
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {"area_mode": "city"})
+        result = await hass.config_entries.options.async_configure(result["flow_id"], {"city": "Praha"})
+        schema = result["data_schema"].schema
+        assert next(k for k in schema if k == "max_age_days").default() == "7"
 
 
 @pytest.mark.parametrize("failure", [CannotConnect, RateLimited])

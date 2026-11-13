@@ -588,7 +588,7 @@ class CenyPalivCard extends HTMLElement {
     const hidden = (at.excluded || 0) + (all.length - fresh.length);
     const lines = [`<span style="font-size:13px;color:#d6dae1;font-weight:600">${esc(T('table_updated', { t: fa ? when(fa) : '—', n: nu ? when(nu) : '—' }))}</span>`];
     if (at.fetch_error) lines.push(`<span style="font-size:12px;color:#f5c26b">${esc(T('refresh_failed', { at: la ? T('at') + when(la) : '', err: at.fetch_error }))}</span>`);
-    if (at.city_total) lines.push(`<span style="font-size:12px;color:#9aa1ad">${esc(T('hidden', { h: hidden, t: at.city_total, age: maxAge >= 1 ? T('yesterday_l') : T('today_l') }))}</span>`);
+    if (at.city_total) lines.push(`<span style="font-size:12px;color:#9aa1ad">${esc(T('hidden', { h: hidden, t: at.city_total, age: maxAge > 1 ? T('days_l', { n: maxAge }) : (maxAge === 1 ? T('yesterday_l') : T('today_l')) }))}</span>`);
     lines.push(`<span style="font-size:11px;color:#9aa1ad">${esc(T('arrows'))} · <span style="color:#5fd39a">▼ ${esc(T('down'))}</span> · <span style="color:#f5c26b">— ${esc(T('stable'))}</span> · <span style="color:#ff7a6b">▲ ${esc(T('up'))}</span> · ${esc(T('longpress'))}</span>`);
     lines.push(`<span style="font-size:11px;color:#5b6270">${this._source()} · ${esc(at.fuel_label || '')}${at.fuel === 'n95' ? ' ' + esc(T('e10_note')) : ''} · ${esc(T('tap_station'))}</span>`);
     const foot = !this._footer ? `<div style="padding-top:6px;font-size:11px;color:#5b6270;text-align:left">${this._source()}${at.fetch_error ? ' · ' + esc(T('refresh_failed', { at: '', err: at.fetch_error })) : ''}</div>` : `<div style="display:flex;flex-direction:column;gap:3px;text-align:left;border-top:1px solid #23272f;padding-top:12px">${lines.join('')}</div>`;

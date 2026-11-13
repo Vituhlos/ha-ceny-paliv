@@ -59,6 +59,9 @@ TOP = 5
 # LPG / CNG / AdBlue stations are updated less often, so they get a longer window.
 MAX_AGE_DAYS_DEFAULT = 1
 MAX_AGE_DAYS_BY_FUEL = {"lpg": 7, "cng": 3, "adblue": 7}
+# The user may accept older prices (rural stations are updated less often); it never shortens a fuel's window.
+CONF_MAX_AGE_DAYS = "max_age_days"
+MAX_AGE_CHOICES = (1, 3, 7)
 HISTORY_DAYS = 35
 FLAT = 0.005  # |delta| below this = stable price
 PERIODS = (1, 2, 7, 14, 30)  # trend windows in days
@@ -92,17 +95,18 @@ LABELS: dict[str, dict[str, str]] = {
         "price_from": "Price from {d} — may be outdated",
         "trends_start": "Trends start tomorrow (first daily record: today)",
         "since_partial": "* since {d} — history still filling",
-        "not_ranked": "Not ranked — price older than yesterday",
+        "not_ranked": "Not ranked — price too old",
         "cheapest_town": "Cheapest in town · #{rank} of {n} up-to-date stations",
         "vs_cheapest": "+{d} vs cheapest ({name}) · #{rank} of {n}",
         "tap_history": "Tap for full history",
-        "no_recent": "No recent prices (today or yesterday)",
+        "no_recent": "No recent prices",
         "cheapest_price": "Cheapest {p} {unit}",
         "stations_same": "{n} stations at this price",
         "today": "Today",
         "yesterday": "Yesterday",
         "today_l": "today",
         "yesterday_l": "yesterday",
+        "days_l": "{n} days",
         "cheapest_badge": "Cheapest",
         "table_updated": "Table updated {t} · next refresh {n}",
         "refresh_failed": "Last refresh failed{at} ({err}) — showing the previous data",
@@ -128,17 +132,18 @@ LABELS: dict[str, dict[str, str]] = {
         "price_from": "Cena z {d} — může být zastaralá",
         "trends_start": "Trendy se objeví zítra (první denní záznam: dnes)",
         "since_partial": "* od {d} — historie se teprve plní",
-        "not_ranked": "Mimo pořadí — cena je starší než včerejšek",
+        "not_ranked": "Mimo pořadí — příliš stará cena",
         "cheapest_town": "Nejlevnější ve městě · {rank}. z {n} aktuálních stanic",
         "vs_cheapest": "+{d} oproti nejlevnější ({name}) · {rank}. z {n}",
         "tap_history": "Klepnutím zobrazíte celou historii",
-        "no_recent": "Žádné aktuální ceny (dnes nebo včera)",
+        "no_recent": "Žádné aktuální ceny",
         "cheapest_price": "Nejlevnější {p} {unit}",
         "stations_same": "{n} stanic má tuto cenu",
         "today": "Dnes",
         "yesterday": "Včera",
         "today_l": "dnes",
         "yesterday_l": "včera",
+        "days_l": "{n} dní",
         "cheapest_badge": "Nejlevnější",
         "table_updated": "Tabulka aktualizována {t} · další aktualizace {n}",
         "refresh_failed": "Poslední aktualizace selhala{at} ({err}) — zobrazena předchozí data",

@@ -66,10 +66,12 @@
         "description": "Pick one or more fuels – for example Natural 95 and LPG for a dual-fuel car. Each fuel gets its own sensors. Note that mBenzin does not distinguish E10: the Natural 95 price applies to all 95-octane petrol.",
         "data": {
           "fuels": "Fuels",
-          "language": "Language of the dashboard texts"
+          "language": "Language of the dashboard texts",
+          "max_age_days": "Show older prices too"
         },
         "data_description": {
-          "language": "Sets the language of the labels in the ready-made dashboard views (for example \"My station\"). The language of this setup follows Home Assistant's language."
+          "language": "Sets the language of the labels in the ready-made dashboard views (for example \"My station\"). The language of this setup follows Home Assistant's language.",
+          "max_age_days": "Prices are counted only when this fresh. Small stations update their prices on mBenzin.cz less often, so with 1 day they often drop out of the list. Older prices are shown with their date."
         }
       },
       "station": {
@@ -180,10 +182,12 @@
         "description": "Pick one or more fuels – for example Natural 95 and LPG for a dual-fuel car. Each fuel gets its own sensors. Note that mBenzin does not distinguish E10: the Natural 95 price applies to all 95-octane petrol.",
         "data": {
           "fuels": "Fuels",
-          "language": "Language of the dashboard texts"
+          "language": "Language of the dashboard texts",
+          "max_age_days": "Show older prices too"
         },
         "data_description": {
-          "language": "Sets the language of the labels in the ready-made dashboard views (for example \"My station\"). The language of this setup follows Home Assistant's language."
+          "language": "Sets the language of the labels in the ready-made dashboard views (for example \"My station\"). The language of this setup follows Home Assistant's language.",
+          "max_age_days": "Prices are counted only when this fresh. Small stations update their prices on mBenzin.cz less often, so with 1 day they often drop out of the list. Older prices are shown with their date."
         }
       },
       "station": {
@@ -226,6 +230,13 @@
         "zone": "Saved Home Assistant zone",
         "map": "Choose a point on the map",
         "manual": "Manual coordinates (advanced)"
+      }
+    },
+    "max_age_days": {
+      "options": {
+        "1": "Today and yesterday (default)",
+        "3": "Up to 3 days",
+        "7": "Up to 7 days"
       }
     }
   }
