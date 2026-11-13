@@ -7,8 +7,13 @@ class Element {
   constructor() {
     this.children = [];
     this.listeners = {};
+    const listeners = {};
     this.shadowRoot = {
+      listeners,
+      innerHTML: "",
       getElementById: () => ({ replaceChildren() {}, appendChild() {} }),
+      querySelector: () => null,
+      addEventListener(name, callback) { (listeners[name] = listeners[name] || []).push(callback); },
     };
   }
   attachShadow() { return this.shadowRoot; }
@@ -19,6 +24,8 @@ class Element {
 
 class Form extends Element {}
 
+const timers = [];
+const cleared = [];
 const source = readFileSync(
   `${__dirname}/../custom_components/ceny_paliv/frontend/ceny-paliv-card.js`,
   "utf8",
@@ -27,15 +34,17 @@ const context = {
   HTMLElement: Element,
   customElements: { get: () => undefined, define() {} },
   document: { createElement: () => new Form() },
-  window: { customCards: [] },
+  window: { customCards: [], opened: [], open(url) { this.opened.push(url); } },
+  setTimeout: (callback) => { timers.push(callback); return timers.length; },
+  clearTimeout: (id) => { cleared.push(id); },
   CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor };`,
+  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults };`,
   context,
 );
-const { CenyPalivCard, CenyPalivCardEditor } = context.testExports;
+const { CenyPalivCard, CenyPalivCardEditor, editorDefaults } = context.testExports;
 
 const sensor = (fuel, role, configId, extra = {}) => ({
   state: "32.00",
@@ -365,4 +374,79 @@ test("the unavailable message clears map and graph so they are rebuilt when data
   assert.equal(card._gen, 2);
   assert.match(slots.list.innerHTML, /nedostupné/);
   assert.equal(slots.map.innerHTML, "");
+});
+
+test("listeners are registered once however often the config changes", () => {
+  const card = new CenyPalivCard();
+  card.getBoundingClientRect = () => ({ width: 400 });
+  for (let i = 0; i < 3; i += 1) card.setConfig({ fuel: "n95", stations: i + 1 });
+  assert.equal(card.shadowRoot.listeners.click.length, 1);
+  assert.equal(card.shadowRoot.listeners.pointerdown.length, 1);
+});
+
+// what ha-form really sends: all of its data (the defaults it displays included) with the user's change
+const edit = (editor, change) => {
+  const form = editor.children[0];
+  form.listeners["value-changed"]({ detail: { value: { ...form.data, ...change } } });
+  return editor.lastEvent.detail.config;
+};
+
+test("editing a legacy card keeps show_map/show_graph and never saves displayed defaults", () => {
+  const editor = new CenyPalivCardEditor();
+  editor.setConfig({ fuel: "n95", show_map: false });
+  editor.hass = { language: "en", states: { ...area("a") } };
+  assert.deepEqual([...editor.children[0].data.show], ["home", "list", "graph"]);
+
+  const saved = edit(editor, { stations: 3 });
+  same(saved, { fuel: "n95", show_map: false, stations: 3 });
+
+  editor.setConfig(saved);
+  const compact = edit(editor, { compact: true });
+  assert.equal("show_footer" in compact, false); // the footer keeps following "compact"
+
+  editor.setConfig(compact);
+  const explicit = edit(editor, { show: ["list", "map"] });
+  same(explicit.show, ["list", "map"]);
+  assert.equal("show_map" in explicit, false);
+});
+
+test("with one configuration the editor neither saves nor needs config_id, but repairs a stale one", () => {
+  const editor = new CenyPalivCardEditor();
+  const hass = { language: "cs", states: { ...area("a"), ...area("b", "lpg") } };
+  editor.setConfig({ fuel: "n95" });
+  editor.hass = hass;
+  assert.equal(editor.children[0].schema.some((field) => field.name === "config_id"), false);
+  assert.equal("config_id" in edit(editor, { fuel: "lpg" }), false);
+
+  // the integration was removed and added again: the pinned id no longer exists
+  editor.setConfig({ fuel: "n95", config_id: "old-entry" });
+  editor.hass = hass;
+  assert.ok(editor.children[0].schema.some((field) => field.name === "config_id"));
+  assert.equal(edit(editor, {}).config_id, "a");
+});
+
+test("the editor does not rebuild its form on unrelated state changes", () => {
+  const editor = new CenyPalivCardEditor();
+  editor.setConfig({ fuel: "n95" });
+  editor.hass = { language: "en", states: { ...area("a") } };
+  const schema = editor.children[0].schema;
+  editor.hass = { language: "en", states: { ...area("a"), "light.kitchen": { state: "on", attributes: {} } } };
+  assert.equal(editor.children[0].schema, schema);
+  assert.equal(editorDefaults({ compact: true }).show_footer, false);
+});
+
+test("a long press is cancelled when the pointer moves away, and Enter opens a focused row", () => {
+  const row = { dataset: { maps: "https://www.google.com/maps/search/?api=1&query=50.1,14.4" } };
+  const card = { _ids: { top5: "t", home: null }, _entityId: CenyPalivCard.prototype._entityId };
+  const event = { clientX: 0, clientY: 0, composedPath: () => [row] };
+  CenyPalivCard.prototype._down.call(card, event);
+  const timer = card._timer;
+  CenyPalivCard.prototype._move.call(card, { clientX: 3, clientY: 2 });
+  assert.equal(cleared.includes(timer), false); // a small wobble keeps the press
+  CenyPalivCard.prototype._move.call(card, { clientX: 40, clientY: 0 });
+  assert.equal(cleared.includes(timer), true);
+
+  card._click = CenyPalivCard.prototype._click;
+  CenyPalivCard.prototype._key.call(card, { key: "Enter", preventDefault() {}, composedPath: () => [row] });
+  assert.equal(context.window.opened.at(-1), row.dataset.maps);
 });
