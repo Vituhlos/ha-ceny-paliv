@@ -10,7 +10,12 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ceny_paliv.api import CannotConnect, InvalidAuth, MarkerSnapshot
+from custom_components.ceny_paliv.api import (
+    CannotConnect,
+    InvalidAuth,
+    MarkerSnapshot,
+    RateLimited,
+)
 from custom_components.ceny_paliv.config_flow import _valid_coordinates
 from custom_components.ceny_paliv.const import DOMAIN
 
@@ -102,6 +107,280 @@ async def test_options_flow_preserves_settings(hass, enable_custom_integrations,
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert entry.options["homes"] == {"n95": "Oblibena"}
         assert entry.options["language"] == "cs"
+
+
+@pytest.mark.parametrize("failure", [CannotConnect, RateLimited])
+async def test_options_flow_opens_without_api_even_during_failure(
+    hass, enable_custom_integrations, mock_frontend, failure
+):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": "Praha"},
+        options={
+            "fuels": ["diesel"],
+            "homes": {"diesel": "Saved"},
+            "language": "cs",
+        },
+        unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+    original_options = dict(entry.options)
+    with patch(
+        "custom_components.ceny_paliv.config_flow.async_fetch_markers",
+        new=AsyncMock(side_effect=failure),
+    ) as fetch:
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["step_id"] == "area_mode"
+    fetch.assert_not_awaited()
+    assert entry.options == original_options
+
+
+async def test_options_gps_diesel_only_never_fetches_n95_or_city_list(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    hass.config.latitude = 50.1
+    hass.config.longitude = 14.4
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": ""},
+        options={
+            "area_mode": "gps",
+            "location_method": "home",
+            "gps_radius_km": 40,
+            "fuels": ["diesel"],
+            "homes": {},
+        },
+        unique_id="gps-diesel",
+    )
+    entry.add_to_hass(hass)
+    diesel = marker("Diesel", 39)
+    with patch(
+        "custom_components.ceny_paliv.config_flow.async_fetch_markers",
+        new=AsyncMock(return_value=[diesel]),
+    ) as fetch:
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        assert result["step_id"] == "area_mode"
+        fetch.assert_not_awaited()
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"area_mode": "gps"}
+        )
+        assert result["step_id"] == "location_method"
+        fetch.assert_not_awaited()
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"location_method": "home"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"gps_radius_km": 40}
+        )
+        assert result["step_id"] == "fuels"
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"fuels": ["diesel"], "language": "en"}
+        )
+
+    assert result["step_id"] == "station"
+    assert [call.args[2] for call in fetch.await_args_list] == ["diesel"]
+    assert fetch.await_args.kwargs["cache"] is __import__(
+        "custom_components.ceny_paliv.api", fromlist=["shared_marker_cache"]
+    ).shared_marker_cache(hass)
+
+
+async def test_options_gps_to_city_failure_is_retryable_and_preserves_settings(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": ""},
+        options={
+            "area_mode": "gps",
+            "location_method": "manual",
+            "location": {"latitude": 50.1, "longitude": 14.4},
+            "gps_radius_km": 25,
+            "fuels": ["diesel"],
+            "homes": {"diesel": "/Ceny-benzinu-a-nafty/Praha/Saved/1"},
+            "language": "cs",
+        },
+        unique_id="gps-city-failure",
+    )
+    entry.add_to_hass(hass)
+    original_options = dict(entry.options)
+    fetch = AsyncMock(side_effect=[CannotConnect(), [marker("Diesel", 39)]])
+    with patch("custom_components.ceny_paliv.config_flow.async_fetch_markers", new=fetch):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"area_mode": "city"}
+        )
+
+        assert result["step_id"] == "area_mode"
+        assert result["errors"] == {"base": "cannot_connect"}
+        assert entry.options == original_options
+        area_defaults = {
+            key.schema: key.default() if callable(key.default) else key.default
+            for key in result["data_schema"].schema
+            if hasattr(key, "default")
+        }
+        assert area_defaults["area_mode"] == "city"
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"area_mode": "city"}
+        )
+
+    assert result["step_id"] == "city"
+    assert [call.args[2] for call in fetch.await_args_list] == ["diesel", "diesel"]
+    assert entry.options == original_options
+
+
+async def test_options_city_discovery_handles_invalid_key_and_empty_results(
+    hass, enable_custom_integrations, mock_frontend
+):
+    for failure, expected_error in ((InvalidAuth(), "invalid_auth"), ([], "no_cities")):
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={"key": "dummy", "city": "Praha"},
+            options={"fuels": ["lpg"], "homes": {"lpg": "Saved"}},
+            unique_id=f"city-error-{expected_error}",
+        )
+        entry.add_to_hass(hass)
+        with patch(
+            "custom_components.ceny_paliv.config_flow.async_fetch_markers",
+            new=AsyncMock(side_effect=failure if isinstance(failure, Exception) else None,
+                          return_value=None if isinstance(failure, Exception) else failure),
+        ) as fetch:
+            result = await hass.config_entries.options.async_init(entry.entry_id)
+            result = await hass.config_entries.options.async_configure(
+                result["flow_id"], {"area_mode": "city"}
+            )
+        assert result["step_id"] == "area_mode"
+        assert result["errors"] == {"base": expected_error}
+        assert fetch.await_args.args[2] == "lpg"
+        assert entry.options == {"fuels": ["lpg"], "homes": {"lpg": "Saved"}}
+
+
+async def test_options_city_discovery_retry_reuses_flow_and_shared_cooldown(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    from custom_components.ceny_paliv.api import shared_marker_cache
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": ""},
+        options={"area_mode": "gps", "fuels": ["diesel"], "homes": {}},
+        unique_id="gps-city-cooldown",
+    )
+    entry.add_to_hass(hass)
+    original_options = dict(entry.options)
+    underlying_fetch = AsyncMock(side_effect=RateLimited(120))
+    with patch(
+        "custom_components.ceny_paliv.api._async_fetch_markers",
+        new=underlying_fetch,
+    ):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        assert result["step_id"] == "area_mode"
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"area_mode": "city"}
+        )
+        assert result["errors"] == {"base": "rate_limited"}
+        assert entry.options == original_options
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"area_mode": "city"}
+        )
+        assert result["errors"] == {"base": "rate_limited"}
+        assert underlying_fetch.await_count == 1
+        assert underlying_fetch.await_args.args[2] == "diesel"
+        assert shared_marker_cache(hass) is not None
+        assert entry.options == original_options
+
+
+async def test_options_city_to_gps_does_not_fetch_city_list_during_outage(
+    hass, enable_custom_integrations, mock_frontend
+):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": "Praha"},
+        options={
+            "area_mode": "city",
+            "fuels": ["n95"],
+            "homes": {"n95": "Saved"},
+            "language": "en",
+        },
+        unique_id="city-gps-offline",
+    )
+    entry.add_to_hass(hass)
+    original_options = dict(entry.options)
+    with patch(
+        "custom_components.ceny_paliv.config_flow.async_fetch_markers",
+        new=AsyncMock(side_effect=CannotConnect()),
+    ) as fetch:
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"area_mode": "gps"}
+        )
+
+    assert result["step_id"] == "location_method"
+    fetch.assert_not_awaited()
+    assert entry.options == original_options
+
+
+async def test_options_fuels_failure_preserves_pending_choices_for_retry(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    hass.config.latitude = 50.1
+    hass.config.longitude = 14.4
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": ""},
+        options={
+            "area_mode": "gps",
+            "location_method": "home",
+            "gps_radius_km": 40,
+            "fuels": ["diesel"],
+            "homes": {},
+            "language": "en",
+        },
+        unique_id="gps-fuels-retry",
+    )
+    entry.add_to_hass(hass)
+    original_options = dict(entry.options)
+    fetch = AsyncMock(side_effect=[CannotConnect(), [marker("LPG", 20)]])
+    with patch("custom_components.ceny_paliv.config_flow.async_fetch_markers", new=fetch):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"area_mode": "gps"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"location_method": "home"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"gps_radius_km": 40}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"fuels": ["lpg"], "language": "cs"}
+        )
+
+        assert result["step_id"] == "fuels"
+        assert result["errors"] == {"base": "cannot_connect"}
+        assert entry.options == original_options
+        schema_defaults = {
+            getattr(key, "schema", key): (
+                key.default() if callable(key.default) else key.default
+            )
+            for key in result["data_schema"].schema
+            if hasattr(key, "default")
+        }
+        assert schema_defaults["fuels"] == ["lpg"]
+        assert schema_defaults["language"] == "cs"
+
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"fuels": ["lpg"], "language": "cs"}
+        )
+
+    assert result["step_id"] == "station"
+    assert [call.args[2] for call in fetch.await_args_list] == ["lpg", "lpg"]
+    assert entry.options == original_options
 
 
 async def test_gps_config_flow_with_home_location(hass, enable_custom_integrations, mock_frontend, marker):

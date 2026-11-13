@@ -160,6 +160,8 @@ class _FuelStationSteps:
         errors: dict[str, str] = {}
         if user_input is not None:
             fuels = user_input[CONF_FUELS]
+            self._pending_fuels = list(fuels)
+            self._pending_language = user_input[CONF_LANGUAGE]
             if not fuels:
                 errors[CONF_FUELS] = "no_fuel"
             else:
@@ -208,17 +210,25 @@ class _FuelStationSteps:
                     self._station_markers = station_markers
                     self._language = user_input[CONF_LANGUAGE]
                     self._queue, self._homes = list(fuels), {}
+                    self._pending_fuels = None
+                    self._pending_language = None
                     return await self.async_step_station()
+        default_fuels = (
+            self._pending_fuels
+            if self._pending_fuels is not None
+            else self._defaults_fuels
+        )
+        default_language = self._pending_language or self._default_language()
         schema = vol.Schema(
             {
-                vol.Required(CONF_FUELS, default=self._defaults_fuels): SelectSelector(
+                vol.Required(CONF_FUELS, default=default_fuels): SelectSelector(
                     SelectSelectorConfig(
                         options=[{"value": k, "label": v[0]} for k, v in FUELS.items()],
                         multiple=True,
                         mode=SelectSelectorMode.LIST,
                     )
                 ),
-                vol.Required(CONF_LANGUAGE, default=self._default_language()): SelectSelector(
+                vol.Required(CONF_LANGUAGE, default=default_language): SelectSelector(
                     SelectSelectorConfig(
                         options=[{"value": k, "label": v} for k, v in LANGUAGES.items()],
                         mode=SelectSelectorMode.DROPDOWN,
@@ -261,28 +271,54 @@ class _FuelStationSteps:
             return None
         return float(latitude), float(longitude)
 
-    async def async_step_area_mode(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+    async def _async_load_cities(self) -> str | None:
+        """Load city choices on demand using a fuel already configured for this entry."""
+        fuel = next(
+            (item for item in self._defaults_fuels if item in FUELS),
+            DEFAULT_FUELS[0],
+        )
+        try:
+            markers = await async_fetch_markers(
+                async_get_clientsession(self.hass),
+                self._key,
+                fuel,
+                cache=shared_marker_cache(self.hass),
+            )
+        except MBenzinError as err:
+            return _error_key(err)
+        self._cities = city_options(markers)
+        return None if self._cities else "no_cities"
+
+    async def async_step_area_mode(
+        self,
+        user_input: dict[str, Any] | None = None,
+        *,
+        errors: dict[str, str] | None = None,
+    ) -> ConfigFlowResult:
         if user_input is not None:
             self._area_mode = user_input[CONF_AREA_MODE]
+            self._pending_area_mode = self._area_mode
             if self._area_mode == AREA_MODE_CITY:
                 if not getattr(self, "_cities", None):
-                    self._cities = city_options(
-                        await async_fetch_markers(
-                            async_get_clientsession(self.hass),
-                            self._key,
-                            "n95",
-                            cache=shared_marker_cache(self.hass),
+                    error = await self._async_load_cities()
+                    if error:
+                        return await self.async_step_area_mode(
+                            errors={"base": error}
                         )
-                    )
+                self._pending_area_mode = None
                 return await self.async_step_city()
             if not hasattr(self, "_city"):
                 self._city = ""
             self._gps_config_unique_id = f"gps-{uuid4()}"
+            self._pending_area_mode = None
             return await self.async_step_location_method()
 
+        default_area_mode = getattr(
+            self, "_pending_area_mode", getattr(self, "_defaults_area_mode", AREA_MODE_CITY)
+        )
         schema = vol.Schema(
             {
-                vol.Required(CONF_AREA_MODE, default=getattr(self, "_defaults_area_mode", AREA_MODE_CITY)):
+                vol.Required(CONF_AREA_MODE, default=default_area_mode):
                     SelectSelector(
                         SelectSelectorConfig(
                             options=self._localized_options(
@@ -296,7 +332,9 @@ class _FuelStationSteps:
                     )
             }
         )
-        return self.async_show_form(step_id="area_mode", data_schema=schema)
+        return self.async_show_form(
+            step_id="area_mode", data_schema=schema, errors=errors or {}
+        )
 
     async def async_step_location_method(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
@@ -775,14 +813,10 @@ class CenyPalivOptionsFlow(_FuelStationSteps, OptionsFlow):
         self._defaults_gps_radius_km = entry.options.get(
             CONF_GPS_RADIUS_KM, DEFAULT_GPS_RADIUS_KM
         )
-        self._cities = city_options(
-            await async_fetch_markers(
-                async_get_clientsession(self.hass),
-                self._key,
-                "n95",
-                cache=shared_marker_cache(self.hass),
-            )
-        )
+        self._cities = []
+        self._pending_area_mode = None
+        self._pending_fuels = None
+        self._pending_language = None
         return await self.async_step_area_mode()
 
     def _own_entry_id(self) -> str | None:
