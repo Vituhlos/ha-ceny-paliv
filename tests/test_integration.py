@@ -594,7 +594,9 @@ async def test_gps_map_options_and_city_switch_preserve_entry_identity(
         assert entry.options["area_mode"] == "gps"
         assert entry.options["location"] == {"latitude": 50.1, "longitude": 14.4}
         assert entry.options["gps_radius_km"] == 50
-        assert entry.options["homes"]["n95"] == "Oblibena"
+        # the kept favourite is now its exact URL; its sensor keeps the legacy statistics identity
+        assert entry.options["homes"]["n95"] == "/Ceny-benzinu-a-nafty/Praha/Oblibena/123"
+        assert "home_identities" not in entry.options
 
 
 async def test_changing_favourite_archives_old_statistics_identity(
