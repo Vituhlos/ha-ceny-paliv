@@ -494,14 +494,9 @@ class _FuelStationSteps:
             choice = user_input.get(CONF_STATION, NONE_VALUE)
             previous_choice = self._defaults_homes.get(fuel, NONE_VALUE)
             previous_identity = getattr(self, "_home_identities", {}).get(fuel) or (
+                # a saved slug always belongs to the city it was chosen in
                 self._canonical_station_identity(
-                    fuel,
-                    previous_choice,
-                    city=(
-                        self._original_city
-                        if getattr(self, "_defaults_area_mode", AREA_MODE_CITY) == AREA_MODE_CITY
-                        else None
-                    ),
+                    fuel, previous_choice, city=getattr(self, "_original_city", None) or None
                 )
                 if previous_choice != NONE_VALUE
                 else None
@@ -584,26 +579,32 @@ class _FuelStationSteps:
         default = self._defaults_homes.get(fuel, NONE_VALUE)
         if default not in {option["value"] for option in options} and default != NONE_VALUE:
             language = (self.hass.config.language or DEFAULT_LANGUAGE).split("-")[0]
+            # A saved slug (from City mode) is only meaningful in the city it was chosen in: never match
+            # another city's station that happens to share the slug.
+            slug_city = getattr(self, "_original_city", None)
             candidates = [
                 marker
                 for marker in self._station_markers.get(fuel, [])
-                if marker.get("url") == default or _station_slug(marker) == default
+                if marker.get("url") == default
+                or (
+                    "/" not in default
+                    and bool(slug_city)
+                    and city_of(marker) == slug_city
+                    and _station_slug(marker) == default
+                )
             ]
             if len(candidates) == 1 and self._area_mode == AREA_MODE_GPS:
                 marker = candidates[0]
+                # keep the favourite as its exact station URL, so GPS mode never resolves a bare slug
+                default = marker["url"]
                 pretty_options = station_options([marker], None, use_url=True)
-                if pretty_options:
-                    in_area = marker["url"] in {
-                        option["value"] for option in self._stations[fuel]
-                    }
+                if default in {option["value"] for option in options}:
+                    pass  # the station is inside the area and already listed
+                elif pretty_options:
                     prefix = (
                         "Outside selected GPS area · "
-                        if not in_area and language != "cs"
-                        else "Mimo zvolenou GPS oblast · "
-                        if not in_area
-                        else "Saved favourite · "
                         if language != "cs"
-                        else "Uložená oblíbená · "
+                        else "Mimo zvolenou GPS oblast · "
                     )
                     options.append(
                         {"value": default, "label": prefix + pretty_options[0]["label"]}
