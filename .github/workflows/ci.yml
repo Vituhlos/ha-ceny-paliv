@@ -2,6 +2,7 @@ name: Tests
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -22,8 +23,8 @@ jobs:
             python: "3.14"
             requirements: requirements_test_latest.txt
     steps:
-      - uses: actions/checkout@v4.2.2
-      - uses: actions/setup-python@v5.6.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python }}
           cache: pip
@@ -32,5 +33,58 @@ jobs:
         run: python -m pip install -r "${{ matrix.requirements }}"
       - name: Run tests
         run: python -m pytest -q
-      - name: Run Lovelace card regression tests
+
+  card:
+    name: Lovelace card
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: Check syntax
+        run: node --check custom_components/ceny_paliv/frontend/ceny-paliv-card.js
+      - name: Run card regression tests
         run: node --test tests/test_card.js
+
+  lint:
+    name: Lint and versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Ruff (errors and likely bugs)
+        run: |
+          python -m pip install ruff==0.15.22
+          ruff check --select E9,F,B custom_components tests
+      - name: Integration, card and manifest versions match
+        run: |
+          python - <<'EOF'
+          import json, re, pathlib
+          root = pathlib.Path("custom_components/ceny_paliv")
+          manifest = json.loads((root / "manifest.json").read_text())["version"]
+          const = re.search(r'CARD_VERSION = "([^"]+)"', (root / "const.py").read_text()).group(1)
+          card = re.search(r"const CARD_VERSION = '([^']+)'", (root / "frontend/ceny-paliv-card.js").read_text()).group(1)
+          assert manifest == const == card, (manifest, const, card)
+          print("version", manifest)
+          EOF
+
+  hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361 # master 2026-11
+
+  hacs:
+    name: HACS validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@d556e736723344f83838d08488c983a15381059a # 22.5.0
+        with:
+          category: integration
+          # brands: icons ship in custom_components/ceny_paliv/brand/ (HA 2026.3+), not in home-assistant/brands;
+          # topics/issues: repository settings of this fork, decided by the maintainer
+          ignore: brands topics issues
