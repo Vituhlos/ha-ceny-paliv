@@ -39,23 +39,40 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':
 const norm = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 const STYLE = `
-  :host { display: block; }
-  .grid, .col { display: flex; flex-direction: column; gap: 16px; }
+  :host {
+    display: block;
+    /* every colour comes from the Home Assistant theme, so light, dark and custom themes all work */
+    --cp-text: var(--primary-text-color, #212121);
+    --cp-muted: var(--secondary-text-color, #727272);
+    --cp-line: var(--divider-color, rgba(0, 0, 0, 0.12));
+    --cp-surface: var(--ha-card-background, var(--card-background-color, #fff));
+    --cp-fill: color-mix(in srgb, var(--disabled-color, #bdbdbd) 20%, transparent);
+    --cp-home: var(--primary-color, #03a9f4);
+    --cp-fuel: var(--orange-color, #ff9800);
+    /* status text mixed with the text colour: darker on a light card, lighter on a dark one, readable on both */
+    --cp-good: color-mix(in srgb, var(--success-color, #43a047) 80%, var(--primary-text-color, #212121));
+    --cp-warn: color-mix(in srgb, var(--warning-color, #ffa600) 70%, var(--primary-text-color, #212121));
+    --cp-bad: color-mix(in srgb, var(--error-color, #db4437) 80%, var(--primary-text-color, #212121));
+  }
+  .grid, .col { display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); }
   .col { min-width: 0; }
   .grid.columns { flex-direction: row; align-items: flex-start; }
   .grid.columns > .col { flex: 1 1 0; }
   .grid.auto.wide { flex-direction: row; align-items: flex-start; }
   .grid.auto.wide > .col { flex: 1 1 0; }
-  .card { background: #171a20; border: 1px solid #262a33; border-radius: 22px; padding: 16px; color: #eef0f3;
-          font-family: Manrope, system-ui, sans-serif; box-sizing: border-box; }
-  .card.compact { padding: 12px 14px; border-radius: 18px; }
-  .card.home { border-color: rgba(76,195,217,0.30); cursor: pointer; }
-  .row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid #23272f; cursor: pointer; user-select: none; }
+  .card { display: block; padding: var(--ha-space-4, 16px); color: var(--cp-text); box-sizing: border-box;
+          font-family: var(--ha-font-family-body, Roboto, Noto, sans-serif); -webkit-font-smoothing: antialiased; }
+  .card.compact { padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px); }
+  .card.home { cursor: pointer; --ha-card-border-color: color-mix(in srgb, var(--cp-home) 45%, transparent); }
+  .card.home:focus-visible { outline: 2px solid var(--cp-home); outline-offset: -2px; }
+  .row { display: flex; align-items: center; gap: var(--ha-space-3, 12px); padding: var(--ha-space-3, 12px) 0; border-top: 1px solid var(--cp-line); cursor: pointer; user-select: none; outline: none; border-radius: var(--ha-border-radius-md, 8px); }
+  .row:focus-visible { box-shadow: inset 0 0 0 2px var(--cp-home); }
   .compact .row { padding: 7px 0; gap: 10px; }
   .row:first-of-type { border-top: none; }
-  .map, .graph { border-radius: 22px; overflow: hidden; }
+  .map, .graph { border-radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px)); overflow: hidden; }
   .map.fixed { position: relative; min-width: 200px; }
   .map.fixed > * { position: absolute; inset: 0; display: block; }
+  a { color: inherit; }
   ha-icon { display: inline-block; }
 `;
 
@@ -331,7 +348,7 @@ class CenyPalivCard extends HTMLElement {
       const marker = (id) => ({ entity: id, label_mode: 'attribute', attribute: 'price', focus: true });
       const entities = this._ids.pos.slice(0, this._n).filter(Boolean).map(marker);
       if (hasHome) entities.push(marker(this._ids.home));
-      kids.push({ id: 'map', cls: this._mapHeight ? 'map fixed' : 'map', config: { type: 'map', theme_mode: 'dark', auto_fit: true, default_zoom: 12, hours_to_show: 0, entities } });
+      kids.push({ id: 'map', cls: this._mapHeight ? 'map fixed' : 'map', config: { type: 'map', theme_mode: 'auto', auto_fit: true, default_zoom: 12, hours_to_show: 0, entities } });
     }
     if (this._show.includes('graph') && hasHome) {
       kids.push({
@@ -370,10 +387,10 @@ class CenyPalivCard extends HTMLElement {
   }
 
   _arrow(t) {
-    if (!t) return { icon: 'mdi:minus', color: '#5b6270', txt: '—' };
-    if (t.dir === 'down') return { icon: 'mdi:arrow-down-bold', color: '#5fd39a', txt: '−' + Math.abs(t.delta).toFixed(2) };
-    if (t.dir === 'up') return { icon: 'mdi:arrow-up-bold', color: '#ff7a6b', txt: '+' + Math.abs(t.delta).toFixed(2) };
-    return { icon: 'mdi:minus', color: '#f5c26b', txt: '0.00' };
+    if (!t) return { icon: 'mdi:minus', color: 'var(--cp-muted)', txt: '—' };
+    if (t.dir === 'down') return { icon: 'mdi:arrow-down-bold', color: 'var(--cp-good)', txt: '−' + Math.abs(t.delta).toFixed(2) };
+    if (t.dir === 'up') return { icon: 'mdi:arrow-up-bold', color: 'var(--cp-bad)', txt: '+' + Math.abs(t.delta).toFixed(2) };
+    return { icon: 'mdi:minus', color: 'var(--cp-warn)', txt: '0.00' };
   }
 
   _age(s, today) {
@@ -415,16 +432,16 @@ class CenyPalivCard extends HTMLElement {
     const name = s.chain || s.name || '?';
     let h = 0; for (const ch of norm(name)) h = (h * 31 + ch.charCodeAt(0)) % 360;
     const url = this._logoUrl(s);
-    const base = `width:${size}px;height:${size}px;border-radius:999px;position:absolute;left:0;top:0;${extra || ''}`;
-    const init = `<span style="${base}display:flex;align-items:center;justify-content:center;box-sizing:border-box;font-size:${Math.round(size * 0.36)}px;font-weight:800;letter-spacing:-0.02em;background:hsl(${h} 34% 26%);color:hsl(${h} 70% 86%)">${esc(this._initials(name))}</span>`;
+    const base = `width:${size}px;height:${size}px;border-radius:var(--ha-border-radius-pill, 9999px);position:absolute;left:0;top:0;${extra || ''}`;
+    const init = `<span style="${base}display:flex;align-items:center;justify-content:center;box-sizing:border-box;font-size:${Math.round(size * 0.36)}px;font-weight:var(--ha-font-weight-bold, 700);background:color-mix(in srgb, hsl(${h} 55% 50%) 22%, transparent);color:color-mix(in srgb, hsl(${h} 60% 45%) 65%, var(--cp-text))">${esc(this._initials(name))}</span>`;
     if (!url) return init;
-    return init + `<img src="${esc(url)}" alt="${esc(name)}" onload="this.previousElementSibling.style.visibility='hidden'" onerror="this.style.display='none'" style="${base}display:block;object-fit:cover;background:#fff">`;
+    return init + `<img src="${esc(url)}" alt="${esc(name)}" onload="this.previousElementSibling.style.visibility='hidden'" onerror="this.style.display='none'" style="${base}display:block;object-fit:cover;background:#fff;box-shadow:inset 0 0 0 1px var(--cp-line)">`;
   }
 
   _avatar(s, rank, best) {
     const size = this._compact ? 26 : 32;
-    const ring = best ? 'box-shadow:0 0 0 2px #5fd39a;' : '';
-    return `<span style="position:relative;width:${size}px;height:${size}px;flex-shrink:0;display:block">${this._disc(s, size, ring)}<span style="position:absolute;right:-5px;bottom:-5px;min-width:16px;height:16px;padding:0 3px;box-sizing:border-box;border-radius:999px;background:#0e1014;border:1px solid ${best ? '#5fd39a' : '#2a2f39'};color:${best ? '#5fd39a' : '#d6dae1'};font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center">${rank}</span></span>`;
+    const ring = best ? 'box-shadow:0 0 0 2px var(--cp-good);' : '';
+    return `<span style="position:relative;width:${size}px;height:${size}px;flex-shrink:0;display:block">${this._disc(s, size, ring)}<span style="position:absolute;right:-5px;bottom:-5px;min-width:16px;height:16px;padding:0 3px;box-sizing:border-box;border-radius:var(--ha-border-radius-pill, 9999px);background:var(--cp-surface);border:1px solid ${best ? 'var(--cp-good)' : 'var(--cp-line)'};color:${best ? 'var(--cp-good)' : 'var(--cp-text)'};font-size:var(--ha-font-size-xs, 10px);font-weight:var(--ha-font-weight-bold, 700);display:flex;align-items:center;justify-content:center">${rank}</span></span>`;
   }
 
   // ---------------------------------------------------------------- rendering
@@ -465,7 +482,7 @@ class CenyPalivCard extends HTMLElement {
         no_home: 'pro toto palivo není nastavena oblíbená stanice (nastavení integrace).',
       },
     }[lang][why];
-    return `<div class="card" style="color:#9aa1ad;font-size:14px">Ceny paliv: ${text}</div>`;
+    return `<ha-card class="card" style="color:var(--cp-muted);font-size:var(--ha-font-size-m, 14px)">Ceny paliv: ${text}</ha-card>`;
   }
 
   _homeHtml() {
@@ -489,44 +506,44 @@ class CenyPalivCard extends HTMLElement {
         const target = new Date(today); target.setDate(target.getDate() - n);
         covered = new Date(t.ref_date + 'T00:00:00') <= target; if (!covered) partial = t.ref_date;
       }
-      return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;background:#1f232b;border-radius:12px;padding:8px 2px;min-width:0">
-        <span style="font-size:11px;font-weight:700;color:#9aa1ad">${n} d${t && !covered ? '*' : ''}</span>
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--cp-fill);border-radius:var(--ha-border-radius-lg, 12px);padding:8px 2px;min-width:0">
+        <span style="font-size:var(--ha-font-size-s, 11px);font-weight:var(--ha-font-weight-bold, 700);color:var(--cp-muted)">${n} d${t && !covered ? '*' : ''}</span>
         <ha-icon icon="${r.icon}" style="--mdc-icon-size:18px;color:${r.color}"></ha-icon>
-        <span style="font-size:13px;font-weight:800;color:${r.color};white-space:nowrap">${r.txt}</span></div>`;
+        <span style="font-size:var(--ha-font-size-s, 13px);font-weight:var(--ha-font-weight-bold, 700);color:${r.color};white-space:nowrap">${r.txt}</span></div>`;
     };
     const chips = [1, 2, 7, 14, 30].map(chip).join('');
     const anyTrend = Object.values(tr).some(Boolean);
     const note = !anyTrend ? T('trends_start')
       : (partial ? T('since_partial', { d: new Date(partial + 'T00:00:00').toLocaleDateString(LOC, { day: 'numeric', month: 'short' }) }) : '');
     let pos;
-    if (a.rank == null) pos = `<span style="color:#f5c26b">${esc(T('not_ranked'))}</span>`;
-    else if (Number(a.vs_cheapest) <= 0) pos = `<span style="color:#5fd39a">${esc(T('cheapest_town', { rank: a.rank, n: a.fresh_count }))}</span>`;
-    else pos = `<span style="color:#f5c26b">${esc(T('vs_cheapest', { d: Number(a.vs_cheapest).toFixed(2), name: a.cheapest_name, rank: a.rank, n: a.fresh_count }))}</span>`;
+    if (a.rank == null) pos = `<span style="color:var(--cp-warn)">${esc(T('not_ranked'))}</span>`;
+    else if (Number(a.vs_cheapest) <= 0) pos = `<span style="color:var(--cp-good)">${esc(T((this._hass.states[this._ids.top5].attributes || {}).gps_area ? 'cheapest_area' : 'cheapest_town', { rank: a.rank, n: a.fresh_count }))}</span>`;
+    else pos = `<span style="color:var(--cp-warn)">${esc(T('vs_cheapest', { d: Number(a.vs_cheapest).toFixed(2), name: a.cheapest_name, rank: a.rank, n: a.fresh_count }))}</span>`;
     const topHome = (this._hass.states[this._ids.top5].attributes || {}).home || { name: stationName };
     const hasLogo = !!this._logoUrl(topHome);
     const size = this._compact ? 36 : 44;
-    const iconBox = `<div style="position:absolute;left:0;top:0;width:${size}px;height:${size}px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:rgba(76,195,217,0.16)"><ha-icon icon="mdi:gas-station-in-use" style="--mdc-icon-size:22px;color:#4cc3d9"></ha-icon></div>`;
+    const iconBox = `<div style="position:absolute;left:0;top:0;width:${size}px;height:${size}px;border-radius:var(--ha-tile-icon-border-radius, var(--ha-border-radius-pill, 9999px));display:flex;align-items:center;justify-content:center;background:color-mix(in srgb, var(--cp-home) 20%, transparent)"><ha-icon icon="mdi:gas-station-in-use" style="--mdc-icon-size:22px;color:var(--cp-home)"></ha-icon></div>`;
     const logo = `<div style="position:relative;width:${size}px;height:${size}px;flex-shrink:0">${hasLogo ? this._disc(topHome, size) : iconBox}</div>`;
     const cp = this._compact;
-    const mini = [1, 7, 30].map((n) => { const r = this._arrow(tr[String(n)]); return `<span style="color:#9aa1ad">${n} d <span style="color:${r.color};font-weight:800">${esc(r.txt)}</span></span>`; }).join(' · ');
-    return `<div class="card home${cp ? ' compact' : ''}" role="button" tabindex="0" data-more-info="${esc(this._ids.home)}">
+    const mini = [1, 7, 30].map((n) => { const r = this._arrow(tr[String(n)]); return `<span style="color:var(--cp-muted)">${n} d <span style="color:${r.color};font-weight:var(--ha-font-weight-bold, 700)">${esc(r.txt)}</span></span>`; }).join(' · ');
+    return `<ha-card class="card home${cp ? ' compact' : ''}" role="button" tabindex="0" data-more-info="${esc(this._ids.home)}">
       <div style="display:flex;flex-direction:column;gap:${cp ? 8 : 12}px;width:100%;text-align:left">
         <div style="display:flex;align-items:center;gap:12px">${logo}
           <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:2px;min-width:0">
-            <span style="font-size:12px;letter-spacing:.09em;text-transform:uppercase;font-weight:700;color:#9aa1ad">${esc(T('my_station'))}</span>
-            <span style="font-size:15px;font-weight:700;color:#eef0f3">${esc(stationName)}</span>
-            <span style="font-size:12px;color:${stale ? '#f5c26b' : '#9aa1ad'}">${esc(updTxt)}</span></div>
+            <span style="font-size:var(--ha-font-size-s, 12px);letter-spacing:.09em;text-transform:uppercase;font-weight:var(--ha-font-weight-bold, 700);color:var(--cp-muted)">${esc(T('my_station'))}</span>
+            <span style="font-size:var(--ha-font-size-m, 15px);font-weight:var(--ha-font-weight-bold, 700);color:var(--cp-text)">${esc(stationName)}</span>
+            <span style="font-size:var(--ha-font-size-s, 12px);color:${stale ? 'var(--cp-warn)' : 'var(--cp-muted)'}">${esc(updTxt)}</span></div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0">
-            <span style="font-size:${cp ? 30 : 40}px;font-weight:800;letter-spacing:-0.03em;line-height:1;color:${stale ? '#9aa1ad' : '#eef0f3'}">${price}</span>
-            <span style="font-size:11px;color:#9aa1ad;font-weight:600">${esc(a.unit_of_measurement || 'Kč/l')}</span></div>
+            <span style="font-size:${cp ? 30 : 40}px;font-weight:var(--ha-font-weight-bold, 700);line-height:1;color:${stale ? 'var(--cp-muted)' : 'var(--cp-text)'}">${price}</span>
+            <span style="font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted);font-weight:var(--ha-font-weight-medium, 500)">${esc(a.unit_of_measurement || 'Kč/l')}</span></div>
         </div>
-        ${cp ? `<div style="display:flex;flex-wrap:wrap;gap:4px 8px;font-size:12px;font-weight:600">${mini}</div>`
+        ${cp ? `<div style="display:flex;flex-wrap:wrap;gap:4px 8px;font-size:var(--ha-font-size-s, 12px);font-weight:var(--ha-font-weight-medium, 500)">${mini}</div>`
     : `<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px">${chips}</div>
-        ${note ? `<span style="font-size:11px;color:#5b6270;margin-top:-4px">${esc(note)}</span>` : ''}`}
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;font-weight:600">${pos}
-          ${cp ? '' : `<span style="color:#5b6270;font-weight:500;white-space:nowrap">${esc(T('tap_history'))}</span>`}</div>
-        ${this._show.includes('list') ? '' : `<span style="font-size:11px;color:#5b6270">${this._source()}</span>`}
-      </div></div>`;
+        ${note ? `<span style="font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted);margin-top:-4px">${esc(note)}</span>` : ''}`}
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:var(--ha-font-size-s, 12px);font-weight:var(--ha-font-weight-medium, 500)">${pos}
+          ${cp ? '' : `<span style="color:var(--cp-muted);font-weight:var(--ha-font-weight-medium, 500);white-space:nowrap">${esc(T('tap_history'))}</span>`}</div>
+        ${this._show.includes('list') ? '' : `<span style="font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted)">${this._source()}</span>`}
+      </div></ha-card>`;
   }
 
   _listHtml() {
@@ -547,14 +564,14 @@ class CenyPalivCard extends HTMLElement {
     const n = min === null ? 0 : fresh.filter((s) => Number(s.price) === min).length;
     const sub = min === null ? T('no_recent') : T('cheapest_price', { p: fp(min), unit }) + (n > 1 ? ' · ' + T('stations_same', { n }) : '');
     const head = `<div style="display:flex;align-items:center;gap:12px;width:100%;padding-bottom:${cp ? 6 : 12}px">
-      <div style="width:${cp ? 36 : 44}px;height:${cp ? 36 : 44}px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:rgba(245,177,76,0.16);flex-shrink:0">
-        <ha-icon icon="mdi:gas-station" style="--mdc-icon-size:22px;color:#f5b14c"></ha-icon></div>
+      <div style="width:${cp ? 36 : 44}px;height:${cp ? 36 : 44}px;border-radius:var(--ha-tile-icon-border-radius, var(--ha-border-radius-pill, 9999px));display:flex;align-items:center;justify-content:center;background:color-mix(in srgb, var(--cp-fuel) 20%, transparent);flex-shrink:0">
+        <ha-icon icon="mdi:gas-station" style="--mdc-icon-size:22px;color:var(--cp-fuel)"></ha-icon></div>
       <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:2px;text-align:left;min-width:0">
-        <span style="font-size:15px;font-weight:700;color:#eef0f3">${esc(at.fuel_label || this._config.fuel)} · ${esc(at.city_name || '')}</span>
-        <span style="font-size:13px;color:#9aa1ad">${esc(sub)}</span></div>
+        <span style="font-size:var(--ha-font-size-m, 15px);font-weight:var(--ha-font-weight-bold, 700);color:var(--cp-text)">${esc(at.fuel_label || this._config.fuel)} · ${esc(at.city_name || '')}</span>
+        <span style="font-size:var(--ha-font-size-s, 13px);color:var(--cp-muted)">${esc(sub)}</span></div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0">
-        <span style="font-size:${cp ? 22 : 28}px;font-weight:800;letter-spacing:-0.02em;line-height:1;color:${min === null ? '#5b6270' : '#5fd39a'}">${min === null ? '—' : fp(min)}</span>
-        <span style="font-size:11px;color:#9aa1ad;font-weight:600">${esc(unit)}</span></div></div>`;
+        <span style="font-size:${cp ? 22 : 28}px;font-weight:var(--ha-font-weight-bold, 700);line-height:1;color:${min === null ? 'var(--cp-muted)' : 'var(--cp-good)'}">${min === null ? '—' : fp(min)}</span>
+        <span style="font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted);font-weight:var(--ha-font-weight-medium, 500)">${esc(unit)}</span></div></div>`;
     const rows = list.map((s, i) => {
       const best = Number(s.price) === min;
       const diff = Number(s.price) - min;
@@ -563,20 +580,20 @@ class CenyPalivCard extends HTMLElement {
       const addr = a0.startsWith(name) ? a0.slice(name.length).trim() : a0;
       const tr = this._arrow((s.trends || {})['1']);
       const age = this._age(s, today);
-      const when = age <= 0 ? esc(T('today')) : `<span style="color:#f5c26b">${esc(age === 1 ? T('yesterday') : (s.updated || '—'))}</span>`;
-      const home = s.home ? `<ha-icon icon="mdi:home" title="${esc(T('my_station'))}" style="--mdc-icon-size:14px;color:#4cc3d9;margin-left:6px"></ha-icon>` : '';
+      const when = age <= 0 ? esc(T('today')) : `<span style="color:var(--cp-warn)">${esc(age === 1 ? T('yesterday') : (s.updated || '—'))}</span>`;
+      const home = s.home ? `<ha-icon icon="mdi:home" title="${esc(T('my_station'))}" style="--mdc-icon-size:14px;color:var(--cp-home);margin-left:6px"></ha-icon>` : '';
       return `<div class="row" role="link" tabindex="0" data-maps="${esc(s.maps)}">
         ${this._avatar(s, i + 1, best)}
         <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:2px;text-align:left;min-width:0">
-          <span style="font-size:15px;font-weight:700;color:#eef0f3;${cp ? 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis' : ''}">${esc(name)}${cp ? ` <span style="font-size:11px;font-weight:500;color:#9aa1ad">${esc(addr)}</span>` : ''}${home}</span>
-          ${cp ? '' : `<span style="font-size:12px;color:#9aa1ad;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(addr)} · ${when}</span>`}</div>
+          <span style="font-size:var(--ha-font-size-m, 15px);font-weight:var(--ha-font-weight-bold, 700);color:var(--cp-text);${cp ? 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis' : ''}">${esc(name)}${cp ? ` <span style="font-size:var(--ha-font-size-s, 11px);font-weight:var(--ha-font-weight-medium, 500);color:var(--cp-muted)">${esc(addr)}</span>` : ''}${home}</span>
+          ${cp ? '' : `<span style="font-size:var(--ha-font-size-s, 12px);color:var(--cp-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(addr)} · ${when}</span>`}</div>
         <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:40px" title="${esc(T('vs_yesterday'))}">
           <ha-icon icon="${tr.icon}" style="--mdc-icon-size:18px;color:${tr.color}"></ha-icon>
-          <span style="font-size:10px;font-weight:700;color:${tr.color}">${tr.txt}</span></div>
+          <span style="font-size:var(--ha-font-size-xs, 10px);font-weight:var(--ha-font-weight-bold, 700);color:${tr.color}">${tr.txt}</span></div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;gap:1px">
-          <span style="font-size:18px;font-weight:800;color:${best ? '#5fd39a' : '#eef0f3'}">${fp(s.price)}</span>
-          <span style="font-size:11px;font-weight:600;color:${best ? '#5fd39a' : '#9aa1ad'}">${esc(best ? T('cheapest_badge') : '+' + fp(diff))}</span></div>
-        <ha-icon icon="mdi:chevron-right" style="--mdc-icon-size:18px;color:#5b6270;flex-shrink:0"></ha-icon></div>`;
+          <span style="font-size:var(--ha-font-size-l, 18px);font-weight:var(--ha-font-weight-bold, 700);color:${best ? 'var(--cp-good)' : 'var(--cp-text)'}">${fp(s.price)}</span>
+          <span style="font-size:var(--ha-font-size-s, 11px);font-weight:var(--ha-font-weight-medium, 500);color:${best ? 'var(--cp-good)' : 'var(--cp-muted)'}">${esc(best ? T('cheapest_badge') : '+' + fp(diff))}</span></div>
+        <ha-icon icon="mdi:chevron-right" style="--mdc-icon-size:18px;color:var(--cp-muted);flex-shrink:0"></ha-icon></div>`;
     }).join('');
     // footer
     const now = new Date();
@@ -586,13 +603,13 @@ class CenyPalivCard extends HTMLElement {
     const la = at.last_attempt ? new Date(at.last_attempt) : null;
     const nu = at.next_update ? new Date(at.next_update) : null;
     const hidden = (at.excluded || 0) + (all.length - fresh.length);
-    const lines = [`<span style="font-size:13px;color:#d6dae1;font-weight:600">${esc(T('table_updated', { t: fa ? when(fa) : '—', n: nu ? when(nu) : '—' }))}</span>`];
-    if (at.fetch_error) lines.push(`<span style="font-size:12px;color:#f5c26b">${esc(T('refresh_failed', { at: la ? T('at') + when(la) : '', err: at.fetch_error }))}</span>`);
-    if (at.city_total) lines.push(`<span style="font-size:12px;color:#9aa1ad">${esc(T('hidden', { h: hidden, t: at.city_total, age: maxAge > 1 ? T('days_l', { n: maxAge }) : (maxAge === 1 ? T('yesterday_l') : T('today_l')) }))}</span>`);
-    lines.push(`<span style="font-size:11px;color:#9aa1ad">${esc(T('arrows'))} · <span style="color:#5fd39a">▼ ${esc(T('down'))}</span> · <span style="color:#f5c26b">— ${esc(T('stable'))}</span> · <span style="color:#ff7a6b">▲ ${esc(T('up'))}</span> · ${esc(T('longpress'))}</span>`);
-    lines.push(`<span style="font-size:11px;color:#5b6270">${this._source()} · ${esc(at.fuel_label || '')}${at.fuel === 'n95' ? ' ' + esc(T('e10_note')) : ''} · ${esc(T('tap_station'))}</span>`);
-    const foot = !this._footer ? `<div style="padding-top:6px;font-size:11px;color:#5b6270;text-align:left">${this._source()}${at.fetch_error ? ' · ' + esc(T('refresh_failed', { at: '', err: at.fetch_error })) : ''}</div>` : `<div style="display:flex;flex-direction:column;gap:3px;text-align:left;border-top:1px solid #23272f;padding-top:12px">${lines.join('')}</div>`;
-    return `<div class="card${cp ? ' compact' : ''}" data-more-info="${esc(this._ids.home || this._ids.top5)}">${head}${rows}${foot}</div>`;
+    const lines = [`<span style="font-size:var(--ha-font-size-s, 13px);color:var(--cp-text);font-weight:var(--ha-font-weight-medium, 500)">${esc(T('table_updated', { t: fa ? when(fa) : '—', n: nu ? when(nu) : '—' }))}</span>`];
+    if (at.fetch_error) lines.push(`<span style="font-size:var(--ha-font-size-s, 12px);color:var(--cp-warn)">${esc(T('refresh_failed', { at: la ? T('at') + when(la) : '', err: at.fetch_error }))}</span>`);
+    if (at.city_total) lines.push(`<span style="font-size:var(--ha-font-size-s, 12px);color:var(--cp-muted)">${esc(T('hidden', { h: hidden, t: at.city_total, age: maxAge > 1 ? T('days_l', { n: maxAge }) : (maxAge === 1 ? T('yesterday_l') : T('today_l')) }))}</span>`);
+    lines.push(`<span style="font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted)">${esc(T('arrows'))} · <span style="color:var(--cp-good)">▼ ${esc(T('down'))}</span> · <span style="color:var(--cp-warn)">— ${esc(T('stable'))}</span> · <span style="color:var(--cp-bad)">▲ ${esc(T('up'))}</span> · ${esc(T('longpress'))}</span>`);
+    lines.push(`<span style="font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted)">${this._source()} · ${esc(at.fuel_label || '')}${at.fuel === 'n95' ? ' ' + esc(T('e10_note')) : ''} · ${esc(T('tap_station'))}</span>`);
+    const foot = !this._footer ? `<div style="padding-top:6px;font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted);text-align:left">${this._source()}${at.fetch_error ? ' · ' + esc(T('refresh_failed', { at: '', err: at.fetch_error })) : ''}</div>` : `<div style="display:flex;flex-direction:column;gap:3px;text-align:left;border-top:1px solid var(--cp-line);padding-top:12px">${lines.join('')}</div>`;
+    return `<ha-card class="card${cp ? ' compact' : ''}" data-more-info="${esc(this._ids.home || this._ids.top5)}">${head}${rows}${foot}</ha-card>`;
   }
 
   // ---------------------------------------------------------------- interaction
