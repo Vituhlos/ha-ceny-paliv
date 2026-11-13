@@ -23,6 +23,18 @@ const CARD_VERSION = '0.4.2';
 
 const PARTS = ['home', 'list', 'map', 'graph'];
 
+// Parts a config shows. show_map / show_graph: options of the first versions, still honoured when `show` is not set.
+function shownParts(config) {
+  const legacy = PARTS.filter((p) => !(p === 'map' && config.show_map === false) && !(p === 'graph' && config.show_graph === false));
+  const show = (Array.isArray(config.show) ? config.show : config.show ? [config.show] : legacy).filter((p) => PARTS.includes(p));
+  return show.length ? show : PARTS;
+}
+
+// What the card uses for an option the config does not set (the editor shows these, but never saves them).
+function editorDefaults(config) {
+  return { show: shownParts(config), layout: 'auto', stations: 5, compact: false, show_footer: !config.compact, map_height: 0 };
+}
+
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const norm = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -73,15 +85,20 @@ class CenyPalivCard extends HTMLElement {
     this._sig = '';
     this._children = null;
     this._timer = null;
+    // registered once: the shadow root outlives every setConfig
+    const root = this.shadowRoot;
+    root.addEventListener('click', (e) => this._click(e));
+    root.addEventListener('keydown', (e) => this._key(e));
+    root.addEventListener('pointerdown', (e) => this._down(e));
+    root.addEventListener('pointermove', (e) => this._move(e));
+    // pointerleave does not bubble to the root: moving away is caught by pointermove / pointercancel
+    ['pointerup', 'pointercancel'].forEach((n) => root.addEventListener(n, () => clearTimeout(this._timer)));
   }
 
   setConfig(config) {
     if (!config || !config.fuel) throw new Error('ceny-paliv-card: set "fuel", for example "n95"');
-    // show_map / show_graph: options of the first versions, still honoured when `show` is not set
-    const legacy = PARTS.filter((p) => !(p === 'map' && config.show_map === false) && !(p === 'graph' && config.show_graph === false));
-    const show = (Array.isArray(config.show) ? config.show : config.show ? [config.show] : legacy).filter((p) => PARTS.includes(p));
     this._config = Object.assign({ layout: 'auto', stations: 5, compact: false, logo_path: '' }, config);
-    this._show = show.length ? show : PARTS;
+    this._show = shownParts(config);
     this._layout = ['auto', 'columns', 'stack'].includes(this._config.layout) ? this._config.layout : 'auto';
     this._n = Math.min(5, Math.max(1, Math.round(Number(this._config.stations) || 5)));
     this._compact = !!this._config.compact;
@@ -244,10 +261,13 @@ class CenyPalivCard extends HTMLElement {
       const a = state.attributes || {};
       if (!id.startsWith('sensor.ceny_paliv_') || a.cp_fuel !== fuel || a.cp_role !== 'top5' || !a.cp_config_id) continue;
       if (!configs.some((item) => item.value === a.cp_config_id)) {
-        const label = a.city_name || 'GPS area';
+        const area = a.gps_area || null;
+        const where = area
+          ? [a.city_name || 'GPS area', area.radius_km ? `${area.radius_km} km` : '', area.zone_entity || area.method || ''].filter(Boolean).join(' · ')
+          : (a.city_name || 'GPS area');
         configs.push({
           value: a.cp_config_id,
-          label: `${label} (${a.cp_config_id.slice(0, 8)})`,
+          label: `${where} (${a.cp_config_id.slice(0, 8)})`,
         });
       }
     }
@@ -266,9 +286,6 @@ class CenyPalivCard extends HTMLElement {
       ? `<div class="col" id="${id}">${ids.filter((p) => this._show.includes(p)).map((p) => `<div id="${p}"></div>`).join('')}</div>` : '');
     const mode = sd.wide ? this._layout : 'stack';
     root.innerHTML = `<style>${STYLE}</style><div class="wrap"><div class="grid ${mode}">${col('colA', ['home', 'list'])}${col('colB', ['map', 'graph'])}</div></div>`;
-    root.addEventListener('click', (e) => this._click(e));
-    root.addEventListener('pointerdown', (e) => this._down(e));
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach((n) => root.addEventListener(n, () => clearTimeout(this._timer)));
     this._extraReady = false;
     this._gen = (this._gen || 0) + 1;
     this._fit();
@@ -484,7 +501,7 @@ class CenyPalivCard extends HTMLElement {
     const logo = `<div style="position:relative;width:${size}px;height:${size}px;flex-shrink:0">${hasLogo ? this._disc(topHome, size) : iconBox}</div>`;
     const cp = this._compact;
     const mini = [1, 7, 30].map((n) => { const r = this._arrow(tr[String(n)]); return `<span style="color:#9aa1ad">${n} d <span style="color:${r.color};font-weight:800">${esc(r.txt)}</span></span>`; }).join(' · ');
-    return `<div class="card home${cp ? ' compact' : ''}" data-more-info="${esc(this._ids.home)}">
+    return `<div class="card home${cp ? ' compact' : ''}" role="button" tabindex="0" data-more-info="${esc(this._ids.home)}">
       <div style="display:flex;flex-direction:column;gap:${cp ? 8 : 12}px;width:100%;text-align:left">
         <div style="display:flex;align-items:center;gap:12px">${logo}
           <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:2px;min-width:0">
@@ -539,7 +556,7 @@ class CenyPalivCard extends HTMLElement {
       const age = this._age(s, today);
       const when = age <= 0 ? esc(T('today')) : `<span style="color:#f5c26b">${esc(age === 1 ? T('yesterday') : (s.updated || '—'))}</span>`;
       const home = s.home ? `<ha-icon icon="mdi:home" title="${esc(T('my_station'))}" style="--mdc-icon-size:14px;color:#4cc3d9;margin-left:6px"></ha-icon>` : '';
-      return `<div class="row" data-maps="${esc(s.maps)}">
+      return `<div class="row" role="link" tabindex="0" data-maps="${esc(s.maps)}">
         ${this._avatar(s, i + 1, best)}
         <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:2px;text-align:left;min-width:0">
           <span style="font-size:15px;font-weight:700;color:#eef0f3;${cp ? 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis' : ''}">${esc(name)}${cp ? ` <span style="font-size:11px;font-weight:500;color:#9aa1ad">${esc(addr)}</span>` : ''}${home}</span>
@@ -579,12 +596,27 @@ class CenyPalivCard extends HTMLElement {
     const t = this._entityId(e);
     this._long = false;
     clearTimeout(this._timer);
+    this._start = { x: e.clientX, y: e.clientY };
     if (t && t.dataset.maps) {
       this._timer = setTimeout(() => {
         this._long = true;
         this._moreInfo(this._ids.home || this._ids.top5);
       }, 550);
     }
+  }
+
+  _move(e) {
+    const s = this._start;
+    if (s && Math.hypot((e.clientX || 0) - (s.x || 0), (e.clientY || 0) - (s.y || 0)) > 10) clearTimeout(this._timer);
+  }
+
+  // Enter / Space on a focused row or the favourite card acts like a tap
+  _key(e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (!this._entityId(e)) return;
+    e.preventDefault();
+    this._long = false;
+    this._click(e);
   }
 
   _click(e) {
@@ -626,21 +658,24 @@ class CenyPalivCardEditor extends HTMLElement {
     if (!this._form) {
       this._form = document.createElement('ha-form');
       this._form.addEventListener('value-changed', (e) => {
-        const config = Object.assign({}, this._config, e.detail.value);
-        const selectedFuel = config.fuel;
-        const availableConfigurations = CenyPalivCard.configurations(this._hass, selectedFuel);
-        const selectedConfigIsValid = availableConfigurations.some(
-          (item) => item.value === config.config_id
-        );
-        const fuelChanged = selectedFuel !== this._config.fuel;
-        if (!selectedConfigIsValid && (fuelChanged || config.config_id)) {
-          if (availableConfigurations.length === 1) {
-            config.config_id = availableConfigurations[0].value;
-          } else {
-            delete config.config_id;
-          }
-        } else if (fuelChanged && availableConfigurations.length === 1) {
-          config.config_id = availableConfigurations[0].value;
+        // ha-form sends all of its data, including the defaults it was given for display: keep only what the
+        // user set, so a legacy show_map/show_graph or the compact-dependent footer default survive an edit
+        const defaults = editorDefaults(this._config);
+        const config = Object.assign({}, this._config);
+        for (const [k, v] of Object.entries(e.detail.value || {})) {
+          if (!(k in this._config) && JSON.stringify(v) === JSON.stringify(defaults[k])) continue;
+          config[k] = v;
+        }
+        if ('show' in config && JSON.stringify(config.show) !== JSON.stringify(defaults.show)) {
+          delete config.show_map;  // an explicit `show` replaces the legacy options
+          delete config.show_graph;
+        }
+        // config_id pins one configuration; it is only needed while several offer the fuel
+        const availableConfigurations = CenyPalivCard.configurations(this._hass, config.fuel);
+        const selectedConfigIsValid = availableConfigurations.some((item) => item.value === config.config_id);
+        if (config.config_id && !selectedConfigIsValid) {
+          if (availableConfigurations.length === 1) config.config_id = availableConfigurations[0].value;
+          else delete config.config_id;
         }
         for (const k of Object.keys(config)) {
           const v = config[k];
@@ -650,15 +685,22 @@ class CenyPalivCardEditor extends HTMLElement {
       });
       this.appendChild(this._form);
     }
-    const lang = ((this._hass.language || 'en').split('-')[0] in EDITOR_TEXT) ? this._hass.language.split('-')[0] : 'en';
+    const code = (this._hass.language || 'en').split('-')[0];
+    const lang = code in EDITOR_TEXT ? code : 'en';
     const L = EDITOR_TEXT[lang];
     const options = CenyPalivCard.fuels(this._hass);
     const configurations = CenyPalivCard.configurations(this._hass, this._config.fuel);
     this._form.hass = this._hass;
-    this._form.data = Object.assign({ show: PARTS, layout: 'auto', stations: 5, compact: false, show_footer: !this._config.compact, map_height: 0 }, this._config);
+    // the editor gets every state change: rebuild the form only when what it shows has changed
+    const stale = !!this._config.config_id && !configurations.some((item) => item.value === this._config.config_id);
+    const key = JSON.stringify([lang, options, configurations, stale, this._config]);
+    if (key === this._key) return;
+    this._key = key;
+    this._form.data = Object.assign(editorDefaults(this._config), this._config);
     this._form.schema = [
       { name: 'fuel', required: true, selector: { select: { options, mode: 'dropdown' } } },
-      ...(configurations.length > 1
+      // shown while several configurations offer the fuel, or to repair a pinned one that no longer exists
+      ...(configurations.length > 1 || (stale && configurations.length)
         ? [{ name: 'config_id', selector: { select: { options: configurations, mode: 'dropdown' } } }]
         : []),
       { name: 'show', selector: { select: { multiple: true, mode: 'list', options: PARTS.map((p) => ({ value: p, label: L[p] })) } } },
@@ -680,6 +722,7 @@ if (!window.customCards.some((c) => c.type === 'ceny-paliv-card')) {
   window.customCards.push({
     type: 'ceny-paliv-card',
     name: 'Ceny paliv',
+    preview: true,
     description: 'Czech fuel prices: cheapest stations of your city, your favourite station, map and 30-day graph (data from mBenzin.cz).',
   });
 }
