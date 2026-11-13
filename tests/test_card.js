@@ -477,6 +477,49 @@ test("a long press is cancelled when the pointer moves away, and Enter opens a f
   assert.equal(context.window.opened.at(-1), row.dataset.maps);
 });
 
+test("numbers and times follow the Home Assistant profile, texts the integration's language", () => {
+  const card = Object.create(CenyPalivCard.prototype);
+  const top = { attributes: { labels: { locale: "cs-CZ" } } };
+  const at = (locale) => Object.assign(card, {
+    _hass: { language: "cs", locale, states: { "sensor.t": top }, config: { time_zone: "Europe/Prague" } },
+    _ids: { top5: "sensor.t" },
+  });
+  at({ number_format: "language" });
+  assert.equal(card._num(38.5), "38,50"); // Czech decimal comma, two digits for a price
+  assert.equal(card._num("x"), "—");
+  at({ number_format: "comma_decimal" });
+  assert.equal(card._num(38.5), "38.50");
+  at({ number_format: "decimal_comma" });
+  assert.equal(card._num(1238.5), "1.238,50");
+
+  const evening = new Date("2026-11-13T19:58:00+01:00");
+  at({ time_format: "24", time_zone: "server" });
+  assert.equal(card._dateTime(evening, { hour: "numeric", minute: "2-digit" }), "19:58");
+  at({ time_format: "12", time_zone: "server" });
+  assert.match(card._dateTime(evening, { hour: "numeric", minute: "2-digit" }), /7:58\s?(PM|odp\.)/i);
+});
+
+test("a row does not repeat the station name in its address, even without accents", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const top = {
+    state: "38.5", last_updated: "x",
+    attributes: {
+      stations: [{ name: "Am oil Miličín", chain: "Am oil Miličín", address: "Am oil Milicin parkoviste", price: 38.5, updated_date: today, trends: {} }],
+      fuel: "n95", fuel_label: "Natural 95", labels: { locale: "cs-CZ", today: "Dnes" }, max_age_days: 1,
+    },
+  };
+  const card = Object.create(CenyPalivCard.prototype);
+  Object.assign(card, {
+    _hass: { language: "cs", states: { "sensor.t": top } },
+    _ids: { top5: "sensor.t", home: null, pos: [] },
+    _config: { fuel: "n95" }, _n: 5, _compact: false, _footer: false, _show: ["list"],
+  });
+  const html = card._listHtml();
+  assert.match(html, /Dnes<\/span> · parkoviste/);
+  assert.doesNotMatch(html, /Milicin parkoviste/);
+  assert.match(html, /38,50/);
+});
+
 test("prices always show the required source 'Ceny: mbenzin.cz' as a link", () => {
   const top = {
     state: "30", last_updated: "x",

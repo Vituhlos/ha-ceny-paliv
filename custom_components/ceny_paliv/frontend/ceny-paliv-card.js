@@ -46,13 +46,17 @@ const STYLE = `
     --cp-muted: var(--secondary-text-color, #727272);
     --cp-line: var(--divider-color, rgba(0, 0, 0, 0.12));
     --cp-surface: var(--ha-card-background, var(--card-background-color, #fff));
-    --cp-fill: color-mix(in srgb, var(--disabled-color, #bdbdbd) 20%, transparent);
+    --cp-neutral: var(--disabled-color, #bdbdbd);
     --cp-home: var(--primary-color, #03a9f4);
     --cp-fuel: var(--orange-color, #ff9800);
+    --cp-good-base: var(--success-color, #43a047);
+    --cp-warn-base: var(--warning-color, #ffa600);
+    --cp-bad-base: var(--error-color, #db4437);
     /* status text mixed with the text colour: darker on a light card, lighter on a dark one, readable on both */
-    --cp-good: color-mix(in srgb, var(--success-color, #43a047) 80%, var(--primary-text-color, #212121));
-    --cp-warn: color-mix(in srgb, var(--warning-color, #ffa600) 70%, var(--primary-text-color, #212121));
-    --cp-bad: color-mix(in srgb, var(--error-color, #db4437) 80%, var(--primary-text-color, #212121));
+    --cp-good: color-mix(in srgb, var(--cp-good-base) 80%, var(--cp-text));
+    --cp-warn: color-mix(in srgb, var(--cp-warn-base) 70%, var(--cp-text));
+    --cp-bad: color-mix(in srgb, var(--cp-bad-base) 80%, var(--cp-text));
+    --cp-radius: var(--ha-card-features-border-radius, var(--ha-border-radius-lg, 12px));
   }
   .grid, .col { display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); }
   .col { min-width: 0; }
@@ -60,20 +64,141 @@ const STYLE = `
   .grid.columns > .col { flex: 1 1 0; }
   .grid.auto.wide { flex-direction: row; align-items: flex-start; }
   .grid.auto.wide > .col { flex: 1 1 0; }
-  .card { display: block; padding: var(--ha-space-4, 16px); color: var(--cp-text); box-sizing: border-box;
-          font-family: var(--ha-font-family-body, Roboto, Noto, sans-serif); -webkit-font-smoothing: antialiased; }
-  .card.compact { padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px); }
-  .card.home { cursor: pointer; --ha-card-border-color: color-mix(in srgb, var(--cp-home) 45%, transparent); }
-  .card.home:focus-visible { outline: 2px solid var(--cp-home); outline-offset: -2px; }
-  .row { display: flex; align-items: center; gap: var(--ha-space-3, 12px); padding: var(--ha-space-3, 12px) 0; border-top: 1px solid var(--cp-line); cursor: pointer; user-select: none; outline: none; border-radius: var(--ha-border-radius-md, 8px); }
+  .card {
+    display: flex; flex-direction: column; gap: var(--ha-space-3, 12px);
+    padding: var(--ha-space-4, 16px); box-sizing: border-box;
+    font-family: var(--ha-font-family-body, Roboto, Noto, sans-serif); color: var(--cp-text);
+    -webkit-font-smoothing: antialiased;
+  }
+  .card.compact { gap: var(--ha-space-2, 8px); padding: var(--ha-space-3, 12px); }
+  .card.home { cursor: pointer; outline: none; }
+  .card.home:focus-visible { box-shadow: inset 0 0 0 2px var(--cp-home); }
+  .muted { color: var(--cp-muted); }
+  .good { color: var(--cp-good); }
+  .warn { color: var(--cp-warn); }
+  .bad { color: var(--cp-bad); }
+  .num { font-variant-numeric: tabular-nums; }
+  a { color: inherit; }
+  ha-icon { display: inline-flex; }
+
+  /* header: the tile card's icon and two lines, with the price on the right */
+  .head { display: flex; align-items: center; gap: var(--ha-space-3, 12px); min-width: 0; }
+  .icon {
+    position: relative; flex: none; width: 40px; height: 40px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--ha-tile-icon-border-radius, var(--ha-border-radius-pill, 9999px));
+    color: var(--tint); --mdc-icon-size: 24px;
+  }
+  .icon::before { content: ""; position: absolute; inset: 0; background: var(--tint); opacity: 0.2; }
+  .icon > * { position: relative; }
+  .icon.home { --tint: var(--cp-home); }
+  .icon.fuel { --tint: var(--cp-fuel); }
+  .compact .icon { width: 36px; height: 36px; --mdc-icon-size: 20px; }
+  .info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+  .primary, .secondary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* the tile card's text tokens, so a theme that restyles tiles (Fluvy and others) restyles these lines too */
+  .primary {
+    font-size: var(--ha-tile-info-primary-font-size, var(--ha-font-size-m, 14px));
+    font-weight: var(--ha-tile-info-primary-font-weight, var(--ha-font-weight-medium, 500));
+    letter-spacing: var(--ha-tile-info-primary-letter-spacing, 0.1px); line-height: 20px;
+  }
+  .secondary {
+    font-size: var(--ha-tile-info-secondary-font-size, var(--ha-font-size-s, 12px));
+    font-weight: var(--ha-tile-info-secondary-font-weight, var(--ha-font-weight-normal, 400));
+    letter-spacing: var(--ha-tile-info-secondary-letter-spacing, 0.4px); line-height: 16px;
+    color: var(--ha-tile-info-secondary-color, var(--cp-muted));
+  }
+  /* header texts wrap instead of cutting "GPS area" or "price from … — may be outdated" on a phone */
+  .head > .info .primary, .home .head > .info .secondary { white-space: normal; }
+  /* an outdated price is flagged by an icon too: some themes (Fluvy dark) use status colours close to the text */
+  .secondary .flag { --mdc-icon-size: 14px; vertical-align: -2px; margin-inline-end: 4px; }
+  .value { flex: none; display: flex; align-items: baseline; gap: var(--ha-space-1, 4px); line-height: var(--ha-line-height-condensed, 1.2); }
+  .value .number { font-size: var(--ha-font-size-3xl, 28px); font-weight: var(--ha-font-weight-normal, 400); font-variant-numeric: tabular-nums; }
+  .compact .value .number { font-size: var(--ha-font-size-2xl, 24px); }
+  .value .unit { font-size: var(--ha-font-size-s, 12px); color: var(--cp-muted); }
+  .value.stale .number { color: var(--cp-muted); }
+
+  /* trends: five neutral tiles, like card features */
+  .trends { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--ha-space-2, 8px); }
+  .trend {
+    position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; min-height: 52px; padding: var(--ha-space-1, 4px) 2px; box-sizing: border-box; border-radius: var(--cp-radius);
+  }
+  .trend::before { content: ""; position: absolute; inset: 0; background: var(--cp-neutral); opacity: 0.2; }
+  .trend > * { position: relative; }
+  .trend .label { font-size: var(--ha-font-size-xs, 10px); line-height: 12px; letter-spacing: 0.4px; color: var(--cp-muted); }
+  .trend .delta {
+    display: inline-flex; align-items: center; gap: 2px; white-space: nowrap;
+    font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums;
+    --mdc-icon-size: 14px;
+  }
+  .trends-inline { display: flex; flex-wrap: wrap; gap: 2px var(--ha-space-3, 12px); font-size: var(--ha-font-size-s, 12px); }
+  .trends-inline .delta { font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
+  .note { font-size: var(--ha-font-size-xs, 10px); line-height: 14px; color: var(--cp-muted); }
+  .status { display: flex; align-items: flex-start; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); line-height: 16px; --mdc-icon-size: 16px; }
+  .status ha-icon { flex: none; }
+
+  /* station rows */
+  .rows { display: flex; flex-direction: column; margin: 0 calc(-1 * var(--ha-space-2, 8px)); }
+  .row {
+    position: relative; display: flex; align-items: center; gap: var(--ha-space-3, 12px); min-height: 52px;
+    padding: var(--ha-space-2, 8px); box-sizing: border-box; border-radius: var(--cp-radius);
+    cursor: pointer; user-select: none; outline: none;
+  }
+  .row + .row::after { content: ""; position: absolute; top: 0; left: var(--ha-space-2, 8px); right: var(--ha-space-2, 8px); border-top: 1px solid var(--cp-line); }
+  .row::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--cp-neutral); opacity: 0; transition: opacity 180ms ease-in-out; }
+  .row:hover::before { opacity: 0.12; }
   .row:focus-visible { box-shadow: inset 0 0 0 2px var(--cp-home); }
-  .compact .row { padding: 7px 0; gap: 10px; }
-  .row:first-of-type { border-top: none; }
+  .row > * { position: relative; }
+  .compact .row { min-height: 40px; padding: var(--ha-space-1, 4px) var(--ha-space-2, 8px); gap: 10px; }
+  .row .info .primary ha-icon { --mdc-icon-size: 14px; color: var(--cp-home); vertical-align: -2px; margin-inline-start: 4px; }
+  .row .change { flex: none; display: flex; align-items: center; gap: 2px; justify-content: flex-end;
+    font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; --mdc-icon-size: 14px; }
+  .row .price { flex: none; display: flex; flex-direction: column; align-items: flex-end; min-width: 52px; }
+  .row .price .number { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); line-height: 20px; font-variant-numeric: tabular-nums; }
+  .row .price .diff { font-size: var(--ha-font-size-xs, 10px); line-height: 14px; color: var(--cp-muted); font-variant-numeric: tabular-nums; }
+  .row .price.best .number, .row .price.best .diff { color: var(--cp-good); }
+
+  /* station badge: the chain's logo or its initials, with the rank */
+  .avatar { position: relative; flex: none; width: 36px; height: 36px; }
+  .compact .avatar { width: 28px; height: 28px; }
+  .disc {
+    position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center;
+    border-radius: var(--ha-border-radius-pill, 9999px);
+    font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); letter-spacing: 0.2px;
+    background: color-mix(in srgb, hsl(var(--hue) 55% 50%) 22%, transparent);
+    color: color-mix(in srgb, hsl(var(--hue) 60% 45%) 65%, var(--cp-text));
+  }
+  .compact .disc { font-size: var(--ha-font-size-xs, 10px); }
+  .disc img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #fff; }
+  .avatar .rank {
+    position: absolute; right: -4px; bottom: -4px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center; border-radius: var(--ha-border-radius-pill, 9999px);
+    background: var(--cp-surface); box-shadow: 0 0 0 1px var(--cp-line);
+    font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-medium, 500); color: var(--cp-muted);
+  }
+  .avatar.best .rank { color: var(--cp-good); box-shadow: 0 0 0 1px currentColor; }
+
+  /* footer and messages */
+  .foot { display: flex; flex-direction: column; gap: 2px; padding-top: var(--ha-space-3, 12px); border-top: 1px solid var(--cp-line);
+    font-size: var(--ha-font-size-s, 12px); line-height: 16px; color: var(--cp-muted); }
+  .compact .foot { padding-top: var(--ha-space-2, 8px); }
+  .foot .legend ha-icon { --mdc-icon-size: 12px; vertical-align: -1px; }
+  .source { font-size: var(--ha-font-size-s, 12px); line-height: 16px; color: var(--cp-muted); }
+  .alert { position: relative; display: flex; gap: var(--ha-space-2, 8px); padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px);
+    border-radius: var(--cp-radius); overflow: hidden; font-size: var(--ha-font-size-s, 12px); line-height: 16px; color: var(--cp-text); --mdc-icon-size: 18px; }
+  .alert::before { content: ""; position: absolute; inset: 0; background: var(--alert-color); opacity: 0.12; }
+  .alert > * { position: relative; }
+  .alert ha-icon { flex: none; color: var(--alert-color); }
+  .alert.warning { --alert-color: var(--cp-warn-base); }
+  .alert.info { --alert-color: var(--info-color, #039be5); }
+  .message { flex-direction: row; align-items: flex-start; font-size: var(--ha-font-size-m, 14px); line-height: 20px; color: var(--cp-muted); --mdc-icon-size: 20px; }
+  .message ha-icon { flex: none; color: var(--cp-muted); }
+
   .map, .graph { border-radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px)); overflow: hidden; }
   .map.fixed { position: relative; min-width: 200px; }
   .map.fixed > * { position: absolute; inset: 0; display: block; }
-  a { color: inherit; }
-  ha-icon { display: inline-block; }
+  @media (prefers-reduced-motion: reduce) { .row::before { transition: none; } }
 `;
 
 // A state Home Assistant restored for an entity no integration provides (yet): it carries no data or attributes.
@@ -387,15 +512,61 @@ class CenyPalivCard extends HTMLElement {
   }
 
   _arrow(t) {
-    if (!t) return { icon: 'mdi:minus', color: 'var(--cp-muted)', txt: '—' };
-    if (t.dir === 'down') return { icon: 'mdi:arrow-down-bold', color: 'var(--cp-good)', txt: '−' + Math.abs(t.delta).toFixed(2) };
-    if (t.dir === 'up') return { icon: 'mdi:arrow-up-bold', color: 'var(--cp-bad)', txt: '+' + Math.abs(t.delta).toFixed(2) };
-    return { icon: 'mdi:minus', color: 'var(--cp-warn)', txt: '0.00' };
+    if (!t) return { icon: 'mdi:minus', cls: 'muted', txt: '—' };
+    if (t.dir === 'down') return { icon: 'mdi:arrow-down', cls: 'good', txt: '−' + this._num(Math.abs(t.delta)) };
+    if (t.dir === 'up') return { icon: 'mdi:arrow-up', cls: 'bad', txt: '+' + this._num(Math.abs(t.delta)) };
+    return { icon: 'mdi:equal', cls: 'warn', txt: this._num(0) };
   }
 
   _age(s, today) {
     if (!s.updated_date) return s.updated === 'Dnes' ? 0 : 99;
     return Math.round((today - new Date(s.updated_date + 'T00:00:00')) / 86400000);
+  }
+
+  // ---------------------------------------------------------------- formatting, the Home Assistant way
+  // Texts follow the language chosen in the integration (labels); the number and time format follow the user's
+  // Home Assistant profile (decimal separator, 12/24 h clock, local or server time zone).
+  _numberLocale() {
+    const lang = this._labels().locale || (this._hass && this._hass.language) || 'en';
+    const format = this._hass && this._hass.locale && this._hass.locale.number_format;
+    const fixed = { comma_decimal: 'en-US', decimal_comma: 'de-DE', space_comma: 'fr-FR' };
+    if (format in fixed) return fixed[format];
+    return format === 'system' ? undefined : lang;
+  }
+
+  _num(value, digits = 2) {
+    const n = Number(value);
+    if (!isFinite(n)) return '—';
+    try {
+      return new Intl.NumberFormat(this._numberLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n);
+    } catch (err) {
+      return n.toFixed(digits);
+    }
+  }
+
+  _dateTime(date, options) {
+    const locale = (this._hass && this._hass.locale) || {};
+    const opts = Object.assign({}, options);
+    if (opts.hour) {
+      if (locale.time_format === '12') opts.hour12 = true;
+      else if (locale.time_format === '24') opts.hour12 = false;
+    }
+    const zone = locale.time_zone === 'server' && this._hass.config && this._hass.config.time_zone;
+    if (zone) opts.timeZone = zone;
+    const lang = locale.time_format === 'system' ? undefined : (this._labels().locale || 'en-GB');
+    try {
+      return new Intl.DateTimeFormat(lang, opts).format(date);
+    } catch (err) {
+      return date.toLocaleString();
+    }
+  }
+
+  // a station's price date: "today", "yesterday" or the day itself
+  _when(s, age) {
+    if (age <= 0) return { text: this._T('today'), old: false };
+    if (age === 1) return { text: this._T('yesterday'), old: true };
+    const d = s.updated_date ? new Date(s.updated_date + 'T00:00:00') : null;
+    return { text: d ? this._dateTime(d, { day: 'numeric', month: 'numeric' }) : (s.updated || '—'), old: true };
   }
 
   // URL of the logo of a station's chain, or '' when there is none. Logos come from the downloaded pack (list in the
@@ -419,7 +590,7 @@ class CenyPalivCard extends HTMLElement {
   // Condition of the mBenzin.cz access key: "Ceny: mbenzin.cz" shown visibly with the prices, as a link on the web.
   _source() {
     const text = this._labels().source || 'Ceny: mbenzin.cz';
-    return `<a href="https://www.mbenzin.cz" target="_blank" rel="noopener noreferrer" style="color:inherit">${esc(text)}</a>`;
+    return `<a href="https://www.mbenzin.cz" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`;
   }
 
   _initials(name) {
@@ -427,21 +598,17 @@ class CenyPalivCard extends HTMLElement {
     return (w.length <= 3 ? w : w.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2)).toUpperCase();
   }
 
-  // Round badge: the chain's logo when there is one, else its initials on a colour taken from the name.
-  _disc(s, size, extra) {
+  // Round badge: the chain's logo when there is one, else its initials on a tint of a hue taken from the name.
+  _disc(s) {
     const name = s.chain || s.name || '?';
     let h = 0; for (const ch of norm(name)) h = (h * 31 + ch.charCodeAt(0)) % 360;
     const url = this._logoUrl(s);
-    const base = `width:${size}px;height:${size}px;border-radius:var(--ha-border-radius-pill, 9999px);position:absolute;left:0;top:0;${extra || ''}`;
-    const init = `<span style="${base}display:flex;align-items:center;justify-content:center;box-sizing:border-box;font-size:${Math.round(size * 0.36)}px;font-weight:var(--ha-font-weight-bold, 700);background:color-mix(in srgb, hsl(${h} 55% 50%) 22%, transparent);color:color-mix(in srgb, hsl(${h} 60% 45%) 65%, var(--cp-text))">${esc(this._initials(name))}</span>`;
-    if (!url) return init;
-    return init + `<img src="${esc(url)}" alt="${esc(name)}" onload="this.previousElementSibling.style.visibility='hidden'" onerror="this.style.display='none'" style="${base}display:block;object-fit:cover;background:#fff;box-shadow:inset 0 0 0 1px var(--cp-line)">`;
+    const img = url ? `<img src="${esc(url)}" alt="" onerror="this.remove()">` : '';
+    return `<span class="disc" style="--hue:${h}" aria-hidden="true">${esc(this._initials(name))}${img}</span>`;
   }
 
   _avatar(s, rank, best) {
-    const size = this._compact ? 26 : 32;
-    const ring = best ? 'box-shadow:0 0 0 2px var(--cp-good);' : '';
-    return `<span style="position:relative;width:${size}px;height:${size}px;flex-shrink:0;display:block">${this._disc(s, size, ring)}<span style="position:absolute;right:-5px;bottom:-5px;min-width:16px;height:16px;padding:0 3px;box-sizing:border-box;border-radius:var(--ha-border-radius-pill, 9999px);background:var(--cp-surface);border:1px solid ${best ? 'var(--cp-good)' : 'var(--cp-line)'};color:${best ? 'var(--cp-good)' : 'var(--cp-text)'};font-size:var(--ha-font-size-xs, 10px);font-weight:var(--ha-font-weight-bold, 700);display:flex;align-items:center;justify-content:center">${rank}</span></span>`;
+    return `<span class="avatar${best ? ' best' : ''}">${this._disc(s)}<span class="rank">${rank}</span></span>`;
   }
 
   // ---------------------------------------------------------------- rendering
@@ -482,75 +649,65 @@ class CenyPalivCard extends HTMLElement {
         no_home: 'pro toto palivo není nastavena oblíbená stanice (nastavení integrace).',
       },
     }[lang][why];
-    return `<ha-card class="card" style="color:var(--cp-muted);font-size:var(--ha-font-size-m, 14px)">Ceny paliv: ${text}</ha-card>`;
+    return `<ha-card class="card message"><ha-icon icon="mdi:gas-station-off-outline"></ha-icon><span>Ceny paliv: ${text}</span></ha-card>`;
   }
 
   _homeHtml() {
     const e = this._hass.states[this._ids.home];
     if (!e) return '';
     const T = (k, v) => this._T(k, v);
-    const LOC = this._labels().locale || 'en-GB';
     const a = e.attributes;
-    const stationName = a.station || T('my_station');
+    const cp = this._compact;
+    const topAttrs = this._hass.states[this._ids.top5].attributes || {};
+    const stationName = String(a.station || '').trim() || T('my_station');
     const ok = !['unavailable', 'unknown'].includes(e.state);
-    const price = ok ? Number(e.state).toFixed(2) : '—';
     const stale = a.age_days == null || Number(a.age_days) > 1;
-    const updTxt = a.age_days == 0 ? T('updated_today') : (a.age_days == 1 ? T('updated_yesterday') : T('price_from', { d: a.updated || '—' }));
+    const updated = a.age_days == 0 ? T('updated_today') : (a.age_days == 1 ? T('updated_yesterday')
+      : T('price_from', { d: a.updated_date ? this._dateTime(new Date(a.updated_date + 'T00:00:00'), { day: 'numeric', month: 'numeric', year: 'numeric' }) : (a.updated || '—') }));
     const tr = a.trends || {};
     const today = new Date(); today.setHours(0, 0, 0, 0);
     let partial = null;
-    const chip = (n) => {
+    const tile = (n) => {
       const t = tr[String(n)]; const r = this._arrow(t);
       let covered = true;
       if (t) {
         const target = new Date(today); target.setDate(target.getDate() - n);
         covered = new Date(t.ref_date + 'T00:00:00') <= target; if (!covered) partial = t.ref_date;
       }
-      return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;background:var(--cp-fill);border-radius:var(--ha-border-radius-lg, 12px);padding:8px 2px;min-width:0">
-        <span style="font-size:var(--ha-font-size-s, 11px);font-weight:var(--ha-font-weight-bold, 700);color:var(--cp-muted)">${n} d${t && !covered ? '*' : ''}</span>
-        <ha-icon icon="${r.icon}" style="--mdc-icon-size:18px;color:${r.color}"></ha-icon>
-        <span style="font-size:var(--ha-font-size-s, 13px);font-weight:var(--ha-font-weight-bold, 700);color:${r.color};white-space:nowrap">${r.txt}</span></div>`;
+      return `<div class="trend"><span class="label">${n} d${t && !covered ? '*' : ''}</span>
+        <span class="delta ${r.cls}">${t ? `<ha-icon icon="${r.icon}"></ha-icon>` : ''}${esc(r.txt)}</span></div>`;
     };
-    const chips = [1, 2, 7, 14, 30].map(chip).join('');
+    const trends = cp
+      ? `<div class="trends-inline">${[1, 7, 30].map((n) => { const r = this._arrow(tr[String(n)]); return `<span class="muted">${n} d <span class="delta ${r.cls}">${esc(r.txt)}</span></span>`; }).join('')}</div>`
+      : `<div class="trends">${[1, 2, 7, 14, 30].map(tile).join('')}</div>`;
     const anyTrend = Object.values(tr).some(Boolean);
-    const note = !anyTrend ? T('trends_start')
-      : (partial ? T('since_partial', { d: new Date(partial + 'T00:00:00').toLocaleDateString(LOC, { day: 'numeric', month: 'short' }) }) : '');
-    let pos;
-    if (a.rank == null) pos = `<span style="color:var(--cp-warn)">${esc(T('not_ranked'))}</span>`;
-    else if (Number(a.vs_cheapest) <= 0) pos = `<span style="color:var(--cp-good)">${esc(T((this._hass.states[this._ids.top5].attributes || {}).gps_area ? 'cheapest_area' : 'cheapest_town', { rank: a.rank, n: a.fresh_count }))}</span>`;
-    else pos = `<span style="color:var(--cp-warn)">${esc(T('vs_cheapest', { d: Number(a.vs_cheapest).toFixed(2), name: a.cheapest_name, rank: a.rank, n: a.fresh_count }))}</span>`;
-    const topHome = (this._hass.states[this._ids.top5].attributes || {}).home || { name: stationName };
-    const hasLogo = !!this._logoUrl(topHome);
-    const size = this._compact ? 36 : 44;
-    const iconBox = `<div style="position:absolute;left:0;top:0;width:${size}px;height:${size}px;border-radius:var(--ha-tile-icon-border-radius, var(--ha-border-radius-pill, 9999px));display:flex;align-items:center;justify-content:center;background:color-mix(in srgb, var(--cp-home) 20%, transparent)"><ha-icon icon="mdi:gas-station-in-use" style="--mdc-icon-size:22px;color:var(--cp-home)"></ha-icon></div>`;
-    const logo = `<div style="position:relative;width:${size}px;height:${size}px;flex-shrink:0">${hasLogo ? this._disc(topHome, size) : iconBox}</div>`;
-    const cp = this._compact;
-    const mini = [1, 7, 30].map((n) => { const r = this._arrow(tr[String(n)]); return `<span style="color:var(--cp-muted)">${n} d <span style="color:${r.color};font-weight:var(--ha-font-weight-bold, 700)">${esc(r.txt)}</span></span>`; }).join(' · ');
-    return `<ha-card class="card home${cp ? ' compact' : ''}" role="button" tabindex="0" data-more-info="${esc(this._ids.home)}">
-      <div style="display:flex;flex-direction:column;gap:${cp ? 8 : 12}px;width:100%;text-align:left">
-        <div style="display:flex;align-items:center;gap:12px">${logo}
-          <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:2px;min-width:0">
-            <span style="font-size:var(--ha-font-size-s, 12px);letter-spacing:.09em;text-transform:uppercase;font-weight:var(--ha-font-weight-bold, 700);color:var(--cp-muted)">${esc(T('my_station'))}</span>
-            <span style="font-size:var(--ha-font-size-m, 15px);font-weight:var(--ha-font-weight-bold, 700);color:var(--cp-text)">${esc(stationName)}</span>
-            <span style="font-size:var(--ha-font-size-s, 12px);color:${stale ? 'var(--cp-warn)' : 'var(--cp-muted)'}">${esc(updTxt)}</span></div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0">
-            <span style="font-size:${cp ? 30 : 40}px;font-weight:var(--ha-font-weight-bold, 700);line-height:1;color:${stale ? 'var(--cp-muted)' : 'var(--cp-text)'}">${price}</span>
-            <span style="font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted);font-weight:var(--ha-font-weight-medium, 500)">${esc(a.unit_of_measurement || 'Kč/l')}</span></div>
-        </div>
-        ${cp ? `<div style="display:flex;flex-wrap:wrap;gap:4px 8px;font-size:var(--ha-font-size-s, 12px);font-weight:var(--ha-font-weight-medium, 500)">${mini}</div>`
-    : `<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px">${chips}</div>
-        ${note ? `<span style="font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted);margin-top:-4px">${esc(note)}</span>` : ''}`}
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:var(--ha-font-size-s, 12px);font-weight:var(--ha-font-weight-medium, 500)">${pos}
-          ${cp ? '' : `<span style="color:var(--cp-muted);font-weight:var(--ha-font-weight-medium, 500);white-space:nowrap">${esc(T('tap_history'))}</span>`}</div>
-        ${this._show.includes('list') ? '' : `<span style="font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted)">${this._source()}</span>`}
-      </div></ha-card>`;
+    const note = cp ? '' : !anyTrend ? T('trends_start')
+      : (partial ? T('since_partial', { d: this._dateTime(new Date(partial + 'T00:00:00'), { day: 'numeric', month: 'short' }) }) : '');
+    let status;
+    if (a.rank == null) status = { icon: 'mdi:clock-alert-outline', cls: 'warn', text: T('not_ranked') };
+    else if (Number(a.vs_cheapest) <= 0) status = { icon: 'mdi:trophy-outline', cls: 'good', text: T(topAttrs.gps_area ? 'cheapest_area' : 'cheapest_town', { rank: a.rank, n: a.fresh_count }) };
+    else status = { icon: 'mdi:information-outline', cls: 'muted', text: T('vs_cheapest', { d: this._num(a.vs_cheapest), name: a.cheapest_name, rank: a.rank, n: a.fresh_count }) };
+    const homeStation = topAttrs.home || { name: stationName };
+    const icon = this._logoUrl(homeStation)
+      ? `<span class="avatar">${this._disc(homeStation)}</span>`
+      : '<span class="icon home"><ha-icon icon="mdi:gas-station-in-use"></ha-icon></span>';
+    return `<ha-card class="card home${cp ? ' compact' : ''}" role="button" tabindex="0" data-more-info="${esc(this._ids.home)}" aria-label="${esc(T('my_station'))}: ${esc(stationName)}">
+      <div class="head">${icon}
+        <div class="info"><span class="primary">${esc(stationName)}</span>
+          <span class="secondary${stale ? ' warn' : ''}">${stale ? '<ha-icon class="flag" icon="mdi:clock-alert-outline"></ha-icon>' : ''}${esc(cp ? updated : `${T('my_station')} · ${updated}`)}</span></div>
+        <div class="value${stale ? ' stale' : ''}"><span class="number">${ok ? this._num(e.state) : '—'}</span><span class="unit">${esc(a.unit_of_measurement || 'Kč/l')}</span></div>
+      </div>
+      ${trends}
+      ${note ? `<span class="note">${esc(note)}</span>` : ''}
+      <div class="status ${status.cls}"><ha-icon icon="${status.icon}"></ha-icon><span>${esc(status.text)}</span></div>
+      ${this._show.includes('list') ? '' : `<span class="source">${this._source()}</span>`}
+    </ha-card>`;
   }
 
   _listHtml() {
     const S = this._hass.states[this._ids.top5];
     const at = S.attributes;
     const T = (k, v) => this._T(k, v);
-    const LOC = this._labels().locale || 'en-GB';
     const all = Array.isArray(at.stations) ? at.stations : [];
     const maxAge = at.max_age_days != null ? Number(at.max_age_days) : 1;
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -560,56 +717,49 @@ class CenyPalivCard extends HTMLElement {
     const prices = list.map((s) => Number(s.price)).filter((p) => !isNaN(p));
     const min = prices.length ? Math.min(...prices) : null;
     const unit = at.unit_of_measurement || 'Kč/l';
-    const fp = (p) => Number(p).toFixed(2);
     const n = min === null ? 0 : fresh.filter((s) => Number(s.price) === min).length;
-    const sub = min === null ? T('no_recent') : T('cheapest_price', { p: fp(min), unit }) + (n > 1 ? ' · ' + T('stations_same', { n }) : '');
-    const head = `<div style="display:flex;align-items:center;gap:12px;width:100%;padding-bottom:${cp ? 6 : 12}px">
-      <div style="width:${cp ? 36 : 44}px;height:${cp ? 36 : 44}px;border-radius:var(--ha-tile-icon-border-radius, var(--ha-border-radius-pill, 9999px));display:flex;align-items:center;justify-content:center;background:color-mix(in srgb, var(--cp-fuel) 20%, transparent);flex-shrink:0">
-        <ha-icon icon="mdi:gas-station" style="--mdc-icon-size:22px;color:var(--cp-fuel)"></ha-icon></div>
-      <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:2px;text-align:left;min-width:0">
-        <span style="font-size:var(--ha-font-size-m, 15px);font-weight:var(--ha-font-weight-bold, 700);color:var(--cp-text)">${esc(at.fuel_label || this._config.fuel)} · ${esc(at.city_name || '')}</span>
-        <span style="font-size:var(--ha-font-size-s, 13px);color:var(--cp-muted)">${esc(sub)}</span></div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0">
-        <span style="font-size:${cp ? 22 : 28}px;font-weight:var(--ha-font-weight-bold, 700);line-height:1;color:${min === null ? 'var(--cp-muted)' : 'var(--cp-good)'}">${min === null ? '—' : fp(min)}</span>
-        <span style="font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted);font-weight:var(--ha-font-weight-medium, 500)">${esc(unit)}</span></div></div>`;
+    const sub = min === null ? T('no_recent') : T('cheapest_price', { p: this._num(min), unit }) + (n > 1 ? ' · ' + T('stations_same', { n }) : '');
+    const head = `<div class="head"><span class="icon fuel"><ha-icon icon="mdi:gas-station"></ha-icon></span>
+      <div class="info"><span class="primary">${esc(at.fuel_label || this._config.fuel)} · ${esc(at.city_name || '')}</span>
+        <span class="secondary">${esc(sub)}</span></div>
+      <div class="value"><span class="number${min === null ? ' muted' : ''}">${min === null ? '—' : this._num(min)}</span><span class="unit">${esc(unit)}</span></div></div>`;
     const rows = list.map((s, i) => {
       const best = Number(s.price) === min;
-      const diff = Number(s.price) - min;
       const name = s.name || '—';
       const a0 = s.address || '';
-      const addr = a0.startsWith(name) ? a0.slice(name.length).trim() : a0;
+      // the address often repeats the name, sometimes without its accents ("Am oil Milicin parkoviste")
+      const addr = norm(a0).startsWith(norm(name)) ? a0.slice(name.length).trim() : a0;
       const tr = this._arrow((s.trends || {})['1']);
-      const age = this._age(s, today);
-      const when = age <= 0 ? esc(T('today')) : `<span style="color:var(--cp-warn)">${esc(age === 1 ? T('yesterday') : (s.updated || '—'))}</span>`;
-      const home = s.home ? `<ha-icon icon="mdi:home" title="${esc(T('my_station'))}" style="--mdc-icon-size:14px;color:var(--cp-home);margin-left:6px"></ha-icon>` : '';
-      return `<div class="row" role="link" tabindex="0" data-maps="${esc(s.maps)}">
+      const when = this._when(s, this._age(s, today));
+      const home = s.home ? `<ha-icon icon="mdi:home" title="${esc(T('my_station'))}"></ha-icon>` : '';
+      // the price date first: a long address is what gets cut
+      const where = [`<span class="${when.old ? 'warn' : ''}">${esc(when.text)}</span>`, esc(addr)].filter((w) => w !== '');
+      return `<div class="row" role="link" tabindex="0" data-maps="${esc(s.maps)}" aria-label="${esc(name)} ${esc(addr)}: ${this._num(s.price)} ${esc(unit)}">
         ${this._avatar(s, i + 1, best)}
-        <div style="flex:1 1 auto;display:flex;flex-direction:column;gap:2px;text-align:left;min-width:0">
-          <span style="font-size:var(--ha-font-size-m, 15px);font-weight:var(--ha-font-weight-bold, 700);color:var(--cp-text);${cp ? 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis' : ''}">${esc(name)}${cp ? ` <span style="font-size:var(--ha-font-size-s, 11px);font-weight:var(--ha-font-weight-medium, 500);color:var(--cp-muted)">${esc(addr)}</span>` : ''}${home}</span>
-          ${cp ? '' : `<span style="font-size:var(--ha-font-size-s, 12px);color:var(--cp-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(addr)} · ${when}</span>`}</div>
-        <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:40px" title="${esc(T('vs_yesterday'))}">
-          <ha-icon icon="${tr.icon}" style="--mdc-icon-size:18px;color:${tr.color}"></ha-icon>
-          <span style="font-size:var(--ha-font-size-xs, 10px);font-weight:var(--ha-font-weight-bold, 700);color:${tr.color}">${tr.txt}</span></div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;gap:1px">
-          <span style="font-size:var(--ha-font-size-l, 18px);font-weight:var(--ha-font-weight-bold, 700);color:${best ? 'var(--cp-good)' : 'var(--cp-text)'}">${fp(s.price)}</span>
-          <span style="font-size:var(--ha-font-size-s, 11px);font-weight:var(--ha-font-weight-medium, 500);color:${best ? 'var(--cp-good)' : 'var(--cp-muted)'}">${esc(best ? T('cheapest_badge') : '+' + fp(diff))}</span></div>
-        <ha-icon icon="mdi:chevron-right" style="--mdc-icon-size:18px;color:var(--cp-muted);flex-shrink:0"></ha-icon></div>`;
+        <div class="info"><span class="primary">${esc(name)}${cp && addr ? ` <span class="muted">${esc(addr)}</span>` : ''}${home}</span>
+          ${cp ? '' : `<span class="secondary">${where.join(' · ')}</span>`}</div>
+        <span class="change ${tr.cls}" title="${esc(T('vs_yesterday'))}">${s.trends && s.trends['1'] ? `<ha-icon icon="${tr.icon}"></ha-icon>` : ''}${esc(tr.txt)}</span>
+        <span class="price${best ? ' best' : ''}"><span class="number">${this._num(s.price)}</span>${cp ? '' : `<span class="diff">${esc(best ? T('cheapest_badge') : '+' + this._num(Number(s.price) - min))}</span>`}</span>
+      </div>`;
     }).join('');
     // footer
     const now = new Date();
-    const hm = (d) => d.toLocaleTimeString(LOC, { hour: '2-digit', minute: '2-digit' });
-    const when = (d) => (d.toDateString() === now.toDateString() ? hm(d) : d.toLocaleString(LOC, { weekday: 'short', hour: '2-digit', minute: '2-digit' }));
+    const time = (d) => (d.toDateString() === now.toDateString()
+      ? this._dateTime(d, { hour: 'numeric', minute: '2-digit' })
+      : this._dateTime(d, { weekday: 'short', hour: 'numeric', minute: '2-digit' }));
     const fa = at.fetched_at ? new Date(at.fetched_at) : null;
     const la = at.last_attempt ? new Date(at.last_attempt) : null;
     const nu = at.next_update ? new Date(at.next_update) : null;
     const hidden = (at.excluded || 0) + (all.length - fresh.length);
-    const lines = [`<span style="font-size:var(--ha-font-size-s, 13px);color:var(--cp-text);font-weight:var(--ha-font-weight-medium, 500)">${esc(T('table_updated', { t: fa ? when(fa) : '—', n: nu ? when(nu) : '—' }))}</span>`];
-    if (at.fetch_error) lines.push(`<span style="font-size:var(--ha-font-size-s, 12px);color:var(--cp-warn)">${esc(T('refresh_failed', { at: la ? T('at') + when(la) : '', err: at.fetch_error }))}</span>`);
-    if (at.city_total) lines.push(`<span style="font-size:var(--ha-font-size-s, 12px);color:var(--cp-muted)">${esc(T('hidden', { h: hidden, t: at.city_total, age: maxAge > 1 ? T('days_l', { n: maxAge }) : (maxAge === 1 ? T('yesterday_l') : T('today_l')) }))}</span>`);
-    lines.push(`<span style="font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted)">${esc(T('arrows'))} · <span style="color:var(--cp-good)">▼ ${esc(T('down'))}</span> · <span style="color:var(--cp-warn)">— ${esc(T('stable'))}</span> · <span style="color:var(--cp-bad)">▲ ${esc(T('up'))}</span> · ${esc(T('longpress'))}</span>`);
-    lines.push(`<span style="font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted)">${this._source()} · ${esc(at.fuel_label || '')}${at.fuel === 'n95' ? ' ' + esc(T('e10_note')) : ''} · ${esc(T('tap_station'))}</span>`);
-    const foot = !this._footer ? `<div style="padding-top:6px;font-size:var(--ha-font-size-s, 11px);color:var(--cp-muted);text-align:left">${this._source()}${at.fetch_error ? ' · ' + esc(T('refresh_failed', { at: '', err: at.fetch_error })) : ''}</div>` : `<div style="display:flex;flex-direction:column;gap:3px;text-align:left;border-top:1px solid var(--cp-line);padding-top:12px">${lines.join('')}</div>`;
-    return `<ha-card class="card${cp ? ' compact' : ''}" data-more-info="${esc(this._ids.home || this._ids.top5)}">${head}${rows}${foot}</ha-card>`;
+    const alert = at.fetch_error
+      ? `<div class="alert warning" role="status"><ha-icon icon="mdi:alert-outline"></ha-icon><span>${esc(T('refresh_failed', { at: la ? T('at') + time(la) : '', err: at.fetch_error }))}</span></div>`
+      : '';
+    const lines = [`<span>${esc(T('table_updated', { t: fa ? time(fa) : '—', n: nu ? time(nu) : '—' }))}</span>`];
+    if (at.city_total) lines.push(`<span>${esc(T('hidden', { h: hidden, t: at.city_total, age: maxAge > 1 ? T('days_l', { n: maxAge }) : (maxAge === 1 ? T('yesterday_l') : T('today_l')) }))}</span>`);
+    lines.push(`<span class="legend">${esc(T('arrows'))}: <span class="good"><ha-icon icon="mdi:arrow-down"></ha-icon> ${esc(T('down'))}</span> · <span class="warn"><ha-icon icon="mdi:equal"></ha-icon> ${esc(T('stable'))}</span> · <span class="bad"><ha-icon icon="mdi:arrow-up"></ha-icon> ${esc(T('up'))}</span> · ${esc(T('longpress'))}</span>`);
+    lines.push(`<span>${this._source()} · ${esc(at.fuel_label || '')}${at.fuel === 'n95' ? ' ' + esc(T('e10_note')) : ''} · ${esc(T('tap_station'))}</span>`);
+    const foot = this._footer ? `<div class="foot">${lines.join('')}</div>` : `<div class="foot"><span>${this._source()}</span></div>`;
+    return `<ha-card class="card list${cp ? ' compact' : ''}" data-more-info="${esc(this._ids.home || this._ids.top5)}">${head}${alert}<div class="rows">${rows}</div>${foot}</ha-card>`;
   }
 
   // ---------------------------------------------------------------- interaction
