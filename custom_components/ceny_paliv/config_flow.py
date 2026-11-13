@@ -749,6 +749,9 @@ class CenyPalivConfigFlow(_FuelStationSteps, ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
+        # A new entry has no favourite identities yet; the shared station step updates them.
+        self._home_identities = {}
+        self._home_history = {}
         if user_input is not None:
             key = user_input[CONF_KEY].strip()
             try:
