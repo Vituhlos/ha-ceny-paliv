@@ -69,7 +69,11 @@ rules:
   docs-installation-parameters:
     status: todo
     comment: The setup fields are only partly described.
-  entity-unavailable: done
+  entity-unavailable:
+    status: todo
+    comment: >-
+      When one fuel cannot be refreshed, the coordinator keeps its previous prices with fetch_error and the sensors
+      stay available (a test asserts it). The rule wants them unavailable while the service cannot be reached.
   integration-owner:
     status: todo
     comment: codeowners still names the upstream author.

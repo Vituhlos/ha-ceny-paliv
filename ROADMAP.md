@@ -17,7 +17,7 @@ která vypadá a chová se jako nativní součást Home Assistantu.
 - Karta: vzhled podle návrhového systému HA (tokeny motivu, nativní vzory, světlý i tmavý motiv, Fluvy), ověřený
   na ukázkové stránce a pak na skutečném dashboardu; snímky ke schválení před každým vydáním.
 
-Výchozí stav (0.5.3 + #27): Bronze 14/20, Silver 5/10, Gold 5/21, Platinum 0/3; pokrytí testy 96 %,
+Výchozí stav (0.5.3 + #27): Bronze 14/20, Silver 4/10, Gold 5/21, Platinum 0/3; pokrytí testy 96 %,
 konfigurační průvodce 94 %.
 
 ## 0.6 – kvalitativní základ (Bronze → Gold)
@@ -28,7 +28,8 @@ konfigurační průvodce 94 %.
   která po změně oblasti nebo paliv nikam nepatří.
 - Diagnostika ke stažení (klíč skrytý), Opravy (Repairs) – např. dlouho nepřicházející data.
 - Akce `ceny_paliv.refresh` (registrovaná v `async_setup`, chyby přes překlady) se zarážkou proti zahlcení mBenzinu;
-  `PARALLEL_UPDATES`; výpadek i obnova se zalogují jen jednou.
+  `PARALLEL_UPDATES`; výpadek i obnova se zalogují jen jednou; při výpadku mBenzinu se entity stanou nedostupnými
+  (pravidlo `entity-unavailable`) – poslední známé ceny zůstanou v kartě jako „poslední známá data“.
 - Čitelné názvy stanic („VS Petrol · Obory“), správná města, žádné opakování.
 - Historie podle stanice v dlouhodobých statistikách HA – změna oblíbené stanice ani nové přidání integrace
   o historii nepřijde.
