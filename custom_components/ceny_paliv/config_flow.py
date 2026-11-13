@@ -11,6 +11,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
 from homeassistant.core import callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     EntitySelector,
@@ -160,21 +161,31 @@ class _FuelStationSteps:
             if not getattr(self, "_options_flow", False):
                 await self.async_set_unique_id(self._city)
                 self._abort_if_unique_id_configured()
+            elif any(
+                other.unique_id == self._city and other.entry_id != self._own_entry_id()
+                for other in self.hass.config_entries.async_entries(DOMAIN)
+            ):
+                # another configuration already covers this city
+                return self.async_show_form(
+                    step_id="city", data_schema=self._city_schema(), errors={CONF_CITY: "already_configured"}
+                )
             return await self.async_step_fuels()
+        return self.async_show_form(step_id="city", data_schema=self._city_schema())
+
+    def _city_schema(self) -> vol.Schema:
         city_key = vol.Required(CONF_CITY)
         if (
             getattr(self, "_defaults_city", None)
             in {city["value"] for city in self._cities}
         ):
             city_key = vol.Required(CONF_CITY, default=self._defaults_city)
-        schema = vol.Schema(
+        return vol.Schema(
             {
                 city_key: SelectSelector(
                     SelectSelectorConfig(options=self._cities, mode=SelectSelectorMode.DROPDOWN)
                 )
             }
         )
-        return self.async_show_form(step_id="city", data_schema=schema)
 
     async def async_step_fuels(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
@@ -763,6 +774,10 @@ class _FuelStationSteps:
         return options
 
 
+def _entry_title(area_mode: str, city: str) -> str:
+    return f"Ceny paliv {pretty(city)}" if area_mode == AREA_MODE_CITY else "Ceny paliv GPS area"
+
+
 _KEY_SCHEMA = vol.Schema(
     {vol.Required(CONF_KEY): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))}
 )
@@ -811,11 +826,7 @@ class CenyPalivConfigFlow(_FuelStationSteps, ConfigFlow, domain=DOMAIN):
         if self._area_mode == AREA_MODE_GPS:
             await self.async_set_unique_id(self._gps_config_unique_id)
         return self.async_create_entry(
-            title=(
-                f"Ceny paliv {pretty(self._city)}"
-                if self._area_mode == AREA_MODE_CITY
-                else "Ceny paliv GPS area"
-            ),
+            title=_entry_title(self._area_mode, self._city),
             data={CONF_KEY: self._key, CONF_CITY: self._city or ""},
             options=self._options(),
         )
@@ -862,4 +873,51 @@ class CenyPalivOptionsFlow(_FuelStationSteps, OptionsFlow):
         return self.config_entry.entry_id
 
     async def _async_finish(self) -> ConfigFlowResult:
-        return self.async_create_entry(data=self._options(self.config_entry.options))
+        entry = self.config_entry
+        # the entry's identity follows its area, so the old city can be added again and the title stays true
+        if self._area_mode == AREA_MODE_CITY:
+            unique_id = self._city
+        else:
+            unique_id = entry.unique_id if (entry.unique_id or "").startswith("gps-") else f"gps-{uuid4()}"
+        updates: dict[str, Any] = {"unique_id": unique_id}
+        if entry.title == _entry_title(
+            entry.options.get(CONF_AREA_MODE, AREA_MODE_CITY), entry.options.get(CONF_CITY, entry.data.get(CONF_CITY, ""))
+        ):  # only an automatic title; a title the user typed is theirs
+            updates["title"] = _entry_title(self._area_mode, self._city)
+        self.hass.config_entries.async_update_entry(entry, **updates)
+        self._update_favourite_registry(entry)
+        return self.async_create_entry(data=self._options(entry.options))
+
+    @callback
+    def _update_favourite_registry(self, entry) -> None:
+        """Disable favourite sensors archived by this change; re-enable a favourite that becomes active again."""
+        from .sensor import _sensor_unique_id  # noqa: PLC0415 - sensor imports the coordinator stack
+
+        registry = er.async_get(self.hass)
+        before = {
+            (fuel, record.get("identity"), bool(record.get("legacy")))
+            for fuel, records in entry.options.get(CONF_HOME_HISTORY, {}).items()
+            for record in records
+        }
+
+        def entity_id(fuel: str, identity: str | None) -> str | None:
+            unique_id = _sensor_unique_id(entry.entry_id, fuel, "home", identity)
+            return registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+
+        active = {
+            entity_id(fuel, self._home_identities.get(fuel))
+            for fuel in self._homes
+            if fuel in self._fuels
+        }
+        for fuel, records in self._home_history.items():
+            for record in records:
+                identity, legacy = record.get("identity"), bool(record.get("legacy"))
+                if (fuel, identity, legacy) in before:
+                    continue
+                archived = entity_id(fuel, None if legacy else identity)
+                if archived and archived not in active:
+                    registry.async_update_entity(archived, disabled_by=er.RegistryEntryDisabler.INTEGRATION)
+        for entity in filter(None, active):
+            registry_entry = registry.async_get(entity)
+            if registry_entry and registry_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION:
+                registry.async_update_entity(entity, disabled_by=None)

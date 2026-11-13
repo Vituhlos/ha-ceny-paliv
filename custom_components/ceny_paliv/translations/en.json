@@ -209,7 +209,8 @@
       "no_fuel": "Pick at least one fuel.",
       "invalid_zone": "Choose an existing zone with valid coordinates.",
       "invalid_coordinates": "Enter valid latitude and longitude coordinates.",
-      "invalid_radius": "Choose a radius from 5 to 50 km."
+      "invalid_radius": "Choose a radius from 5 to 50 km.",
+      "already_configured": "This city is already set up in another configuration."
     }
   }
 }

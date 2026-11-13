@@ -7,10 +7,13 @@ from aiohttp import web
 
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
-from .const import CARD_URL, CARD_VERSION, LOGO_URL
+from .api import release_shared_marker_cache
+from .const import CARD_URL, CARD_VERSION, DOMAIN, LOGO_URL
 from .coordinator import CenyPalivConfigEntry, CenyPalivCoordinator
 from .logos import ID_RE, logo_dir
 
@@ -73,4 +76,15 @@ async def _async_reload(hass: HomeAssistant, entry: CenyPalivConfigEntry) -> Non
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: CenyPalivConfigEntry) -> bool:
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded and not any(
+        other.entry_id != entry.entry_id and other.state is ConfigEntryState.LOADED
+        for other in hass.config_entries.async_entries(DOMAIN)
+    ):
+        release_shared_marker_cache(hass)  # no entry uses the nationwide snapshots any more
+    return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: CenyPalivConfigEntry) -> None:
+    """The entry is deleted: its price history goes with it."""
+    await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}").async_remove()
