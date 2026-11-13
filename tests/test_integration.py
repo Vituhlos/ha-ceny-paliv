@@ -1560,3 +1560,29 @@ async def test_gps_logo_step_preselects_only_chains_inside_the_area(
         (logos_key,) = result["data_schema"].schema
         assert logos_key.default() == ["orlen"]
         hass.config_entries.flow.async_abort(result["flow_id"])
+
+
+async def test_area_and_location_choices_are_translated_by_home_assistant(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    """Option labels come from translations/<language>.json, so they follow each user's own language."""
+    from pathlib import Path
+
+    with patch(
+        "custom_components.ceny_paliv.config_flow.async_fetch_markers",
+        new=AsyncMock(return_value=[marker("Oblibena", 33)]),
+    ):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"key": "dummy"})
+        (area_key,) = result["data_schema"].schema
+        area_selector = result["data_schema"].schema[area_key]
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"area_mode": "gps"})
+        (method_key,) = result["data_schema"].schema
+        method_selector = result["data_schema"].schema[method_key]
+        hass.config_entries.flow.async_abort(result["flow_id"])
+    root = Path(__file__).parent.parent / "custom_components" / DOMAIN / "translations"
+    for language in ("en", "cs"):
+        selectors = json.loads((root / f"{language}.json").read_text(encoding="utf-8"))["selector"]
+        for selector in (area_selector, method_selector):
+            key = selector.config["translation_key"]
+            assert set(selectors[key]["options"]) == set(selector.config["options"]), (language, key)

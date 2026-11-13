@@ -289,13 +289,6 @@ class _FuelStationSteps:
         ha_language = (self.hass.config.language or DEFAULT_LANGUAGE).split("-")[0]
         return ha_language if ha_language in LANGUAGES else DEFAULT_LANGUAGE
 
-    def _localized_options(self, values: dict[str, tuple[str, str]]) -> list[dict[str, str]]:
-        language = (self.hass.config.language or DEFAULT_LANGUAGE).split("-")[0]
-        return [
-            {"value": value, "label": labels[1 if language == "cs" else 0]}
-            for value, labels in values.items()
-        ]
-
     def _gps_center_for_flow(self) -> tuple[float, float] | None:
         method = getattr(self, "_location_method", LOCATION_HOME)
         if method == LOCATION_HOME:
@@ -365,12 +358,8 @@ class _FuelStationSteps:
                 vol.Required(CONF_AREA_MODE, default=default_area_mode):
                     SelectSelector(
                         SelectSelectorConfig(
-                            options=self._localized_options(
-                                {
-                                    AREA_MODE_CITY: ("City", "Město"),
-                                    AREA_MODE_GPS: ("GPS area", "GPS okolí"),
-                                }
-                            ),
+                            options=[AREA_MODE_CITY, AREA_MODE_GPS],
+                            translation_key="area_mode",  # labels in translations/<language>.json
                             mode=SelectSelectorMode.DROPDOWN,
                         )
                     )
@@ -398,14 +387,8 @@ class _FuelStationSteps:
             {
                 vol.Required(CONF_LOCATION_METHOD, default=default): SelectSelector(
                     SelectSelectorConfig(
-                        options=self._localized_options(
-                            {
-                                LOCATION_HOME: ("Home location", "Poloha domácnosti"),
-                                LOCATION_ZONE: ("Saved Home Assistant zone", "Uložená zóna Home Assistantu"),
-                                LOCATION_MAP: ("Choose a point on the map", "Vybrat bod na mapě"),
-                                LOCATION_MANUAL: ("Manual coordinates (advanced)", "Ruční souřadnice (pokročilé)"),
-                            }
-                        ),
+                        options=[LOCATION_HOME, LOCATION_ZONE, LOCATION_MAP, LOCATION_MANUAL],
+                        translation_key="location_method",
                         mode=SelectSelectorMode.DROPDOWN,
                     )
                 )
