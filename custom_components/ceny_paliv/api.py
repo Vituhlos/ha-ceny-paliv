@@ -346,7 +346,11 @@ def _safe_station_slug(marker: dict[str, Any]) -> str | None:
         return None
 
 
-def _usable_gps_marker(marker: dict[str, Any]) -> bool:
+def _usable_marker(marker: dict[str, Any]) -> bool:
+    """A marker with a station URL, a name, a finite non-negative price and valid coordinates.
+
+    One malformed marker must never abort the refresh of every fuel, so City and GPS mode both skip it.
+    """
     if (
         not isinstance(marker, dict)
         or _safe_station_slug(marker) is None
@@ -409,7 +413,7 @@ def station_options(
         and _safe_station_slug(marker) is not None
         and isinstance(marker.get("name"), str)
         and marker["name"].strip()
-        and (use_url is False or _usable_gps_marker(marker))
+        and (use_url is False or _usable_marker(marker))
     ]
     if center is not None:
         try:
@@ -451,7 +455,7 @@ def _bounded_text(value: Any, limit: int = _MAX_ATTRIBUTE_TEXT) -> str:
 
 def parse_fresh(value: str | None, today: dt.date) -> dt.date | None:
     """mBenzin 'fresh' field -> date. Returns None when the format is unknown."""
-    raw = (value or "").strip()
+    raw = value.strip() if isinstance(value, str) else ""
     low = raw.lower()
     if low == "dnes":
         return today
@@ -464,7 +468,7 @@ def parse_fresh(value: str | None, today: dt.date) -> dt.date | None:
         except ValueError:
             return None
     m = re.search(r"(\d+)\s*d", low)  # e.g. "před 3 dny"
-    if m:
+    if m and len(m.group(1)) <= 4:  # a longer number is not a real age (and would overflow the date)
         return today - dt.timedelta(days=int(m.group(1)))
     return None
 
@@ -527,14 +531,14 @@ def build_payload(
     label, unit = FUELS.get(fuel, (fuel, "Kč/l"))
     max_age = MAX_AGE_DAYS_BY_FUEL.get(fuel, MAX_AGE_DAYS_DEFAULT)
     gps_mode = gps_method is not None
-    in_city = [m for m in markers if city_of(m) == city] if not gps_mode else []
+    in_city = [m for m in markers if city_of(m) == city and _usable_marker(m)] if not gps_mode else []
     in_region = (
         stations_within_radius(markers, *gps_center, gps_radius_km)
         if gps_mode and gps_center is not None
         else []
     )
     region_markers = (
-        [marker for marker in in_region if _usable_gps_marker(marker)]
+        [marker for marker in in_region if _usable_marker(marker)]
         if gps_mode
         else []
     )
@@ -549,7 +553,7 @@ def build_payload(
         if gps_mode and "/" in home_slug:
             home_matches = [
                 m for m in markers
-                if isinstance(m, dict) and m.get("url") == home_slug and _usable_gps_marker(m)
+                if isinstance(m, dict) and m.get("url") == home_slug and _usable_marker(m)
             ]
         elif gps_mode:
             # A bare slug is a favourite saved in City mode: it only identifies a station in that city.
@@ -559,7 +563,7 @@ def build_payload(
                 and bool(city)
                 and city_of(m) == city
                 and _safe_station_slug(m) == home_slug
-                and _usable_gps_marker(m)
+                and _usable_marker(m)
             ]
             if len(home_matches) != 1:
                 home_matches = []
@@ -569,6 +573,7 @@ def build_payload(
                 if isinstance(m, dict)
                 and city_of(m) == city
                 and (m.get("url") == home_slug or _safe_station_slug(m) == home_slug)
+                and _usable_marker(m)
             ]
         if len(home_matches) > 1:
             home_matches = []
@@ -638,7 +643,7 @@ def build_payload(
                 bool(home_marker) and m.get("url") == home_marker.get("url")
                 if gps_mode
                 else bool(home_slug)
-                and (station_slug(m) == home_slug or m.get("url") == home_slug)
+                and (_safe_station_slug(m) == home_slug or m.get("url") == home_slug)
             ),
             "trends": {str(n): _trend(log, m["price"], today, n) for n in PERIODS},
         }
@@ -758,6 +763,6 @@ def build_payload(
             "radius_km": gps_radius_km,
             "zone_entity": gps_zone_entity,
             "error": gps_error,
-            "station_count": len(in_region),
+            "station_count": len(region_markers),
         }
     return result
