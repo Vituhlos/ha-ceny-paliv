@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.5.3
+
+### Changed
+
+- **The card looks and behaves like a Home Assistant card** (#24, #25):
+  - It takes its colours, fonts, sizes and corners from your theme instead of drawing its own dark surface. It follows light, dark and custom themes, and the map follows the theme too.
+  - The favourite station and the list follow the tile card: a round icon, a name, a second line and the price on the right. Themes that restyle tiles, such as Fluvy, restyle these lines too.
+  - Prices and times follow your Home Assistant profile: the number format (`38,50` in Czech), the 12/24 h clock and the time zone.
+  - Less clutter: no all-caps label, tap hint or chevrons. A tap still opens the details or Google Maps.
+  - Outdated prices are flagged by an icon as well as their colour. A row shows the price date before the address, and no longer repeats the station name.
+  - A failed refresh shows as a warning in the card.
+
+### Fixed
+
+- In a GPS area the favourite-station card said "Cheapest in town"; it now says "Cheapest in the area" (#24).
+- Czech hidden-stations note: "starší než včerejšek" instead of "starší než včera" (#25).
+
+### Known limitations
+
+- Validated with offline tests, CI and a demo page (default, custom and Fluvy themes, light and dark, phone and desktop widths) before release; checked on a live Home Assistant dashboard only after release.
+
 ## 0.5.2
 
 ### New
