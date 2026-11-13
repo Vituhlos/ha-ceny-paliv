@@ -21,7 +21,8 @@ from .const import LOGO_DIR_NAME, LOGO_INDEX_URL, LOGO_RAW_URL, USER_AGENT
 
 _LOGGER = logging.getLogger(__name__)
 
-ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
+# \Z, not $: "$" would also accept a trailing newline
+ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}\Z")
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 MAX_BYTES = 150_000
 MANIFEST = "installed.json"  # {id: {"label": ..., "match": [...]}} for the logos this integration downloaded
@@ -39,11 +40,24 @@ def logo_dir(hass: HomeAssistant) -> Path:
 
 
 def _read_manifest(folder: Path) -> dict[str, dict[str, Any]]:
+    """The manifest, keeping only valid ids: its ids become file names that may be deleted."""
     try:
         data = json.loads((folder / MANIFEST).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(k, str) and ID_RE.match(k) and isinstance(v, dict)}
+
+
+def _match_list(value: Any, default: list[str]) -> list[str]:
+    """A list of chain names; a lone string is one name (not its letters), anything else falls back."""
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, list):
+        return default
+    names = [item for item in value if isinstance(item, str) and item.strip()]
+    return names or default
 
 
 def scan_logos(folder: Path) -> list[dict[str, Any]]:
@@ -57,8 +71,10 @@ def scan_logos(folder: Path) -> list[dict[str, Any]]:
         if not ID_RE.match(logo_id):
             continue
         # a file dropped by hand matches its own name, with dashes and underscores read as spaces ("robin-oil" = "robin oil")
-        match = manifest.get(logo_id, {}).get("match") or [logo_id, logo_id.replace("-", " ").replace("_", " ")]
-        out.append({"id": logo_id, "match": list(dict.fromkeys(normalize(m) for m in match if m))})
+        match = _match_list(
+            manifest.get(logo_id, {}).get("match"), [logo_id, logo_id.replace("-", " ").replace("_", " ")]
+        )
+        out.append({"id": logo_id, "match": list(dict.fromkeys(normalize(m) for m in match))})
     return out
 
 
@@ -80,10 +96,17 @@ async def async_fetch_index(session: ClientSession) -> list[dict[str, Any]] | No
         _LOGGER.warning("Ceny paliv: cannot read the logo index: %s", err)
         return None
     out = []
-    for item in data.get("logos", []) if isinstance(data, dict) else []:
-        logo_id = str(item.get("id", ""))
-        if ID_RE.match(logo_id):
-            out.append({"id": logo_id, "label": str(item.get("label") or logo_id), "match": list(item.get("match") or [logo_id])})
+    logos = data.get("logos") if isinstance(data, dict) else None
+    for item in logos if isinstance(logos, list) else []:
+        if not isinstance(item, dict):
+            continue
+        logo_id = item.get("id")
+        if isinstance(logo_id, str) and ID_RE.match(logo_id):
+            out.append({
+                "id": logo_id,
+                "label": str(item.get("label") or logo_id),
+                "match": _match_list(item.get("match"), [logo_id]),
+            })
     return out
 
 
@@ -103,9 +126,10 @@ async def async_sync(hass: HomeAssistant, session: ClientSession, index: list[di
     folder = logo_dir(hass)
     by_id = {i["id"]: i for i in index}
     manifest = await hass.async_add_executor_job(_read_manifest, folder)
+    on_disk = set(await hass.async_add_executor_job(installed_ids, folder))
 
     for logo_id in sorted(wanted & set(by_id)):
-        if (folder / f"{logo_id}.png").is_file() and logo_id in manifest:
+        if logo_id in on_disk:
             continue
         try:
             async with session.get(LOGO_RAW_URL.format(id=logo_id), headers={"User-Agent": USER_AGENT}, timeout=20) as resp:

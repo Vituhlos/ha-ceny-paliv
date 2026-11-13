@@ -1530,3 +1530,33 @@ async def test_first_refresh_without_any_data_retries_setup(hass, enable_custom_
         await hass.async_block_till_done()
     assert entry.state is ConfigEntryState.SETUP_RETRY
     assert hass.states.get("sensor.ceny_paliv_n95_top5") is None
+
+
+async def test_gps_logo_step_preselects_only_chains_inside_the_area(
+    hass, enable_custom_integrations, mock_frontend, marker, tmp_path
+):
+    hass.config.config_dir = str(tmp_path)
+    hass.config.latitude, hass.config.longitude = 50.1, 14.4
+    near = marker("Blizko", 33, name="Orlen")
+    far = {**marker("Daleko", 30, city="Brno", name="Shell"), "lat": 49.2, "lng": 16.6}
+    index = [
+        {"id": "orlen", "label": "Orlen", "match": ["orlen"]},
+        {"id": "shell", "label": "Shell", "match": ["shell"]},
+    ]
+    with (
+        patch("custom_components.ceny_paliv.config_flow.async_fetch_markers", new=AsyncMock(return_value=[near, far])),
+        patch("custom_components.ceny_paliv.config_flow.async_fetch_index", new=AsyncMock(return_value=index)),
+    ):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"key": "dummy"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"area_mode": "gps"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"location_method": "home"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"gps_radius_km": 10})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"fuels": ["n95"], "language": "en"}
+        )
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        assert result["step_id"] == "logos"
+        (logos_key,) = result["data_schema"].schema
+        assert logos_key.default() == ["orlen"]
+        hass.config_entries.flow.async_abort(result["flow_id"])
