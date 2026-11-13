@@ -394,7 +394,24 @@ def test_gps_history_keeps_inactive_top_five_samples_until_expiry(marker, now):
     ]
     assert result["stations"][0]["trends"]["1"]["ref_date"] == "2025-01-15"
 
-    expired_day = now + timedelta(days=39)
+    retained_day = now + timedelta(days=37)
+    build_payload(
+        [],
+        fuel="n95",
+        city="",
+        home_slug=None,
+        history=history,
+        now=retained_day,
+        fetched_at=retained_day,
+        gps_method="map",
+        gps_center=(50.1, 14.4),
+        gps_radius_km=5,
+    )
+    assert history[station_a["url"]] == [
+        ["2025-01-17", 19],
+    ]
+
+    expired_day = retained_day + timedelta(days=1)
     build_payload(
         [],
         fuel="n95",

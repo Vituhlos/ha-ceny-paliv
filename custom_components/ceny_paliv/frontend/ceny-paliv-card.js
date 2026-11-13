@@ -107,7 +107,8 @@ class CenyPalivCard extends HTMLElement {
       if (a.cp_role) {
         return a.cp_role === role
           && a.cp_fuel === fuel
-          && (!configId || a.cp_config_id === configId)
+          && typeof a.cp_config_id === 'string'
+          && a.cp_config_id === configId
           && (role !== 'home' || !['unavailable', 'unknown'].includes(state.state));
       }
       return !configId && role !== 'home_archive'
@@ -115,10 +116,17 @@ class CenyPalivCard extends HTMLElement {
     };
     const topState = c && c.top5 && hass.states[c.top5];
     const cachedTopConfig = topState && (topState.attributes || {}).cp_config_id;
+    const expectedTopConfig = this._config.config_id || cachedTopConfig;
     const cachedHome = c && c.home && hass.states[c.home];
-    const valid = c && matches(topState, 'top5', this._config.fuel, this._config.config_id)
-      && (!c.home || matches(cachedHome, 'home', this._config.fuel, cachedTopConfig))
-      && c.pos.every((id) => !id || hass.states[id]);
+    const valid = c && matches(topState, 'top5', this._config.fuel, expectedTopConfig)
+      && (!c.home || matches(cachedHome, 'home', this._config.fuel, expectedTopConfig))
+      && c.pos.every((id, index) => {
+        if (!id) return true;
+        const state = hass.states[id];
+        const attributes = state && state.attributes || {};
+        return matches(state, 'position', this._config.fuel, cachedTopConfig)
+          && (!attributes.cp_index || attributes.cp_index === index + 1);
+      });
     const now = Date.now();
     if (valid && (c.home || (!topState.attributes.home && now - this._scanAt < 10000))) return c;
     this._scanAt = now;
@@ -142,10 +150,15 @@ class CenyPalivCard extends HTMLElement {
     const selected = candidates[0];
     const selectedConfig = selected.attributes.cp_config_id;
     ids.top5 = selected.id;
+    const homes = [];
     for (const id of Object.keys(hass.states)) {
       if (!id.startsWith('sensor.ceny_paliv_')) continue;
       const a = hass.states[id].attributes || {};
       if (a.cp_role === 'home_archive') continue;
+      if (a.cp_role && (
+        typeof a.cp_config_id !== 'string'
+        || a.cp_config_id !== selectedConfig
+      )) continue;
       if (selectedConfig && a.cp_config_id !== selectedConfig) continue;
       let role = null; let idx = 0;
       if (a.cp_fuel) {
@@ -161,9 +174,10 @@ class CenyPalivCard extends HTMLElement {
         role === 'home'
         && !['unavailable', 'unknown'].includes(hass.states[id].state)
         && (!selectedConfig || a.cp_config_id === selectedConfig)
-      ) ids.home = id;
+      ) homes.push(id);
       else if (role === 'position' && idx >= 1 && idx <= 5) ids.pos[idx - 1] = id;
     }
+    ids.home = homes.length === 1 ? homes[0] : null;
     return ids;
   }
 

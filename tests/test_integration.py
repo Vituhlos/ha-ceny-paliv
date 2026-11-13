@@ -376,6 +376,64 @@ async def test_city_change_same_slug_uses_distinct_station_urls_and_statistics(
     )
 
 
+async def test_city_change_unresolved_same_slug_does_not_keep_legacy_identity(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": "Praha"},
+        options={"fuels": ["n95"], "homes": {"n95": "Shared"}},
+        unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+    brno_station = marker("Other", 40, city="Brno")
+
+    with (
+        patch(
+            "custom_components.ceny_paliv.config_flow.async_fetch_markers",
+            new=AsyncMock(return_value=[brno_station]),
+        ),
+        patch(
+            "custom_components.ceny_paliv.config_flow.async_fetch_index",
+            new=AsyncMock(return_value=None),
+        ),
+    ):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"area_mode": "city"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"city": "Brno"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"fuels": ["n95"], "language": "en"}
+        )
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"station": "Shared"}
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["homes"]["n95"] == "Shared"
+    assert entry.options["home_history"]["n95"] == [
+        {"identity": "Shared", "legacy": True}
+    ]
+    assert entry.options["home_identities"]["n95"] != "Shared"
+    assert entry.options["home_identities"]["n95"].startswith("unresolved:")
+
+    from custom_components.ceny_paliv.coordinator import CenyPalivCoordinator
+    from custom_components.ceny_paliv.sensor import (
+        CenyPalivArchivedHomeSensor,
+        CenyPalivHomeSensor,
+    )
+
+    coordinator = CenyPalivCoordinator(hass, entry)
+    active = CenyPalivHomeSensor(coordinator, entry, "n95")
+    archived = CenyPalivArchivedHomeSensor(
+        coordinator, entry, "n95", "Shared", True
+    )
+    assert active.unique_id != archived.unique_id
+
+
 async def test_favourite_identity_cycles_modes_and_reloads_without_collisions(
     hass, enable_custom_integrations, mock_frontend, marker
 ):

@@ -472,6 +472,43 @@ class _FuelStationSteps:
                 choice,
                 city=self._city if self._area_mode == AREA_MODE_CITY else None,
             )
+            area_changed = (
+                self._area_mode
+                != getattr(self, "_defaults_area_mode", AREA_MODE_CITY)
+                or (
+                    self._area_mode == AREA_MODE_CITY
+                    and self._city != getattr(self, "_original_city", self._city)
+                )
+                or (
+                    self._area_mode == AREA_MODE_GPS
+                    and (
+                        self._location_method
+                        != getattr(self, "_defaults_location_method", LOCATION_HOME)
+                        or self._gps_location
+                        != getattr(self, "_defaults_gps_location", None)
+                        or self._gps_zone_entity
+                        != getattr(self, "_defaults_zone_entity", None)
+                        or self._gps_radius_km
+                        != getattr(
+                            self, "_defaults_gps_radius_km", DEFAULT_GPS_RADIUS_KM
+                        )
+                    )
+                )
+            )
+            if (
+                choice != NONE_VALUE
+                and selected_identity is None
+                and (
+                    choice != previous_choice
+                    or area_changed
+                    or previous_identity is not None
+                )
+            ):
+                selected_identity = (
+                    f"unresolved:{self._area_mode}:"
+                    f"{self._city if self._area_mode == AREA_MODE_CITY else self._location_method}:"
+                    f"{choice}"
+                )
             if (
                 getattr(self, "_options_flow", False)
                 and previous_identity != selected_identity
