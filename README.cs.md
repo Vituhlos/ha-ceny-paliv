@@ -31,7 +31,7 @@ mBenzin před automatickým stahováním dat chrání ověřením prohlížeče,
 Co je dobré vědět:
 
 - Klíč je **osobní** – nikomu ho nesdílejte a nikam ho nezveřejňujte. **Každý si žádá vlastní.**
-- Poskytovatel zatím nepotvrdil limit požadavků pro tuto integraci. Automatická aktualizace zůstává každých **6 hodin** a požadavky se stejným klíčem a palivem se sdílejí mezi konfiguracemi. Toto sdílení a dočasná prodleva po HTTP 429 nejsou kvótou požadavků na klíč; trvalá kvóta se nevynucuje. Tu lze zavést až s potvrzeným limitem od poskytovatele a perzistentním počítáním požadavků. Po HTTP 429 se pozastaví všechna paliva daného klíče do času z platné hlavičky `Retry-After`, případně na 6 hodin, pokud ji poskytovatel neposlal; restart Home Assistantu tuto paměťovou ochranu vymaže.
+- Poskytovatel zatím nepotvrdil limit požadavků pro tuto integraci. Automatická aktualizace zůstává každých **6 hodin** a požadavky se stejným klíčem a palivem se sdílejí mezi konfiguracemi. Toto sdílení a dočasná prodleva po HTTP 429 nejsou kvótou požadavků na klíč; trvalá kvóta se nevynucuje. Tu lze zavést až s potvrzeným limitem od poskytovatele a perzistentním počítáním požadavků. Po HTTP 429 se pozastaví všechna paliva daného klíče do času z platné hlavičky `Retry-After` (nejvýše 24 hodin), případně na necelých 6 hodin, pokud ji poskytovatel neposlal; restart Home Assistantu tuto paměťovou ochranu vymaže.
 - Klíč se odesílá v HTTP hlavičce, nikoli v URL požadavku.
 - Integrace používá data cenové mapy mBenzin, nikoli oficiálně zdokumentované API. Buďte k serveru ohleduplní a respektujte podmínky mBenzin.
 
@@ -61,7 +61,7 @@ Pro každé palivo `<palivo>` (`n95`, `benzinplus`, `diesel`, `dieselplus`, `lpg
 | `sensor.ceny_paliv_<palivo>_home` | cena u vaší oblíbené stanice (jen pokud jste nějakou vybrali), trendy, pořadí, statistika |
 | `sensor.ceny_paliv_<palivo>_1` … `_5` | 5 nejlevnějších stanic se zeměpisnou šířkou a délkou pro kartu mapy |
 
-Senzory se jmenují podle stanice, kterou právě ukazují (např. `1 · Orlen – Bratri Stefanu 69`). Identifikátory stávajících senzorů se při přepnutí oblasti nemění. Ceny se obnovují každých 6 hodin. Pokud se aktualizace nepovede (třeba kvůli chybě 429), zůstanou zachována poslední data a atribut `fetch_error` uvede důvod. Celorepubliková data se sdílejí mezi konfiguracemi se stejným klíčem a palivem po dobu až 6 hodin. GPS výpočty i výběr oblíbené stanice v kruhu používají tutéž cache; změna oblasti nevytváří další požadavek na mBenzin. Ruční aktualizace i znovunačtení integrace cache využívají; restart Home Assistantu ji vymaže. Relativní údaj o aktuálnosti se vyhodnocuje podle původního času odpovědi v českém časovém pásmu.
+Senzory se jmenují podle stanice, kterou právě ukazují (např. `1 · Orlen – Bratri Stefanu 69`). Identifikátory stávajících senzorů se při přepnutí oblasti nemění. Ceny se obnovují každých 6 hodin. Pokud se aktualizace nepovede (třeba kvůli chybě 429), zůstanou zachována poslední data a atribut `fetch_error` uvede důvod. Celorepubliková data se sdílejí mezi konfiguracemi se stejným klíčem a palivem po dobu necelých 6 hodin, takže každá plánovaná aktualizace stáhne čerstvá data. GPS výpočty i výběr oblíbené stanice v kruhu používají tutéž cache; změna oblasti nevytváří další požadavek na mBenzin. Ruční aktualizace i znovunačtení integrace cache využívají; restart Home Assistantu ji vymaže. Relativní údaj o aktuálnosti se vyhodnocuje podle původního času odpovědi v českém časovém pásmu.
 
 ## 3. Karta pro dashboard (je součástí, nic dalšího se neinstaluje)
 

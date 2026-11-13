@@ -13,7 +13,13 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .logos import logo_dir, scan_logos
-from .api import MBenzinError, async_fetch_snapshot, build_payload, shared_marker_cache
+from .api import (
+    MBenzinError,
+    async_fetch_snapshot,
+    build_payload,
+    next_update_at,
+    shared_marker_cache,
+)
 from .const import (
     AREA_MODE_GPS,
     CONF_AREA_MODE,
@@ -154,7 +160,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                     **previous,
                     "fetch_error": err_name,
                     "last_attempt": now.isoformat(timespec="seconds"),
-                    "next_update": (now + UPDATE_INTERVAL).isoformat(timespec="seconds"),
+                    "next_update": next_update_at(now).isoformat(timespec="seconds"),
                 }
                 continue
             now = dt_util.now()

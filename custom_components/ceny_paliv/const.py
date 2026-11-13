@@ -65,6 +65,12 @@ PERIODS = (1, 2, 7, 14, 30)  # trend windows in days
 
 # Automatic refreshes remain six-hourly; no unconfirmed provider limit is assumed.
 UPDATE_INTERVAL = timedelta(hours=6)
+# Shared marker cache lifetime. It must expire before the next scheduled refresh: Home Assistant schedules
+# that refresh from a whole-second loop time, so a cache living exactly UPDATE_INTERVAL would often serve the
+# refresh its own six-hour-old snapshot and stretch the real refresh period to twelve hours.
+MARKER_CACHE_TTL = UPDATE_INTERVAL - timedelta(minutes=10)
+# Upper bound for a provider Retry-After value, so a broken header cannot block a key until restart.
+MAX_RETRY_AFTER = timedelta(hours=24)
 
 MAPS = "https://www.google.com/maps/search/?api=1&query={lat},{lng}"
 
