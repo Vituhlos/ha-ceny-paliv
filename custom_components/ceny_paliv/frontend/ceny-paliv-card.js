@@ -561,12 +561,24 @@ class CenyPalivCard extends HTMLElement {
     }
   }
 
+  // A calendar date ("2026-11-10") as written, never shifted by a time zone: it is a day, not an instant.
+  _day(iso, options) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+    if (!m) return null;
+    const locale = (this._hass && this._hass.locale) || {};
+    const lang = locale.time_format === 'system' ? undefined : (this._labels().locale || 'en-GB');
+    try {
+      return new Intl.DateTimeFormat(lang, Object.assign({}, options, { timeZone: 'UTC' })).format(Date.UTC(+m[1], m[2] - 1, +m[3]));
+    } catch (err) {
+      return iso;
+    }
+  }
+
   // a station's price date: "today", "yesterday" or the day itself
   _when(s, age) {
     if (age <= 0) return { text: this._T('today'), old: false };
     if (age === 1) return { text: this._T('yesterday'), old: true };
-    const d = s.updated_date ? new Date(s.updated_date + 'T00:00:00') : null;
-    return { text: d ? this._dateTime(d, { day: 'numeric', month: 'numeric' }) : (s.updated || '—'), old: true };
+    return { text: this._day(s.updated_date, { day: 'numeric', month: 'numeric' }) || s.updated || '—', old: true };
   }
 
   // URL of the logo of a station's chain, or '' when there is none. Logos come from the downloaded pack (list in the
@@ -663,7 +675,7 @@ class CenyPalivCard extends HTMLElement {
     const ok = !['unavailable', 'unknown'].includes(e.state);
     const stale = a.age_days == null || Number(a.age_days) > 1;
     const updated = a.age_days == 0 ? T('updated_today') : (a.age_days == 1 ? T('updated_yesterday')
-      : T('price_from', { d: a.updated_date ? this._dateTime(new Date(a.updated_date + 'T00:00:00'), { day: 'numeric', month: 'numeric', year: 'numeric' }) : (a.updated || '—') }));
+      : T('price_from', { d: this._day(a.updated_date, { day: 'numeric', month: 'numeric', year: 'numeric' }) || a.updated || '—' }));
     const tr = a.trends || {};
     const today = new Date(); today.setHours(0, 0, 0, 0);
     let partial = null;
@@ -682,7 +694,7 @@ class CenyPalivCard extends HTMLElement {
       : `<div class="trends">${[1, 2, 7, 14, 30].map(tile).join('')}</div>`;
     const anyTrend = Object.values(tr).some(Boolean);
     const note = cp ? '' : !anyTrend ? T('trends_start')
-      : (partial ? T('since_partial', { d: this._dateTime(new Date(partial + 'T00:00:00'), { day: 'numeric', month: 'short' }) }) : '');
+      : (partial ? T('since_partial', { d: this._day(partial, { day: 'numeric', month: 'short' }) || partial }) : '');
     let status;
     if (a.rank == null) status = { icon: 'mdi:clock-alert-outline', cls: 'warn', text: T('not_ranked') };
     else if (Number(a.vs_cheapest) <= 0) status = { icon: 'mdi:trophy-outline', cls: 'good', text: T(topAttrs.gps_area ? 'cheapest_area' : 'cheapest_town', { rank: a.rank, n: a.fresh_count }) };

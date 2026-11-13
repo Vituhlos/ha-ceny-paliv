@@ -497,10 +497,15 @@ test("numbers and times follow the Home Assistant profile, texts the integration
   assert.equal(card._dateTime(evening, { hour: "numeric", minute: "2-digit" }), "19:58");
   at({ time_format: "12", time_zone: "server" });
   assert.match(card._dateTime(evening, { hour: "numeric", minute: "2-digit" }), /7:58\s?(PM|odp\.)/i);
+
+  // a price date is a calendar day: no time zone (browser or server) may move it to the day before
+  assert.equal(card._day("2026-11-10", { day: "numeric", month: "numeric" }), "10. 11.");
+  assert.equal(card._day("not a date", { day: "numeric" }), null);
 });
 
 test("a row does not repeat the station name in its address, even without accents", () => {
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date(); // the card counts days in local time
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const top = {
     state: "38.5", last_updated: "x",
     attributes: {
