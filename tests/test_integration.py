@@ -59,6 +59,49 @@ async def test_config_flow(hass, enable_custom_integrations, mock_frontend, mark
         await hass.async_block_till_done()
 
 
+@pytest.mark.parametrize("area_mode", ["city", "gps"])
+async def test_config_flow_allows_fuel_without_favourite(
+    hass, enable_custom_integrations, mock_frontend, marker, area_mode
+):
+    hass.config.latitude = 50.1
+    hass.config.longitude = 14.4
+    favourite = "Oblibena" if area_mode == "city" else "/Ceny-benzinu-a-nafty/Praha/Oblibena/123"
+    with (
+        patch(
+            "custom_components.ceny_paliv.config_flow.async_fetch_markers",
+            new=AsyncMock(return_value=[marker("Oblibena", 33)]),
+        ),
+        patch("custom_components.ceny_paliv.config_flow.async_fetch_index", new=AsyncMock(return_value=None)),
+        patch("custom_components.ceny_paliv.async_setup_entry", new=AsyncMock(return_value=True)),
+    ):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"key": "dummy"})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"area_mode": area_mode}
+        )
+        if area_mode == "city":
+            result = await hass.config_entries.flow.async_configure(result["flow_id"], {"city": "Praha"})
+        else:
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"location_method": "home"}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"gps_radius_km": 40}
+            )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"fuels": ["n95", "lpg"], "language": "en"}
+        )
+        assert result["step_id"] == "station"
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"station": favourite})
+        assert result["step_id"] == "station"
+        # "—" is the form's default: submitting the form unchanged must not fail
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+        assert result["options"]["homes"] == {"n95": favourite}
+        assert "home_identities" not in result["options"]
+        await hass.async_block_till_done()
+
+
 async def test_config_flow_invalid_key_and_duplicate_city(hass, enable_custom_integrations, mock_frontend, marker):
     entry = MockConfigEntry(domain=DOMAIN, data={"key": "dummy", "city": "Praha"}, unique_id="Praha")
     entry.add_to_hass(hass)
