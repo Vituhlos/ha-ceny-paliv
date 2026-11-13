@@ -1077,6 +1077,12 @@ async def test_coordinator_sensors_and_failed_refresh(hass, enable_custom_integr
         assert home.attributes["rank"] == 2
         assert position.state == "33"
         assert position.attributes["latitude"] == 50.1
+        # a position without a station keeps its identity attributes for the card (unknown, not unavailable)
+        empty_position = hass.states.get("sensor.ceny_paliv_n95_3")
+        assert empty_position.state == "unknown"
+        assert empty_position.attributes["cp_role"] == "position"
+        assert empty_position.attributes["cp_index"] == 3
+        assert empty_position.attributes["cp_config_id"] == entry.entry_id
         saved = await entry.runtime_data._store.async_load()
         assert saved["n95"][markers[0]["url"]][-1][1] == 35
 

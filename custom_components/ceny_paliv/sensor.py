@@ -236,9 +236,8 @@ class CenyPalivPositionSensor(CenyPalivEntity):
         stations = self._payload.get("stations") or []
         return stations[self._index] if len(stations) > self._index else None
 
-    @property
-    def available(self) -> bool:
-        return super().available and self._station is not None
+    # No `available` override: a position without a station is "unknown", not "unavailable", because
+    # Home Assistant drops the attributes of unavailable entities and the card needs cp_* to bind it.
 
     @property
     def native_value(self) -> float | None:
