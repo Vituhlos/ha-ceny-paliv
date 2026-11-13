@@ -131,7 +131,7 @@ Loga jsou ochranné známky svých majitelů a slouží jen k označení stanic;
 
 ## 5. Bez karty: standardní karty
 
-Každý senzor se jmenuje podle toho, co právě ukazuje (např. `1 · Orlen – Bratri Stefanu 69`), takže stanici zobrazí jakákoli standardní karta, bez šablony. Názvy sledují pořadí a mění se při každé aktualizaci; identifikátory entit se nemění.
+Každý senzor se jmenuje podle toho, co právě ukazuje (např. `1 · Orlen – Bratri Stefanu 69`), takže stanici zobrazí jakákoli standardní karta, bez šablony. Názvy sledují pořadí a mění se při každé aktualizaci; identifikátory entit zůstávají stejné. Jedinou výjimkou je senzor oblíbené stanice: výběr jiné oblíbené stanice vytvoří nový senzor (např. `_home_2`), aby se nikdy nesmíchaly statistiky dvou stanic (viz Poznámky).
 
 Karta **Entity** s 5 nejlevnějšími stanicemi (stav senzoru je cena):
 
@@ -177,6 +177,8 @@ CI testuje také Python 3.14 s `requirements_test_latest.txt`. Tyto soubory fixu
 verzi testovacího frameworku, který následně fixuje Home Assistant na 2025.1.0,
 respektive 2026.10.4. Frontend a HTTP server Home Assistantu jsou v integračních
 testech simulovány.
+Karta má vlastní testy bez závislostí: `node --test tests/test_card.js` (Node 22+).
+CI navíc spouští hassfest, validaci HACS, ruff a kontrolu, že verze manifestu a karty souhlasí.
 
 ## Licence
 

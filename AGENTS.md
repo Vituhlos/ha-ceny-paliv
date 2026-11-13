@@ -5,6 +5,7 @@ These instructions apply to every coding agent working in this repository, inclu
 ## Project and change boundaries
 
 - This is **Ceny paliv**, a Home Assistant custom integration and dashboard card for Czech fuel prices. Read `README.md` and the relevant source files before proposing changes.
+- This repository is the maintainer's fork used to prepare changes for the upstream project `donthedandy/ha-ceny-paliv`. Keep the links in `manifest.json` (codeowners, documentation, issue tracker), the HACS installation instructions in the READMEs and the logo-pack URL in `const.py` pointing to upstream unless the maintainer decides otherwise.
 - Keep English and Czech user-visible strings and documentation aligned (`README.md` and `README.cs.md` where applicable).
 - The mBenzin access key is personal. Never include real keys, secrets, tokens, private Home Assistant configuration, device identifiers, or other personal data in code, logs, issues, pull requests, or examples.
 - Report which checks actually ran. Clearly distinguish static inspection, automated tests, a running Home Assistant instance, and validation with live fuel-price data. Never claim live API or hardware validation from mocked tests or CI.
