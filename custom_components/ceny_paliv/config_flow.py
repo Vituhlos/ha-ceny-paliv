@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from typing import Any
 from uuid import uuid4
 
@@ -78,6 +79,25 @@ def _error_key(err: MBenzinError) -> str:
     if isinstance(err, RateLimited):
         return "rate_limited"
     return "cannot_connect"
+
+
+def _clean_key(value: Any) -> str | None:
+    """The pasted key without surrounding spaces, or None when it cannot be a key (empty, control characters)."""
+    key = str(value or "").strip()
+    return key if key and key.isprintable() else None
+
+
+async def _async_check_key(hass, key: str | None) -> tuple[list[dict[str, Any]] | None, dict[str, str]]:
+    """Validate a key with one n95 download (shared cache): (markers, errors)."""
+    if key is None:
+        return None, {"base": "invalid_auth"}
+    try:
+        markers = await async_fetch_markers(
+            async_get_clientsession(hass), key, "n95", cache=shared_marker_cache(hass)
+        )
+    except MBenzinError as err:
+        return None, {"base": _error_key(err)}
+    return markers, {}
 
 
 def _valid_coordinates(latitude: Any, longitude: Any) -> bool:
@@ -743,6 +763,11 @@ class _FuelStationSteps:
         return options
 
 
+_KEY_SCHEMA = vol.Schema(
+    {vol.Required(CONF_KEY): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))}
+)
+
+
 class CenyPalivConfigFlow(_FuelStationSteps, ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
@@ -754,24 +779,33 @@ class CenyPalivConfigFlow(_FuelStationSteps, ConfigFlow, domain=DOMAIN):
         self._home_identities = {}
         self._home_history = {}
         if user_input is not None:
-            key = user_input[CONF_KEY].strip()
-            try:
-                markers = await async_fetch_markers(
-                    async_get_clientsession(self.hass),
-                    key,
-                    "n95",
-                    cache=shared_marker_cache(self.hass),
-                )
-            except MBenzinError as err:
-                errors["base"] = _error_key(err)
-            else:
+            key = _clean_key(user_input[CONF_KEY])
+            markers, errors = await _async_check_key(self.hass, key)
+            if markers is not None:
                 self._key = key
                 self._cities = city_options(markers)
                 return await self.async_step_area_mode()
-        schema = vol.Schema(
-            {vol.Required(CONF_KEY): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))}
-        )
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+        return self.async_show_form(step_id="user", data_schema=_KEY_SCHEMA, errors=errors)
+
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
+        """mBenzin.cz refused the key: ask for a new one (the entry, its history and entities stay)."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return await self._async_replace_key("reauth_confirm", self._get_reauth_entry(), user_input)
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Replace the access key of an existing entry."""
+        return await self._async_replace_key("reconfigure", self._get_reconfigure_entry(), user_input)
+
+    async def _async_replace_key(self, step_id: str, entry, user_input: dict[str, Any] | None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            key = _clean_key(user_input[CONF_KEY])
+            markers, errors = await _async_check_key(self.hass, key)
+            if markers is not None:
+                return self.async_update_reload_and_abort(entry, data_updates={CONF_KEY: key})
+        return self.async_show_form(step_id=step_id, data_schema=_KEY_SCHEMA, errors=errors)
 
     async def _async_finish(self) -> ConfigFlowResult:
         if self._area_mode == AREA_MODE_GPS:

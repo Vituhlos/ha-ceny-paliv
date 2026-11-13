@@ -57,7 +57,15 @@ class CannotConnect(MBenzinError):
 
 
 class InvalidAuth(MBenzinError):
-    """The access key is missing, wrong or not accepted."""
+    """The access key is missing, wrong or not accepted.
+
+    `definite` is True for HTTP 401/403. mBenzin also answers a key it does not accept with an HTML page, but
+    such a page can come from an outage too, so the coordinator only trusts it when it repeats.
+    """
+
+    def __init__(self, *args: object, definite: bool = False) -> None:
+        super().__init__(*args)
+        self.definite = definite
 
 
 class RateLimited(MBenzinError):
@@ -123,7 +131,7 @@ async def _async_fetch_markers(
                     now = now.replace(tzinfo=_CZECH_TIMEZONE)
                 raise RateLimited(_retry_after_seconds(resp.headers.get("Retry-After"), now))
             if resp.status in (401, 403):
-                raise InvalidAuth
+                raise InvalidAuth(definite=True)
             if resp.status != 200:
                 raise CannotConnect(f"HTTP {resp.status}")
             try:
@@ -132,6 +140,8 @@ async def _async_fetch_markers(
                 data = None
     except (aiohttp.ClientError, TimeoutError) as err:
         error_name = type(err).__name__
+    except ValueError:  # aiohttp refuses a header value with control characters: not a usable key
+        raise InvalidAuth from None
     else:
         error_name = None
     if error_name is not None:
@@ -233,6 +243,8 @@ class SharedMarkerCache:
                         proposed_until, self._key_backoffs.get(key_hash, proposed_until)
                     )
                 raise RateLimited(err.retry_after)
+            if isinstance(err, InvalidAuth):
+                raise InvalidAuth(*err.args, definite=err.definite)
             raise type(err)(*err.args)
         else:
             fetched_at = self._clock()

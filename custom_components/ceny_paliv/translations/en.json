@@ -85,6 +85,26 @@
         "data": {
           "logos": "Logos"
         }
+      },
+      "reauth_confirm": {
+        "title": "New mBenzin access key",
+        "description": "mBenzin.cz no longer accepts the access key of this configuration. Enter a valid key: your settings, price history and sensors stay as they are.",
+        "data": {
+          "key": "Access key"
+        },
+        "data_description": {
+          "key": "The key mBenzin.cz sent you. Paste it whole, without spaces."
+        }
+      },
+      "reconfigure": {
+        "title": "Change the mBenzin access key",
+        "description": "Enter the new access key. Your settings, price history and sensors stay as they are.",
+        "data": {
+          "key": "Access key"
+        },
+        "data_description": {
+          "key": "The key mBenzin.cz sent you. Paste it whole, without spaces."
+        }
       }
     },
     "error": {
@@ -98,7 +118,9 @@
       "invalid_radius": "Choose a radius from 5 to 50 km."
     },
     "abort": {
-      "already_configured": "This city is already configured."
+      "already_configured": "This city is already configured.",
+      "reauth_successful": "The access key was updated.",
+      "reconfigure_successful": "The access key was updated."
     }
   },
   "options": {
