@@ -549,9 +549,12 @@ def build_payload(
                 if isinstance(m, dict) and m.get("url") == home_slug and _usable_gps_marker(m)
             ]
         elif gps_mode:
+            # A bare slug is a favourite saved in City mode: it only identifies a station in that city.
             home_matches = [
                 m for m in markers
                 if isinstance(m, dict)
+                and bool(city)
+                and city_of(m) == city
                 and _safe_station_slug(m) == home_slug
                 and _usable_gps_marker(m)
             ]

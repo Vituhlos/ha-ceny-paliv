@@ -1266,3 +1266,20 @@ def test_next_update_counts_elapsed_time_across_dst(marker):
     assert result["next_update"] == "2025-03-30T07:30:00+02:00"
     result = payload([marker("A", 30)], datetime(2025, 10, 26, 0, 30, tzinfo=prague))
     assert result["next_update"] == "2025-10-26T05:30:00+01:00"
+
+def test_gps_slug_favourite_only_matches_its_original_city(marker, now):
+    """A favourite saved in City mode keeps meaning that station; another city's twin is never used."""
+    praha = {**marker("Same-slug", 33), "url": "/Ceny-benzinu-a-nafty/Praha/Same-slug/1"}
+    brno = {**marker("Same-slug", 29.9, city="Brno"), "url": "/Ceny-benzinu-a-nafty/Brno/Same-slug/2"}
+
+    def favourite(markers, city="Praha"):
+        return build_payload(
+            markers, fuel="n95", city=city, home_slug="Same-slug", history={}, now=now,
+            gps_method="map", gps_center=(50.1, 14.4), gps_radius_km=10,
+        )["home"]
+
+    assert favourite([praha, brno])["price"] == 33
+    # the Prague station drops out of the feed: the Brno twin must not take its place
+    assert favourite([brno]) is None
+    # an entry that never had a City favourite has no city to resolve a slug against
+    assert favourite([praha], city="") is None
