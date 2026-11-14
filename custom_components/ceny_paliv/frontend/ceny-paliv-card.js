@@ -797,8 +797,10 @@ class CenyPalivCard extends HTMLElement {
       const best = Number(s.price) === min;
       const name = s.name || '—';
       const a0 = s.address || '';
-      // the address often repeats the name, sometimes without its accents ("Am oil Milicin parkoviste")
-      const addr = norm(a0).startsWith(norm(name)) ? a0.slice(name.length).trim() : a0;
+      // the integration gives the street without the repeated name, or the town when there is no street;
+      // before 0.6 only the address, which often repeats the name without its accents ("Am oil Milicin parkoviste")
+      const addr = s.street !== undefined ? (s.street || s.city || '')
+        : (norm(a0).startsWith(norm(name)) ? a0.slice(name.length).trim() : a0);
       const tr = this._arrow((s.trends || {})['1']);
       const when = this._when(s, this._age(s, today));
       const home = s.home ? `<ha-icon icon="mdi:home" title="${esc(T('my_station'))}"></ha-icon>` : '';

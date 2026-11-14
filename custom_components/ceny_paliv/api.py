@@ -13,6 +13,7 @@ from datetime import timezone
 from email.utils import parsedate_to_datetime
 from numbers import Real
 from typing import Any, Callable
+import unicodedata
 from zoneinfo import ZoneInfo
 
 import aiohttp
@@ -411,20 +412,33 @@ def _usable_marker(marker: dict[str, Any]) -> bool:
 
 
 def pretty(slug: str) -> str:
-    return slug.replace("-", " ")
+    """Dashes are spaces, and a run of them is one: 'Brandys-nad-Labem---Stara-Boleslav' -> one space each."""
+    return " ".join(slug.replace("-", " ").split())
+
+
+def _fold(text: str) -> str:
+    """Compare text the way mBenzin's URLs spell it: no accents, no case ('Miličín' == 'Milicin')."""
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().casefold()
 
 
 def street_of(name: str, address: str) -> str:
-    """The address text without the leading station name ('Bratri Stefanu 69')."""
-    if address.lower().startswith(name.lower()):
-        return address[len(name):].strip()
-    return address
+    """The address without the station name in front of it: mBenzin's URLs repeat the name, without accents.
+
+    'Am oil Miličín' + 'Am oil Milicin parkoviste' -> 'parkoviste'; 'Davo-oil' + 'Davo oil' -> ''.
+    """
+    words = address.split()
+    name_words = re.findall(r"[^\W_]+", name)
+    if name_words and len(words) >= len(name_words) and all(
+        _fold(word.strip(".,-")) == _fold(part) for word, part in zip(words[: len(name_words)], name_words, strict=True)
+    ):
+        return " ".join(words[len(name_words):])
+    return " ".join(words)
 
 
-def station_title(name: str, address: str) -> str:
-    """'Orlen – Bratri Stefanu 69' from the station name and its address text."""
-    street = street_of(name, address)
-    return f"{name} – {street}" if street else name
+def station_title(name: str, street: str, city: str | None = None) -> str:
+    """'VS Petrol · Obory': the name, then the street, or the town when the station has no street."""
+    place = street or city
+    return f"{name} · {place}" if place else name
 
 
 def city_options(markers: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -470,13 +484,14 @@ def station_options(
         if value_counts[value] != 1:
             continue
         slug = station_slug(m)
-        label = station_title(m["name"], pretty(slug))
+        street = street_of(m["name"], pretty(slug))
+        label = station_title(m["name"], street)
         if use_url:
             address = m.get("address")
-            station_address = address.strip() if isinstance(address, str) and address.strip() else pretty(slug)
+            station_address = address.strip() if isinstance(address, str) and address.strip() else street
             station_id = m["url"].rstrip("/").rsplit("/", 1)[-1]
             label = (
-                f"{_bounded_text(m['name'], 64)} – {_bounded_text(station_address, 60)}"
+                f"{_bounded_text(station_title(m['name'], station_address), 100)}"
                 f" · {_bounded_text(pretty(city_of(m) or ''), 30)}"
                 f" · {_bounded_text(station_id, 32)}"
             )
@@ -662,12 +677,16 @@ def build_payload(
         slug = _safe_station_slug(m) or ""
         log = history.get(history_key(m), [])
         display_text = _bounded_text if gps_mode else lambda value: value
+        street = street_of(m["name"], pretty(slug))
+        town = pretty(city_of(m) or "")
         data = {
             "rank": rank,
             "name": display_text(m["name"]),
+            "title": display_text(station_title(m["name"], street, town)),
             "chain": display_text(m.get("chain") or m["name"]),
             "address": display_text(pretty(slug)),
-            "street": display_text(street_of(m["name"], pretty(slug))),
+            "street": display_text(street),
+            "city": display_text(town),
             "price": m["price"],
             "lat": m["lat"],
             "lng": m["lng"],

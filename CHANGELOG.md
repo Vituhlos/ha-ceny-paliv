@@ -4,6 +4,12 @@
 
 ### New
 
+- **Readable station names**: every station gets a `title` such as "VS Petrol · Obory" (the name and the street, or
+  the town when it has no street), a `street` without the repeated station name (also when mBenzin writes the name
+  without accents, as "Am oil Milicin parkoviste") and its `city`. The `station` attribute of the favourite and
+  position sensors, and so the card's favourite station, shows the title; list rows show the town for stations
+  without a street. Town names no longer keep a run of spaces ("Brandys nad Labem Stara Boleslav"). The
+  favourite-station choices use "·" instead of "–".
 - **Documentation** (quality scale: the Gold `docs-*` rules): the README, in English and Czech, now has use cases, how
   the data is updated, every attribute of every sensor, examples, known limitations and troubleshooting.
 - **Repairs** (quality scale: repair-issues): Settings → Repairs shows when a fuel has had no prices from mBenzin.cz

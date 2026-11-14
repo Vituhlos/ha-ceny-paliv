@@ -488,8 +488,8 @@ def test_options_filter_cities_and_stations(marker):
     markers = [marker("Shell-Jedna", 30, name="Shell"), marker("Orlen-Dva", 32, name="Orlen"), marker("Jina", 31, city="Brno")]
     assert city_options(markers) == [{"value": "Brno", "label": "Brno"}, {"value": "Praha", "label": "Praha"}]
     assert station_options(markers, "Praha") == [
-        {"value": "Orlen-Dva", "label": "Orlen – Dva"},
-        {"value": "Shell-Jedna", "label": "Shell – Jedna"},
+        {"value": "Orlen-Dva", "label": "Orlen · Dva"},
+        {"value": "Shell-Jedna", "label": "Shell · Jedna"},
     ]
 
 
@@ -1382,3 +1382,55 @@ async def test_key_that_aiohttp_refuses_as_header_is_invalid_auth():
     session.get.side_effect = ValueError("Newline or carriage return character detected in HTTP header")
     with pytest.raises(InvalidAuth):
         await async_fetch_markers(session, "bad\nkey", "n95")
+
+
+@pytest.mark.parametrize(
+    ("name", "address", "street"),
+    [
+        # mBenzin's URL repeats the station name without its accents
+        ("Benzina Kořenov", "Benzina Korenov parkoviste", "parkoviste"),
+        ("Orlen", "Orlen Bratri Stefanu 69", "Bratri Stefanu 69"),
+        ("Červený Mlýn", "Cerveny Mlyn Na Mlyne 5", "Na Mlyne 5"),
+        # a hyphenated name is two words in the URL; nothing is left when the URL is only the name
+        ("Tank-oil", "Tank oil ", ""),
+        ("VS Petrol", "VS Petrol", ""),
+        # an address that does not start with the whole name stays as it is
+        ("Shell Express", "Shell Prazska 1", "Shell Prazska 1"),
+        ("Orlen", "Prazska 1", "Prazska 1"),
+    ],
+)
+def test_street_drops_the_repeated_station_name(name, address, street):
+    from custom_components.ceny_paliv.api import street_of
+
+    assert street_of(name, address) == street
+
+
+def test_titles_name_the_station_by_street_or_town():
+    from custom_components.ceny_paliv.api import pretty, station_title
+
+    assert station_title("Petrol", "Prazska 310", "Neveklov") == "Petrol · Prazska 310"
+    assert station_title("VS Petrol", "", "Obory") == "VS Petrol · Obory"
+    assert station_title("VS Petrol", "") == "VS Petrol"
+    # "Brandýs nad Labem - Stará Boleslav" is "Brandys-nad-Labem---Stara-Boleslav" in mBenzin's links
+    assert pretty("Brandys-nad-Labem---Stara-Boleslav") == "Brandys nad Labem Stara Boleslav"
+
+
+def test_stations_carry_a_readable_title_and_their_town(marker, now):
+    markers = [
+        marker("Benzina-Korenov-parkoviste", 30, name="Benzina Kořenov", city="Brandys-nad-Labem---Stara-Boleslav"),
+        marker("VS-Petrol-", 31, name="VS Petrol", city="Obory"),
+    ]
+    for city in ("Brandys-nad-Labem---Stara-Boleslav", "Obory"):
+        stations = payload(markers, now, city=city)["stations"]
+        assert len(stations) == 1
+        station = stations[0]
+        if city == "Obory":
+            assert station["street"] == ""
+            assert station["title"] == "VS Petrol · Obory"
+            assert station["city"] == "Obory"
+        else:
+            assert station["street"] == "parkoviste"
+            assert station["title"] == "Benzina Kořenov · parkoviste"
+            assert station["city"] == "Brandys nad Labem Stara Boleslav"
+    city_name = payload(markers, now, city="Brandys-nad-Labem---Stara-Boleslav")["city_name"]
+    assert city_name == "Brandys nad Labem Stara Boleslav"

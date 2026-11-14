@@ -202,3 +202,32 @@ async def test_options_flow_offers_the_saved_logos_and_replaces_only_its_own(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options["logos"] == ["shell"]
     assert sync.await_args.args[3] == {"shell"}  # its own old choice is not kept by "other areas"
+
+
+async def test_an_automatic_title_with_the_old_spacing_still_follows_the_city(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    # before 0.6 every dash of "Brandys-nad-Labem---Stara-Boleslav" became a space in the automatic title
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Ceny paliv Brandys nad Labem   Stara Boleslav",
+        data={"key": "dummy", "city": "Brandys-nad-Labem---Stara-Boleslav"},
+        options={"fuels": ["n95"], "homes": {}},
+        unique_id="Brandys-nad-Labem---Stara-Boleslav",
+    )
+    entry.add_to_hass(hass)
+    markers = [marker("Levna", 33, city="Brandys-nad-Labem---Stara-Boleslav"), marker("Jina", 34, city="Jihlava")]
+    with (
+        patch(f"{FLOW}.async_fetch_markers", new=AsyncMock(return_value=markers)),
+        patch(f"{FLOW}.async_fetch_index", new=AsyncMock(return_value=None)),
+    ):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await _configure(hass, result["flow_id"], {"area_mode": "city"}, options=True)
+        assert {"value": "Brandys-nad-Labem---Stara-Boleslav", "label": "Brandys nad Labem Stara Boleslav"} in (
+            result["data_schema"].schema["city"].config["options"]
+        )
+        result = await _configure(hass, result["flow_id"], {"city": "Jihlava"}, options=True)
+        result = await _configure(hass, result["flow_id"], {"fuels": ["n95"], "language": "en"}, options=True)
+        result = await _configure(hass, result["flow_id"], {}, options=True)
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.title == "Ceny paliv Jihlava"

@@ -1204,8 +1204,9 @@ async def test_entities_share_the_area_device_and_translated_names(
             "sensor.ceny_paliv_cng_top5": "Ceny paliv Praha CNG · cheapest",
         }
         assert hass.states.get("sensor.ceny_paliv_cng_top5").attributes["unit_of_measurement"] == "Kč/kg"
-        # the station is no longer in the name, so the attribute carries it
-        assert hass.states.get("sensor.ceny_paliv_n95_2").attributes["station"]
+        # the station is no longer in the name: its readable title is in the attribute (no street: the town)
+        assert hass.states.get("sensor.ceny_paliv_n95_2").attributes["station"] == "Oblibena · Praha"
+        assert hass.states.get("sensor.ceny_paliv_n95_home").attributes["station"] == "Oblibena · Praha"
         assert await hass.config_entries.async_unload(entry.entry_id)
 
 
