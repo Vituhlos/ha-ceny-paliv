@@ -112,22 +112,26 @@ rules:
     status: exempt
     comment: No discovery.
   docs-data-update:
-    status: todo
+    status: done
+    comment: README "How the data is updated" (and the Czech README).
   docs-examples:
-    status: todo
-    comment: examples/price_alert.yaml exists but the README does not present examples.
+    status: done
+    comment: README "Examples" (three automations and a script; their templates were rendered with Home Assistant).
   docs-known-limitations:
-    status: todo
+    status: done
+    comment: README "Known limitations".
   docs-supported-devices:
     status: exempt
     comment: A web service, not devices.
   docs-supported-functions:
-    status: todo
-    comment: The entities are listed, their attributes are not.
+    status: done
+    comment: README "Entities" and "Attributes" describe every sensor and attribute; "Actions" the action.
   docs-troubleshooting:
-    status: todo
+    status: done
+    comment: README "Troubleshooting" (common problems, debug logging, diagnostics).
   docs-use-cases:
-    status: todo
+    status: done
+    comment: README "Use cases".
   dynamic-devices:
     status: exempt
     comment: >-
