@@ -57,7 +57,7 @@ For each fuel `<fuel>` (`n95`, `benzinplus`, `diesel`, `dieselplus`, `lpg`, `cng
 | `sensor.ceny_paliv_<fuel>_home` | price at your favourite station (only if you chose one); trends, rank, statistics |
 | `sensor.ceny_paliv_<fuel>_1` … `_5` | the 5 cheapest stations, with latitude/longitude for the map card |
 
-The position sensors are named after the station they currently show (for example `1 · Orlen – Bratri Stefanu 69`); existing entity IDs remain stable when changing area mode. Prices refresh every 6 hours. If a refresh fails (for example HTTP 429) the last data is kept and the attribute `fetch_error` says why. Nationwide data is shared between configurations with the same key and fuel for just under 6 hours, so every scheduled refresh downloads fresh data. GPS filtering and the in-area favourite selector use that same snapshot; changing the area does not create another mBenzin request. Manual refreshes and integration reloads reuse this in-memory cache; restarting Home Assistant clears it. Cached relative freshness labels are interpreted against the original response time in the Czech timezone, not the later cache-use time.
+Each configured area is a service device (named after the entry, for example `Ceny paliv Praha`) and its sensors have translated names under it, for example `Ceny paliv Praha Natural 95 · cheapest #1`; the station a position or favourite sensor currently shows is in its `station` attribute. Existing entity IDs remain stable when upgrading or changing area mode. Prices refresh every 6 hours. If a refresh fails (for example HTTP 429) the last data is kept and the attribute `fetch_error` says why. Nationwide data is shared between configurations with the same key and fuel for just under 6 hours, so every scheduled refresh downloads fresh data. GPS filtering and the in-area favourite selector use that same snapshot; changing the area does not create another mBenzin request. Manual refreshes and integration reloads reuse this in-memory cache; restarting Home Assistant clears it. Cached relative freshness labels are interpreted against the original response time in the Czech timezone, not the later cache-use time.
 
 ## 3. The dashboard card (included, nothing else to install)
 
@@ -126,7 +126,7 @@ The logos are trademarks of their owners, used only to identify the stations; th
 
 ## 5. Without the card: standard cards
 
-Every sensor is named after what it currently shows (for example `1 · Orlen – Bratri Stefanu 69`), so any standard card displays the station without a template. The names follow the ranking and update at each refresh; the entity ids stay the same. The one exception is the favourite sensor: choosing a different favourite station creates a new one (for example `_home_2`), so the statistics of two stations are never mixed (see Notes).
+Every sensor has a fixed, translated name (for example `Natural 95 · cheapest #1`); the address of the station it currently shows is in its `station` attribute and follows the ranking at each refresh, while the entity ids stay the same. The one exception is the favourite sensor: choosing a different favourite station creates a new one (for example `_home_2`), so the statistics of two stations are never mixed (see Notes).
 
 An **Entities** card with the 5 cheapest stations (the sensor state is the price):
 

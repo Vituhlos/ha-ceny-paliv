@@ -1,0 +1,18 @@
+{
+  "entity": {
+    "sensor": {
+      "cheapest": {
+        "default": "mdi:gas-station"
+      },
+      "favourite": {
+        "default": "mdi:gas-station-in-use"
+      },
+      "archived_favourite": {
+        "default": "mdi:archive"
+      },
+      "position": {
+        "default": "mdi:gas-station"
+      }
+    }
+  }
+}

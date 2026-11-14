@@ -906,7 +906,7 @@ class CenyPalivOptionsFlow(_FuelStationSteps, OptionsFlow):
     @callback
     def _update_favourite_registry(self, entry) -> None:
         """Disable favourite sensors archived by this change; re-enable a favourite that becomes active again."""
-        from .sensor import _sensor_unique_id  # noqa: PLC0415 - sensor imports the coordinator stack
+        from .entity import _sensor_unique_id  # noqa: PLC0415 - entity imports the coordinator stack
 
         registry = er.async_get(self.hass)
         before = {

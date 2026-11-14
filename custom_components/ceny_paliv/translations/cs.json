@@ -239,5 +239,21 @@
         "7": "Až 7 dní"
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "cheapest": {
+        "name": "{fuel} · nejlevnější"
+      },
+      "favourite": {
+        "name": "{fuel} · oblíbená stanice"
+      },
+      "archived_favourite": {
+        "name": "{fuel} · archivovaná oblíbená stanice"
+      },
+      "position": {
+        "name": "{fuel} · {position}. nejlevnější"
+      }
+    }
   }
 }
