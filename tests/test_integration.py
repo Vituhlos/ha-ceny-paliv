@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import EntityCategory
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -1026,7 +1027,11 @@ async def test_removed_legacy_favourite_reuses_only_its_original_registry_identi
             "sensor", DOMAIN, f"{entry.entry_id}_n95_home"
         )
         assert archived_id is not None
-        assert hass.states.get(archived_id).state == "unavailable"
+        # quality scale entity-category / entity-disabled-by-default: an archive only keeps statistics
+        archived_entry = registry.async_get(archived_id)
+        assert archived_entry.entity_category is EntityCategory.DIAGNOSTIC
+        assert archived_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+        assert hass.states.get(archived_id) is None
         assert not any(
             state.attributes.get("cp_config_id") == entry.entry_id
             and state.attributes.get("cp_role") == "home"
@@ -1725,3 +1730,54 @@ def test_every_setting_field_has_a_description():
             for name, step in steps.items():
                 assert set(step.get("data_description", {})) == set(step.get("data", {})), (language, section, name)
                 assert all(text.strip() for text in step.get("data_description", {}).values())
+
+
+async def test_removing_a_fuel_removes_its_sensors_but_not_another_areas(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    praha = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": "Praha"},
+        options={"fuels": ["n95", "diesel"], "homes": {"diesel": "Oblibena"}},
+        unique_id="Praha",
+    )
+    brno = MockConfigEntry(
+        domain=DOMAIN,
+        data={"key": "dummy", "city": "Brno"},
+        options={"fuels": ["diesel"], "homes": {}},
+        unique_id="Brno",
+    )
+    praha.add_to_hass(hass)
+    brno.add_to_hass(hass)
+    registry = er.async_get(hass)
+    snapshot = MarkerSnapshot(
+        markers=[marker("Oblibena", 35), marker("Levna", 33, city="Brno")], fetched_at=dt_util.now()
+    )
+
+    def fuels_of(entry):
+        return sorted(
+            {e.unique_id.split("_")[1] for e in er.async_entries_for_config_entry(registry, entry.entry_id)}
+        )
+
+    with patch("custom_components.ceny_paliv.coordinator.async_fetch_snapshot", new=AsyncMock(return_value=snapshot)):
+        assert await hass.config_entries.async_setup(praha.entry_id)  # sets up every area of the integration
+        await hass.async_block_till_done()
+        assert brno.state is ConfigEntryState.LOADED
+        assert fuels_of(praha) == ["diesel", "n95"]
+        diesel_ids = [
+            e.entity_id
+            for e in er.async_entries_for_config_entry(registry, praha.entry_id)
+            if "_diesel_" in e.unique_id
+        ]
+        assert len(diesel_ids) == 7  # top5, favourite and 5 positions
+
+        hass.config_entries.async_update_entry(praha, options={"fuels": ["n95"], "homes": {}})
+        await hass.async_block_till_done()
+
+        # gone from the registry and the state machine, not left behind as "unavailable"
+        assert fuels_of(praha) == ["n95"]
+        assert all(hass.states.get(entity_id) is None for entity_id in diesel_ids)
+        assert fuels_of(brno) == ["diesel"]
+        assert len(er.async_entries_for_config_entry(registry, brno.entry_id)) == 6
+    for entry in (praha, brno):
+        assert await hass.config_entries.async_unload(entry.entry_id)

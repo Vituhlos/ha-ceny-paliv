@@ -4,6 +4,11 @@
 
 ### New
 
+- **Removing a fuel removes its sensors** (in Configure), archived favourites included, instead of leaving them
+  behind as unavailable entities. Other areas are not touched.
+- **Archived favourite sensors are diagnostic and off by default** (quality scale: entity-category,
+  entity-disabled-by-default): they only keep the statistics of a former favourite. Choosing that station again
+  switches its sensor back on.
 - **Action `ceny_paliv.refresh`** (quality scale: action-setup, docs-actions, action-exceptions): loads the prices now,
   for one area or all of them. Prices downloaded less than 30 minutes ago are reused, so it cannot flood mBenzin.cz;
   if mBenzin.cz does not answer, prices still within their lifetime are kept. It reports what could not be refreshed.
