@@ -435,6 +435,36 @@ def street_of(name: str, address: str) -> str:
     return " ".join(words)
 
 
+def street_and_town(marker: dict[str, Any]) -> tuple[str, str]:
+    """The station's street and town, with accents from mBenzin's `addr` ('Selbská 15/2732, Aš') when it has one.
+
+    Without `addr` both come from the station's link, which has no accents ('Selbska 15/2732', 'As'). A village
+    address has no street ('Lhota 12'): then the whole address is the town and the street is empty.
+    """
+    name = marker["name"] if isinstance(marker.get("name"), str) else ""
+    slug_town = pretty(city_of(marker) or "")
+    addr = marker.get("addr")
+    if not isinstance(addr, str) or not " ".join(addr.split()):
+        return street_of(name, pretty(_safe_station_slug(marker) or "")), slug_town
+    parts = [" ".join(part.split()) for part in addr.split(",") if part.strip()]
+    # the town's words, without the house number mBenzin's links sometimes add ('Lhota-12')
+    town_words = _fold(slug_town).split()
+    while town_words and town_words[-1].isdigit():
+        town_words.pop()
+
+    def is_town(part: str) -> bool:
+        # whole words: 'Táborská 5' in Tábor is a street, 'Lhota 12' in Lhota is the village itself
+        return bool(town_words) and _fold(part).split()[: len(town_words)] == town_words
+
+    if len(parts) == 1:
+        if is_town(parts[0]):
+            return "", parts[0]  # a village: the town and a house number
+        return street_of(name, parts[0]), slug_town
+    # the town is the part that matches the town of the link, else the last one ('Pražská 310, Neveklov')
+    index = next((i for i in range(1, len(parts)) if is_town(parts[i])), len(parts) - 1)
+    return street_of(name, ", ".join(parts[:index])), parts[index]
+
+
 def station_title(name: str, street: str, city: str | None = None) -> str:
     """'VS Petrol · Obory': the name, then the street, or the town when the station has no street."""
     place = street or city
@@ -483,16 +513,13 @@ def station_options(
         value = m["url"] if use_url else station_slug(m)
         if value_counts[value] != 1:
             continue
-        slug = station_slug(m)
-        street = street_of(m["name"], pretty(slug))
-        label = station_title(m["name"], street)
+        street, town = street_and_town(m)
+        label = station_title(m["name"], street, town)
         if use_url:
-            address = m.get("address")
-            station_address = address.strip() if isinstance(address, str) and address.strip() else street
             station_id = m["url"].rstrip("/").rsplit("/", 1)[-1]
             label = (
-                f"{_bounded_text(station_title(m['name'], station_address), 100)}"
-                f" · {_bounded_text(pretty(city_of(m) or ''), 30)}"
+                f"{_bounded_text(station_title(m['name'], street), 100)}"
+                f" · {_bounded_text(town, 30)}"
                 f" · {_bounded_text(station_id, 32)}"
             )
         out.append({"value": value, "label": label})
@@ -677,14 +704,14 @@ def build_payload(
         slug = _safe_station_slug(m) or ""
         log = history.get(history_key(m), [])
         display_text = _bounded_text if gps_mode else lambda value: value
-        street = street_of(m["name"], pretty(slug))
-        town = pretty(city_of(m) or "")
+        street, town = street_and_town(m)
+        addr = m.get("addr")
         data = {
             "rank": rank,
             "name": display_text(m["name"]),
             "title": display_text(station_title(m["name"], street, town)),
             "chain": display_text(m.get("chain") or m["name"]),
-            "address": display_text(pretty(slug)),
+            "address": display_text(" ".join(addr.split()) if isinstance(addr, str) and addr.strip() else pretty(slug)),
             "street": display_text(street),
             "city": display_text(town),
             "price": m["price"],
@@ -801,8 +828,12 @@ def build_payload(
             {
                 "rank": index,
                 "name": _bounded_text(m["name"]),
-                "city": _bounded_text(pretty(city_of(m) or "")),
-                "address": _bounded_text(pretty(_safe_station_slug(m) or "")),
+                "city": _bounded_text(street_and_town(m)[1]),
+                "address": _bounded_text(
+                    " ".join(m["addr"].split())
+                    if isinstance(m.get("addr"), str) and m["addr"].strip()
+                    else pretty(_safe_station_slug(m) or "")
+                ),
                 "price": m["price"],
                 "lat": m["lat"],
                 "lng": m["lng"],

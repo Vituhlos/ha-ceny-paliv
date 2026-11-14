@@ -112,7 +112,7 @@ Všechny senzory ukazují cenu v Kč/l (CNG v Kč/kg) a nesou uvedení zdroje `C
 | `gps_nearest_stations` | GPS režim: nejvýše 10 nejbližších stanic, zkráceně (název, město, adresa, cena, souřadnice, datum, vzdálenost) |
 | `language`, `labels`, `logos` | jazyk karty, její texty a stažená loga |
 
-Každá stanice v `stations` (i v `home`) má `rank`, `name`, `title` (čitelný popis: název a ulice, a když stanice ulici nemá, obec, např. `VS Petrol · Obory`), `chain`, `street` (adresa bez opakovaného názvu stanice), `city`, `address` (text adresy od mBenzinu, který často začíná názvem stanice), `price`, `lat`, `lng`, `updated` (vlastní údaj mBenzinu, např. `Dnes`), `updated_date`, `maps` (odkaz do Google Maps), `home` (zda je to vaše oblíbená) a `trends`; v GPS režimu navíc `distance_km`. Ulice a obec pocházejí z odkazů mBenzinu na stanice, které jsou bez diakritiky. `trends` má klíče `1`, `2`, `7`, `14` a `30` (dny); každý je `null`, dokud neexistuje starší cena, jinak obsahuje `dir` (`up`, `down`, `flat`), `delta` (Kč), `ref_date` a `ref_price`.
+Každá stanice v `stations` (i v `home`) má `rank`, `name`, `title` (čitelný popis: název a ulice, a když stanice ulici nemá, obec, např. `VS Petrol · Obory`), `chain`, `street` (adresa bez opakovaného názvu stanice), `city`, `address` (adresa od mBenzinu, např. `Selbská 15/2732, Aš`), `price`, `lat`, `lng`, `updated` (vlastní údaj mBenzinu, např. `Dnes`), `updated_date`, `maps` (odkaz do Google Maps), `home` (zda je to vaše oblíbená) a `trends`; v GPS režimu navíc `distance_km`. Ulice a obec pocházejí z adresy od mBenzinu, s diakritikou; u stanice bez adresy z jejího odkazu, bez diakritiky. `trends` má klíče `1`, `2`, `7`, `14` a `30` (dny); každý je `null`, dokud neexistuje starší cena, jinak obsahuje `dir` (`up`, `down`, `flat`), `delta` (Kč), `ref_date` a `ref_price`.
 
 **`sensor.ceny_paliv_<palivo>_home`** — stav: cena u vaší oblíbené stanice; dlouhodobé statistiky (`state_class: measurement`).
 
@@ -335,7 +335,7 @@ i karty v dashboardech zůstanou. Při prvním startu se stane:
 - Karta si poslední známé ceny pamatuje **v každém prohlížeči zvlášť**: jiné zařízení nebo anonymní okno během výpadku nic neukáže.
 - Trendy potřebují historii: začnou den po přidání a 30denní je k dispozici po měsíci (hvězdička označuje kratší historii).
 - Názvy senzorů jsou pevné (např. „Natural 95 · 1. nejlevnější“); stanice je v atributu `station`.
-- Ulice a obce jsou bez diakritiky (odkazy mBenzinu na stanice ji nemají); názvy stanic ji mají.
+- Stanice, která na mBenzin.cz nemá adresu, ukazuje ulici a obec bez diakritiky (z jejího odkazu).
 - Texty jen v češtině a angličtině.
 
 ## Řešení potíží

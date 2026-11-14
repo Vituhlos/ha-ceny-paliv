@@ -106,7 +106,7 @@ All sensors show the price in Kč/l (CNG in Kč/kg) and carry the attribution `C
 | `gps_nearest_stations` | GPS mode: up to 10 nearest stations, compact (name, city, address, price, coordinates, date, distance) |
 | `language`, `labels`, `logos` | the card's language, its texts and the downloaded logos |
 
-Each station in `stations` (and `home`) has `rank`, `name`, `title` (a readable label: the name and the street, or the town when the station has no street, for example `VS Petrol · Obory`), `chain`, `street` (the address without the repeated station name), `city`, `address` (mBenzin's address text, which often starts with the station name), `price`, `lat`, `lng`, `updated` (mBenzin's own wording, for example `Dnes`), `updated_date`, `maps` (a Google Maps link), `home` (whether it is your favourite) and `trends`; in GPS mode also `distance_km`. The street and the town come from mBenzin's station links, which are written without accents. `trends` has the keys `1`, `2`, `7`, `14` and `30` (days); each is `null` until there is an earlier price, otherwise `dir` (`up`, `down`, `flat`), `delta` (Kč), `ref_date` and `ref_price`.
+Each station in `stations` (and `home`) has `rank`, `name`, `title` (a readable label: the name and the street, or the town when the station has no street, for example `VS Petrol · Obory`), `chain`, `street` (the address without the repeated station name), `city`, `address` (mBenzin's address, for example `Selbská 15/2732, Aš`), `price`, `lat`, `lng`, `updated` (mBenzin's own wording, for example `Dnes`), `updated_date`, `maps` (a Google Maps link), `home` (whether it is your favourite) and `trends`; in GPS mode also `distance_km`. The street and the town come from mBenzin's address, with accents; for a station without one, from its link, without accents. `trends` has the keys `1`, `2`, `7`, `14` and `30` (days); each is `null` until there is an earlier price, otherwise `dir` (`up`, `down`, `flat`), `delta` (Kč), `ref_date` and `ref_price`.
 
 **`sensor.ceny_paliv_<fuel>_home`** — state: the price at your favourite station; long-term statistics (`state_class: measurement`).
 
@@ -329,7 +329,7 @@ carry over. What happens on the first start:
 - The card remembers the last known prices **per browser**: another device or a private window shows nothing during an outage.
 - Trends need history: they start the day after setup and reach 30 days after a month (a `*` marks a shorter history).
 - Sensor names are fixed (for example "Natural 95 · cheapest #1"); the station is in the `station` attribute.
-- Streets and towns are written without accents (mBenzin's station links have none); station names keep theirs.
+- A station without an address at mBenzin.cz shows its street and town without accents (taken from its link).
 - Texts in English and Czech only.
 
 ## Troubleshooting
