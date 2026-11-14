@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
+
+Quality foundation: the integration now meets the **Gold** tier of the Home Assistant integration quality scale
+(self-assessed in `quality_scale.yaml`: Bronze 19/20, Silver 10/10, Gold 21/21; the last Bronze rule needs the
+aiombenzin library planned for 0.7).
 
 Upgrading from 0.5 needs no action: entity ids, history, statistics and settings carry over (see the README,
 "Upgrading from 0.5"). The breaking changes are marked below.
@@ -60,6 +64,13 @@ Upgrading from 0.5 needs no action: entity ids, history, statistics and settings
   replace it with `https://github.com/Vituhlos/ha-ceny-paliv` to keep getting updates.
 - Every setup and Configure field now has a short description, in English and Czech.
 - The README describes every setting in a table and how to remove the integration.
+
+### Known limitations
+
+- Validated with offline tests on Home Assistant 2025.1 and 2026.10 (248 tests, 98 % coverage) and CI; checked on a
+  live Home Assistant only after release. The card's changes (warning during outages, the station's statistics in the
+  graph, the town in list rows) were not shown on a demo page before release.
+- Streets and towns have no accents; whether mBenzin.cz sends them elsewhere is shown by the diagnostics of this version.
 
 ## 0.5.3
 

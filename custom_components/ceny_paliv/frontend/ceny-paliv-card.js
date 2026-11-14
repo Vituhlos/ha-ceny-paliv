@@ -19,7 +19,7 @@
  *
  * Texts come from the language chosen in the integration setup (attribute `labels` of the top5 sensor).
  */
-const CARD_VERSION = '0.5.3';
+const CARD_VERSION = '0.6.0';
 
 const PARTS = ['home', 'list', 'map', 'graph'];
 
