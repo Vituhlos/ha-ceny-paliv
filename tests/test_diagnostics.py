@@ -57,7 +57,11 @@ async def test_city_diagnostics_show_the_refresh_without_the_key_or_favourite(
         unique_id="Praha",
     )
     entry.add_to_hass(hass)
-    snapshot = MarkerSnapshot(markers=[marker("Oblibena", 35), marker("Levna", 33)], fetched_at=dt_util.now())
+    # mBenzin's list is nationwide: its first station is somewhere else than the user's area
+    elsewhere = {**marker("Daleko", 30, city="Brno"), "address": "Česká 1", "extra": {"nested": True}}
+    snapshot = MarkerSnapshot(
+        markers=[elsewhere, marker("Oblibena", 35), marker("Levna", 33)], fetched_at=dt_util.now()
+    )
     with patch("custom_components.ceny_paliv.coordinator.async_fetch_snapshot", new=AsyncMock(return_value=snapshot)):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
@@ -82,6 +86,13 @@ async def test_city_diagnostics_show_the_refresh_without_the_key_or_favourite(
     assert n95["home_found"] is True
     assert n95["home_rank"] == 2
     assert n95["gps_nearest_stations"] == 0
+    # which fields mBenzin sends, with a sample that is not a station of the area
+    markers = data["mbenzin_markers"]["n95"]
+    assert markers["count"] == 3
+    assert markers["fields"] == ["address", "extra", "fresh", "lat", "lng", "name", "price", "url"]
+    assert markers["sample"]["url"] == "/Ceny-benzinu-a-nafty/Brno/Daleko/123"
+    assert markers["sample"]["address"] == "Česká 1"
+    assert "extra" not in markers["sample"]  # only plain values are copied
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

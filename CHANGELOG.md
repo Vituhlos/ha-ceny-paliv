@@ -4,6 +4,9 @@
 
 ### New
 
+- **Diagnostics show what mBenzin.cz sends**: the field names of its stations per fuel, their number, and one example
+  station (the first of the nationwide list, never one of your area). This tells whether a field could give the
+  streets and towns their accents.
 - **Price history per station** in Home Assistant's long-term statistics: the favourite station's price is recorded
   under the station itself (`ceny_paliv:<fuel>_<station id>`), with the up to 35 days the integration already kept.
   Choosing another favourite, choosing a station again, or removing and adding the integration no longer loses or
