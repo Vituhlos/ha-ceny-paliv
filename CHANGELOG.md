@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- **Unusual text from mBenzin.cz can no longer stall Home Assistant**: cutting the house number off a town used a
+  regular expression that needed minutes for a long run of numbers (found by an automated security review before
+  release); it now works word by word. A freshness text longer than 40 characters is treated as unknown.
 - **Towns without house numbers**: mBenzin.cz writes the house number after the town ("silnice 6, Bochov 213"), and
   some station links do too; the `city` of a station is now just the town ("Bochov"). A village without streets keeps
   its address line ("Lhota 12") as the street, so the card shows it as before. The full address stays in `address`.
