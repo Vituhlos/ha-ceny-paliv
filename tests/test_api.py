@@ -1441,8 +1441,17 @@ def test_stations_carry_a_readable_title_and_their_town(marker, now):
     [
         # mBenzin's address: street, comma, town, with accents
         ("F1-Gas-Selbska-152732", "As", "F1 Gas", "Selbská 15/2732, Aš", "Selbská 15/2732", "Aš"),
-        # a village without streets: the town and a house number, no street
-        ("Benzina-", "Lhota-12", "Benzina", "Lhota 12", "", "Lhota 12"),
+        # a village without streets is addressed by its name and number: that is the street, the village the town
+        ("Benzina-", "Lhota-12", "Benzina", "Lhota 12", "Lhota 12", "Lhota"),
+        # a village without a number has no street at all
+        ("Tank-oil-", "Morina", "Tank-oil", "Mořina", "", "Mořina"),
+        # a road address: the house number after the town is not part of the town
+        ("EuroOil-silnice-6", "Bochov-213", "EuroOil", "silnice 6, Bochov 213", "silnice 6", "Bochov"),
+        # a street named like its own village stays a street
+        ("Benzina-Kunstat-307", "Kunstat", "Benzina", "Kunštát 307, Kunštát", "Kunštát 307", "Kunštát"),
+        # a town written with a spaced hyphen
+        ("MOL-Mlada-Boleslav", "Brandys-nad-Labem---Stara-Boleslav", "MOL", "Mladoboleslavská, Brandýs nad Labem - Stará Boleslav",
+         "Mladoboleslavská", "Brandýs nad Labem - Stará Boleslav"),
         # a street without the town: the town comes from the link
         ("Petrol-Prazska-310", "Neveklov", "Petrol", "Pražská 310", "Pražská 310", "Neveklov"),
         # more parts: the town is the one that matches the link, the rest is the street
@@ -1456,8 +1465,8 @@ def test_stations_carry_a_readable_title_and_their_town(marker, now):
         ("Shell-Taborska-5", "Tabor", "Shell", "Táborská 5", "Táborská 5", "Tabor"),
         ("Shell-Taborska-5", "Tabor", "Shell", "Táborská 5, Tábor", "Táborská 5", "Tábor"),
         # a town of several words, with the house number the link adds
-        ("Silmet-", "Krasna-Hora-nad-Vltavou-38", "Silmet", "Krásná Hora nad Vltavou 38", "",
-         "Krásná Hora nad Vltavou 38"),
+        ("Silmet-", "Krasna-Hora-nad-Vltavou-38", "Silmet", "Krásná Hora nad Vltavou 38", "Krásná Hora nad Vltavou 38",
+         "Krásná Hora nad Vltavou"),
     ],
 )
 def test_street_and_town_come_from_mbenzins_address(marker, slug, city, name, addr, street, town):
@@ -1473,6 +1482,9 @@ def test_without_an_address_street_and_town_come_from_the_link(marker, addr):
 
     station = {**marker("Orlen-Bratri-Stefanu-69", 30, name="Orlen", city="Hradec-Kralove"), "addr": addr}
     assert street_and_town(station) == ("Bratri Stefanu 69", "Hradec Kralove")
+    # the house number some links add to the town is dropped too
+    village = {**marker("Benzina-", 30, name="Benzina", city="Lhota-12"), "addr": addr}
+    assert street_and_town(village) == ("", "Lhota")
 
 
 def test_stations_show_mbenzins_address_with_accents(marker, now):
@@ -1481,5 +1493,5 @@ def test_stations_show_mbenzins_address_with_accents(marker, now):
     stations = payload([with_addr, village], now)["stations"]
     assert [(s["title"], s["street"], s["city"], s["address"]) for s in stations] == [
         ("Petrol · Pražská 310", "Pražská 310", "Praha", "Pražská 310, Praha"),
-        ("VS Petrol · Praha 97", "", "Praha 97", "Praha 97"),
+        ("VS Petrol · Praha 97", "Praha 97", "Praha", "Praha 97"),
     ]
