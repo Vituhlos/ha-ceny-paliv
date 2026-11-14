@@ -13,10 +13,12 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EntityCategory
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import FUELS, TOP
+from .const import DOMAIN, FUELS, TOP
 from .coordinator import CenyPalivConfigEntry
 from .entity import CenyPalivEntity
 
@@ -59,11 +61,14 @@ HOME_ATTRIBUTES = (
 
 async def async_setup_entry(hass: HomeAssistant, entry: CenyPalivConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator = entry.runtime_data
+    _async_remove_unconfigured_fuels(hass, entry, coordinator.fuels)
     entities: list[CenyPalivSensor] = []
     for fuel in coordinator.fuels:
         entities.append(CenyPalivTop5Sensor(coordinator, entry, fuel))
         if coordinator.homes.get(fuel):
-            entities.append(CenyPalivHomeSensor(coordinator, entry, fuel))
+            home = CenyPalivHomeSensor(coordinator, entry, fuel)
+            _async_enable_active_favourite(hass, home.unique_id)
+            entities.append(home)
         existing_ids = {entity.unique_id for entity in entities}
         for record in coordinator.home_history.get(fuel, []):
             archived = CenyPalivArchivedHomeSensor(
@@ -78,6 +83,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: CenyPalivConfigEntry, as
                 existing_ids.add(archived.unique_id)
         entities.extend(CenyPalivPositionSensor(coordinator, entry, fuel, i) for i in range(TOP))
     async_add_entities(entities)
+
+
+@callback
+def _async_remove_unconfigured_fuels(hass: HomeAssistant, entry: CenyPalivConfigEntry, fuels: list[str]) -> None:
+    """A fuel removed in Configure takes its sensors (archived favourites too) instead of leaving them unavailable."""
+    registry = er.async_get(hass)
+    prefix = f"{entry.entry_id}_"
+    for registered in er.async_entries_for_config_entry(registry, entry.entry_id):
+        # unique ids are <entry id>_<fuel>_<suffix>[_<station digest>] (entity.py); fuel codes have no "_"
+        if registered.unique_id.startswith(prefix) and registered.unique_id[len(prefix):].split("_")[0] not in fuels:
+            registry.async_remove(registered.entity_id)
+
+
+@callback
+def _async_enable_active_favourite(hass: HomeAssistant, unique_id: str) -> None:
+    """A favourite chosen again reuses its archived sensor, which the integration had switched off."""
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+    registered = registry.async_get(entity_id) if entity_id else None
+    if registered and registered.disabled_by is er.RegistryEntryDisabler.INTEGRATION:
+        registry.async_update_entity(entity_id, disabled_by=None)
 
 
 class CenyPalivSensor(CenyPalivEntity, SensorEntity):
@@ -152,6 +178,9 @@ class CenyPalivArchivedHomeSensor(CenyPalivSensor):
     """Keep retired favourite sensor identities registered without mixing station statistics."""
 
     _attr_translation_key = "archived_favourite"
+    # it only keeps the statistics of a former favourite: out of the dashboards, and off when first registered
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, coordinator, entry, fuel: str, identity: str, legacy: bool) -> None:

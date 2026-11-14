@@ -129,15 +129,23 @@ rules:
   docs-use-cases:
     status: todo
   dynamic-devices:
-    status: todo
-    comment: The single area device is created with its entry; still to decide whether the rule is exempt.
+    status: exempt
+    comment: >-
+      The only device is the area itself (a service device), created with its config entry; mBenzin.cz has no
+      devices that could appear later. New fuels are entities on it, added when Configure reloads the entry.
   entity-category:
-    status: todo
+    status: done
+    comment: >-
+      The archived favourite sensor is a diagnostic entity; the price sensors are the integration's primary data,
+      so they have no category.
   entity-device-class:
     status: exempt
     comment: Home Assistant has no device class for a price per litre or kilogram.
   entity-disabled-by-default:
-    status: todo
+    status: done
+    comment: >-
+      Archived favourites are disabled by default (only their statistics matter). The position sensors stay enabled:
+      the card's map draws them.
   entity-translations:
     status: done
     comment: entity.sensor.* names in translations/en.json and cs.json, with {fuel} and {position} placeholders.
@@ -155,8 +163,10 @@ rules:
   repair-issues:
     status: todo
   stale-devices:
-    status: todo
-    comment: The area device goes with its entry; still to decide whether the rule is exempt.
+    status: exempt
+    comment: >-
+      The only device is the area, removed with its config entry, so it cannot become stale. The sensors of a fuel
+      removed in Configure are removed from the registry at setup (sensor.py).
 
   # Platinum
   async-dependency:
