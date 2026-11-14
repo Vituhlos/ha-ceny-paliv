@@ -56,6 +56,7 @@ HOME_ATTRIBUTES = (
     "trends",
     "maps",
     "distance_km",
+    "statistic_id",
 )
 
 

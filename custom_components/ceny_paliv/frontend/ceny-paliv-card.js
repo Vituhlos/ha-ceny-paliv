@@ -534,11 +534,14 @@ class CenyPalivCard extends HTMLElement {
       kids.push({ id: 'map', cls: this._mapHeight ? 'map fixed' : 'map', config: { type: 'map', theme_mode: 'auto', auto_fit: true, default_zoom: 12, hours_to_show: 0, entities } });
     }
     if (this._show.includes('graph') && hasHome) {
+      // the station's own statistics (kept per station by the integration since 0.6), else the sensor's
+      const home = this._hass.states[this._ids.home];
+      const statistic = (home && home.attributes && home.attributes.statistic_id) || this._ids.home;
       kids.push({
         id: 'graph',
         cls: 'graph',
         config: {
-          type: 'statistics-graph', title: '30 d', entities: [this._ids.home], days_to_show: 30, period: 'day',
+          type: 'statistics-graph', title: '30 d', entities: [statistic], days_to_show: 30, period: 'day',
           chart_type: 'line', stat_types: ['mean', 'min', 'max'],
         },
       });

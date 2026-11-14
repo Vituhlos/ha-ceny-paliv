@@ -1,6 +1,9 @@
 {
   "domain": "ceny_paliv",
   "name": "Ceny paliv",
+  "after_dependencies": [
+    "recorder"
+  ],
   "codeowners": [
     "@Vituhlos"
   ],

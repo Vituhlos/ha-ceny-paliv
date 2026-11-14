@@ -116,6 +116,7 @@ Each station in `stations` (and `home`) has `rank`, `name`, `title` (a readable 
 | `updated`, `updated_date`, `age_days` | when the station last updated its price |
 | `rank`, `fresh_count`, `vs_cheapest`, `cheapest_name` | its rank among the up-to-date stations, how many there are, how much more it costs than the cheapest one and which that is |
 | `trends` | as above |
+| `statistic_id` | the station's own long-term statistics, for example `ceny_paliv:n95_3fa2b1c4d5e6` (see below) |
 
 **`sensor.ceny_paliv_<fuel>_1` … `_5`** — state: the price of the n-th cheapest station; attributes `station` (the readable title), `price`, `latitude` and `longitude` for the map (no coordinates when that station is your favourite, which the favourite sensor draws). A position without a station is `unknown`.
 
@@ -127,7 +128,8 @@ Each station in `stations` (and `home`) has `rank`, `name`, `title` (a readable 
 - **HTTP 429** (too many requests): every fuel of that key waits for mBenzin's `Retry-After` (at most 24 hours), or just under 6 hours without it. The wait is kept in memory only.
 - **When mBenzin.cz cannot be reached** for a fuel, its sensors are unavailable until the next successful refresh; the failure and the recovery are logged once, and after 24 hours without prices **Settings → Repairs** says so. The card keeps showing the last known prices with a warning.
 - **Prices count only while fresh**: today and yesterday by default (CNG 3 days, LPG and AdBlue 7), or up to 3 or 7 days with "Show older prices too". mBenzin's relative dates ("Dnes", "Včera") are read against the time of the download in Czech time.
-- **Trends**: once a day the prices are stored locally (`.storage/ceny_paliv.<entry id>`, kept 35 days): in City mode of every station of the city, in GPS mode of the five shown and the favourite. The trends compare with that log. The favourite sensor's price also goes to Home Assistant's long-term statistics.
+- **Trends**: once a day the prices are stored locally (`.storage/ceny_paliv.<entry id>`, kept 35 days): in City mode of every station of the city, in GPS mode of the five shown and the favourite. The trends compare with that log.
+- **Long-term statistics per station**: at each refresh the favourite station's price is written to Home Assistant's long-term statistics under the station itself (`ceny_paliv:<fuel>_<station id>`, named for example "Natural 95 · VS Petrol · Obory"), together with the up to 35 days of its daily log. They do not belong to a sensor or an area: choosing another favourite starts that station's own statistics, choosing a station again continues its history, and removing and adding the integration keeps it. The card's 30-day graph shows them; the favourite sensor still has its own statistics too.
 
 ## 3. The dashboard card (included, nothing else to install)
 
@@ -297,7 +299,7 @@ Replace `notify.mobile_app_YOUR_PHONE` with your notify action, and the entity i
 
 ## Removing the integration
 
-1. **Settings → Devices & services → Ceny paliv**, then **⋮ → Delete** for each configured area. Its sensors and its stored price history are deleted with it.
+1. **Settings → Devices & services → Ceny paliv**, then **⋮ → Delete** for each configured area. Its sensors and its stored price history are deleted with it. The long-term statistics of your favourite stations stay in Home Assistant (to delete them: **Developer tools → Statistics**, search `ceny_paliv`).
 2. Remove the `custom:ceny-paliv-card` cards from your dashboards. The card is served by the integration, so there is nothing else to uninstall.
 3. **HACS → Ceny paliv → ⋮ → Remove**, then restart Home Assistant.
 4. Optionally delete the folder `ceny_paliv_logos` in your Home Assistant configuration folder: downloaded logos are not removed automatically.

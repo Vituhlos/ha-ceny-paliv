@@ -632,3 +632,27 @@ test("the last known states survive a page reload in this browser only", () => {
   const blocked = { get localStorage() { throw new Error("blocked"); } };
   assert.equal(load(blocked)({ states: { [id]: unavailable() } }).states[id].state, "unavailable");
 });
+
+test("the 30-day graph shows the station's own statistics, or the sensor's before 0.6", async () => {
+  const configs = [];
+  context.window.loadCardHelpers = async () => ({
+    createCardElement: (config) => { configs.push(config); return new Element(); },
+  });
+  const graphOf = async (attributes) => {
+    configs.length = 0;
+    const card = {
+      _extraReady: false,
+      _hass: { states: { "sensor.home": { state: "38.9", attributes } } },
+      _ids: { home: "sensor.home", pos: [] },
+      _show: ["graph"],
+      _n: 5,
+      _mapHeight: 0,
+      _children: null,
+      shadowRoot: { getElementById: () => ({ replaceChildren() {}, appendChild() {} }) },
+    };
+    await CenyPalivCard.prototype._buildExtra.call(card);
+    return Array.from(configs.find((c) => c.type === "statistics-graph").entities);
+  };
+  assert.deepEqual(await graphOf({ statistic_id: "ceny_paliv:n95_0123456789ab" }), ["ceny_paliv:n95_0123456789ab"]);
+  assert.deepEqual(await graphOf({}), ["sensor.home"]);
+});

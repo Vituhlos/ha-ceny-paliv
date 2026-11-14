@@ -770,6 +770,8 @@ def build_payload(
             if kept:
                 home["cheapest_name"] = _bounded_text(kept[0][0]["name"]) if gps_mode else kept[0][0]["name"]
                 home["vs_cheapest"] = round(m["price"] - kept[0][0]["price"], 2)
+        if home is not None:
+            home["url"] = m["url"]  # the station's identity, for its long-term statistics (statistics.py)
 
     stamp = fetched_stamp.isoformat(timespec="seconds")
     result = {

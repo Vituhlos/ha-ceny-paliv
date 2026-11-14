@@ -52,6 +52,7 @@ from .const import (
     UPDATE_INTERVAL,
 )
 from .geography import distance_km
+from .statistics import async_import_station_statistics
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -293,6 +294,11 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 legacy_city=self.config_entry.data.get(CONF_CITY),
                 max_age_days=self.config_entry.options.get(CONF_MAX_AGE_DAYS),
             )
+            if (home := result[fuel].get("home")) is not None:
+                # the favourite's price history, kept per station whatever happens to entities or entries
+                home["statistic_id"] = async_import_station_statistics(
+                    self.hass, fuel, home, self._history[fuel].get(home.get("url"), []), now
+                )
 
         if self.fuels and len(auth_errors) == len(self.fuels):
             self._key_rejections += 1

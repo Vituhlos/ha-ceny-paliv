@@ -122,6 +122,7 @@ Každá stanice v `stations` (i v `home`) má `rank`, `name`, `title` (čitelný
 | `updated`, `updated_date`, `age_days` | kdy stanice naposledy aktualizovala cenu |
 | `rank`, `fresh_count`, `vs_cheapest`, `cheapest_name` | její pořadí mezi stanicemi s aktuální cenou, kolik jich je, o kolik je dražší než nejlevnější a která to je |
 | `trends` | jako výše |
+| `statistic_id` | vlastní dlouhodobé statistiky stanice, např. `ceny_paliv:n95_3fa2b1c4d5e6` (viz níže) |
 
 **`sensor.ceny_paliv_<palivo>_1` … `_5`** — stav: cena n-té nejlevnější stanice; atributy `station` (čitelný popis), `price`, `latitude` a `longitude` pro mapu (bez souřadnic, když je to vaše oblíbená stanice, kterou kreslí senzor oblíbené stanice). Pozice bez stanice má stav `unknown`.
 
@@ -133,7 +134,8 @@ Každá stanice v `stations` (i v `home`) má `rank`, `name`, `title` (čitelný
 - **HTTP 429** (příliš mnoho požadavků): všechna paliva daného klíče počkají na hodnotu `Retry-After` od mBenzinu (nejvýše 24 hodin), bez ní necelých 6 hodin. Čekání se drží jen v paměti.
 - **Když mBenzin.cz pro palivo neodpoví**, jeho senzory budou do příští úspěšné aktualizace nedostupné; výpadek i obnova se zalogují jen jednou a po 24 hodinách bez cen to ohlásí **Nastavení → Opravy**. Karta dál ukazuje poslední známé ceny s upozorněním.
 - **Započítají se jen čerstvé ceny**: ve výchozím stavu dnešní a včerejší (CNG 3 dny, LPG a AdBlue 7), s volbou „Zobrazit i starší ceny“ až 3 nebo 7 dní. Relativní údaje mBenzinu („Dnes“, „Včera“) se vyhodnocují podle času stažení v českém čase.
-- **Trendy**: jednou denně se ceny uloží místně (`.storage/ceny_paliv.<id záznamu>`, drží se 35 dní): v městském režimu všech stanic města, v GPS režimu pěti zobrazených a oblíbené. Trendy se počítají z tohoto záznamu. Cena oblíbené stanice se navíc ukládá do dlouhodobých statistik Home Assistantu.
+- **Trendy**: jednou denně se ceny uloží místně (`.storage/ceny_paliv.<id záznamu>`, drží se 35 dní): v městském režimu všech stanic města, v GPS režimu pěti zobrazených a oblíbené. Trendy se počítají z tohoto záznamu.
+- **Dlouhodobé statistiky podle stanice**: při každé aktualizaci se cena oblíbené stanice zapíše do dlouhodobých statistik Home Assistantu přímo pod stanici (`ceny_paliv:<palivo>_<id stanice>`, s názvem např. „Natural 95 · VS Petrol · Obory“), spolu s až 35 dny jejího denního záznamu. Nepatří k žádnému senzoru ani oblasti: výběr jiné oblíbené stanice založí statistiky té stanice, opětovný výběr stanice naváže na její historii a odebrání a nové přidání integrace ji zachová. Graf za 30 dní v kartě ukazuje právě je; senzor oblíbené stanice má dál i své vlastní statistiky.
 
 ## 3. Karta pro dashboard (je součástí, nic dalšího se neinstaluje)
 
@@ -303,7 +305,7 @@ Místo `notify.mobile_app_VAS_TELEFON` použijte svou akci pro upozornění a m�
 
 ## Odebrání integrace
 
-1. **Nastavení → Zařízení a služby → Ceny paliv**, u každé nastavené oblasti **⋮ → Smazat** (anglicky Delete). Spolu s ní se smažou její senzory i uložená historie cen.
+1. **Nastavení → Zařízení a služby → Ceny paliv**, u každé nastavené oblasti **⋮ → Smazat** (anglicky Delete). Spolu s ní se smažou její senzory i uložená historie cen. Dlouhodobé statistiky vašich oblíbených stanic v Home Assistantu zůstanou (smazat je můžete v **Vývojářské nástroje → Statistiky**, hledejte `ceny_paliv`).
 2. Odstraňte z dashboardů karty `custom:ceny-paliv-card`. Kartu poskytuje sama integrace, nic dalšího se neodinstalovává.
 3. **HACS → Ceny paliv → ⋮ → Odebrat** (Remove) a restartujte Home Assistant.
 4. Volitelně smažte složku `ceny_paliv_logos` v konfiguraci Home Assistantu: stažená loga se automaticky neodstraňují.
