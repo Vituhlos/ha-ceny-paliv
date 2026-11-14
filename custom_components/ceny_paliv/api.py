@@ -435,12 +435,16 @@ def street_of(name: str, address: str) -> str:
     return " ".join(words)
 
 
-_HOUSE_NUMBER = re.compile(r"(?:\s+\d+[\w/]*)+$")
-
-
 def _without_house_number(town: str) -> str:
-    """'Bochov 213' -> 'Bochov': mBenzin puts the house number after the town."""
-    return _HOUSE_NUMBER.sub("", town).strip() or town
+    """'Bochov 213' -> 'Bochov': mBenzin puts the house number after the town.
+
+    Word by word on purpose: the text comes from mBenzin, and a regular expression for this backtracks badly on a
+    long run of numbers.
+    """
+    words = town.split()
+    while len(words) > 1 and words[-1][:1].isdigit():
+        words.pop()
+    return " ".join(words) or town
 
 
 def street_and_town(marker: dict[str, Any]) -> tuple[str, str]:
@@ -544,6 +548,8 @@ def _bounded_text(value: Any, limit: int = _MAX_ATTRIBUTE_TEXT) -> str:
 def parse_fresh(value: str | None, today: dt.date) -> dt.date | None:
     """mBenzin 'fresh' field -> date. Returns None when the format is unknown."""
     raw = value.strip() if isinstance(value, str) else ""
+    if len(raw) > 40:  # "před 3 dny" is short; a long text would make the search below slow, not right
+        return None
     low = raw.lower()
     if low == "dnes":
         return today
