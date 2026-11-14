@@ -116,19 +116,10 @@ def _valid_coordinates(latitude: Any, longitude: Any) -> bool:
 def _station_slug(marker: dict[str, Any]) -> str | None:
     if not isinstance(marker, dict) or not isinstance(marker.get("url"), str):
         return None
-    try:
-        parts = marker["url"].split("/")
-        if (
-            len(parts) < 5
-            or parts[1] != "Ceny-benzinu-a-nafty"
-            or not parts[2]
-            or not parts[3]
-            or not parts[4]
-        ):
-            return None
-        return parts[3]
-    except (KeyError, IndexError, AttributeError, TypeError):
+    parts = marker["url"].split("/")
+    if len(parts) < 5 or parts[1] != "Ceny-benzinu-a-nafty" or not all(parts[2:5]):
         return None
+    return parts[3]
 
 
 class _FuelStationSteps:
@@ -235,14 +226,11 @@ class _FuelStationSteps:
                             area_markers = [m for m in markers if city_of(m) == self._city]
                         elif gps_center is None:
                             area_markers = []
-                        else:
-                            try:
-                                area_markers = stations_within_radius(
-                                    markers, *gps_center,
-                                    getattr(self, "_gps_radius_km", DEFAULT_GPS_RADIUS_KM),
-                                )
-                            except (TypeError, ValueError, OverflowError):
-                                area_markers = []
+                        else:  # centre and radius were validated by their steps, so this cannot raise
+                            area_markers = stations_within_radius(
+                                markers, *gps_center,
+                                getattr(self, "_gps_radius_km", DEFAULT_GPS_RADIUS_KM),
+                            )
                         chains |= {
                             m.get("chain")
                             if isinstance(m.get("chain"), str)
@@ -503,10 +491,7 @@ class _FuelStationSteps:
     async def async_step_gps_radius(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            try:
-                radius = float(user_input[CONF_GPS_RADIUS_KM])
-            except (TypeError, ValueError):
-                radius = 0
+            radius = float(user_input[CONF_GPS_RADIUS_KM])  # the number selector already made it a number
             if not math.isfinite(radius) or not MIN_RADIUS_KM <= radius <= MAX_RADIUS_KM:
                 errors[CONF_GPS_RADIUS_KM] = "invalid_radius"
             else:
