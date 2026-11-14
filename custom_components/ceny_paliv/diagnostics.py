@@ -62,6 +62,8 @@ async def async_get_config_entry_diagnostics(
                 "failed_fuels": sorted(coordinator.failed_fuels),
             },
             "fuels": fuels,
+            # what mBenzin sends, to see whether a field could improve the integration (for example accents)
+            "mbenzin_markers": coordinator.marker_fields,
         },
         TO_REDACT,
     )
