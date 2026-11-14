@@ -99,7 +99,10 @@ rules:
     status: done
     comment: One service device per config entry (area), named after the entry, manufacturer mBenzin.cz.
   diagnostics:
-    status: todo
+    status: done
+    comment: >-
+      diagnostics.py: settings, coordinator state and per-fuel refresh summary; the key, GPS centre and favourite
+      stations are redacted (tests/test_diagnostics.py downloads it through the HTTP API).
   discovery:
     status: exempt
     comment: mBenzin.cz is a web service; there is nothing to discover on the network.
