@@ -303,6 +303,20 @@ sequence:
 
 Místo `notify.mobile_app_VAS_TELEFON` použijte svou akci pro upozornění a místo ID entit svá (Nastavení → Entity, hledejte „Ceny paliv“).
 
+## Přechod z 0.5
+
+Není potřeba nic dělat: aktualizujte v HACS a restartujte Home Assistant. ID entit, historie, statistiky, nastavení
+i karty v dashboardech zůstanou. Při prvním startu se stane:
+
+- Každá oblast se stane zařízením a její senzory se přesunou pod něj; jejich názvy pocházejí z překladů (např.
+  `Natural 95 · 1. nejlevnější` místo názvu stanice, který je teď v atributu `station`).
+- Automatický název oblasti s více mezerami za sebou se upraví („Ceny paliv Brandys nad Labem Stara Boleslav“).
+- Archivované senzory oblíbených stanic se stanou diagnostickými entitami.
+- Historie cen oblíbené stanice založí statistiky stanice, doplněné o až 35 dní, které už jsou uložené.
+- Senzory paliva jsou nově **nedostupné**, když mBenzin.cz neodpovídá (dřív si nechaly poslední cenu); automatizace,
+  které je čtou, mohou potřebovat podmínku. Karta dál ukazuje poslední známé ceny.
+- Pokud máte v HACS přidaný `donthedandy/ha-ceny-paliv`, nahraďte ho `https://github.com/Vituhlos/ha-ceny-paliv`.
+
 ## Odebrání integrace
 
 1. **Nastavení → Zařízení a služby → Ceny paliv**, u každé nastavené oblasti **⋮ → Smazat** (anglicky Delete). Spolu s ní se smažou její senzory i uložená historie cen. Dlouhodobé statistiky vašich oblíbených stanic v Home Assistantu zůstanou (smazat je můžete v **Vývojářské nástroje → Statistiky**, hledejte `ceny_paliv`).

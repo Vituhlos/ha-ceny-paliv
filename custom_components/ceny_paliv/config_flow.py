@@ -782,6 +782,7 @@ _KEY_SCHEMA = vol.Schema(
 
 class CenyPalivConfigFlow(_FuelStationSteps, ConfigFlow, domain=DOMAIN):
     VERSION = 1
+    MINOR_VERSION = 2  # 0.6: automatic titles without a run of spaces (__init__.async_migrate_entry)
 
     _cities: list[dict[str, str]]
 

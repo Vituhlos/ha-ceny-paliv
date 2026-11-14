@@ -14,7 +14,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
 from .api import release_shared_marker_cache
-from .const import CARD_URL, CARD_VERSION, DOMAIN, LOGO_URL
+from .const import AREA_MODE_CITY, CARD_URL, CARD_VERSION, CONF_AREA_MODE, CONF_CITY, DOMAIN, LOGO_URL
 from .coordinator import CenyPalivConfigEntry, CenyPalivCoordinator, location_issue_id, no_data_issue_id
 from .logos import ID_RE, logo_dir
 from .services import async_setup_services
@@ -62,6 +62,24 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(CenyPalivLogoView(hass))
     add_extra_js_url(hass, f"{CARD_URL}?v={CARD_VERSION}")
     async_setup_services(hass)
+    return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: CenyPalivConfigEntry) -> bool:
+    """Upgrade an entry written by an older version; Home Assistant updates the entities and the device itself."""
+    if entry.version > 1:
+        return False  # written by a newer version of the integration: do not guess
+    if entry.minor_version < 2:
+        # 0.5 kept every dash of a town as a space ("Ceny paliv Brandys nad Labem   Stara Boleslav"); since 0.6 the
+        # area's device is named after the entry. A title the user typed is left as it is.
+        from .config_flow import _entry_title  # noqa: PLC0415 - the flow imports the coordinator stack
+
+        automatic = _entry_title(
+            entry.options.get(CONF_AREA_MODE, AREA_MODE_CITY),
+            entry.options.get(CONF_CITY, entry.data.get(CONF_CITY, "")),
+        )
+        title = automatic if " ".join(entry.title.split()) == automatic else entry.title
+        hass.config_entries.async_update_entry(entry, title=title, minor_version=2)
     return True
 
 
