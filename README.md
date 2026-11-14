@@ -106,18 +106,18 @@ All sensors show the price in Kč/l (CNG in Kč/kg) and carry the attribution `C
 | `gps_nearest_stations` | GPS mode: up to 10 nearest stations, compact (name, city, address, price, coordinates, date, distance) |
 | `language`, `labels`, `logos` | the card's language, its texts and the downloaded logos |
 
-Each station in `stations` (and `home`) has `rank`, `name`, `chain`, `address`, `street`, `price`, `lat`, `lng`, `updated` (mBenzin's own wording, for example `Dnes`), `updated_date`, `maps` (a Google Maps link), `home` (whether it is your favourite) and `trends`; in GPS mode also `distance_km`. `trends` has the keys `1`, `2`, `7`, `14` and `30` (days); each is `null` until there is an earlier price, otherwise `dir` (`up`, `down`, `flat`), `delta` (Kč), `ref_date` and `ref_price`.
+Each station in `stations` (and `home`) has `rank`, `name`, `title` (a readable label: the name and the street, or the town when the station has no street, for example `VS Petrol · Obory`), `chain`, `street` (the address without the repeated station name), `city`, `address` (mBenzin's address text, which often starts with the station name), `price`, `lat`, `lng`, `updated` (mBenzin's own wording, for example `Dnes`), `updated_date`, `maps` (a Google Maps link), `home` (whether it is your favourite) and `trends`; in GPS mode also `distance_km`. The street and the town come from mBenzin's station links, which are written without accents. `trends` has the keys `1`, `2`, `7`, `14` and `30` (days); each is `null` until there is an earlier price, otherwise `dir` (`up`, `down`, `flat`), `delta` (Kč), `ref_date` and `ref_price`.
 
 **`sensor.ceny_paliv_<fuel>_home`** — state: the price at your favourite station; long-term statistics (`state_class: measurement`).
 
 | Attribute | Content |
 |---|---|
-| `station`, `price`, `latitude`, `longitude`, `maps`, `distance_km` | where it is (`distance_km` in GPS mode) |
+| `station`, `price`, `latitude`, `longitude`, `maps`, `distance_km` | the station's readable title (as `title` above) and where it is (`distance_km` in GPS mode) |
 | `updated`, `updated_date`, `age_days` | when the station last updated its price |
 | `rank`, `fresh_count`, `vs_cheapest`, `cheapest_name` | its rank among the up-to-date stations, how many there are, how much more it costs than the cheapest one and which that is |
 | `trends` | as above |
 
-**`sensor.ceny_paliv_<fuel>_1` … `_5`** — state: the price of the n-th cheapest station; attributes `station`, `price`, `latitude` and `longitude` for the map (no coordinates when that station is your favourite, which the favourite sensor draws). A position without a station is `unknown`.
+**`sensor.ceny_paliv_<fuel>_1` … `_5`** — state: the price of the n-th cheapest station; attributes `station` (the readable title), `price`, `latitude` and `longitude` for the map (no coordinates when that station is your favourite, which the favourite sensor draws). A position without a station is `unknown`.
 
 ## How the data is updated
 
@@ -196,7 +196,7 @@ The logos are trademarks of their owners, used only to identify the stations; th
 
 ## 5. Without the card: standard cards
 
-Every sensor has a fixed, translated name (for example `Natural 95 · cheapest #1`); the address of the station it currently shows is in its `station` attribute and follows the ranking at each refresh, while the entity ids stay the same. The one exception is the favourite sensor: choosing a different favourite station creates a new one (for example `_home_2`), so the statistics of two stations are never mixed (see Notes).
+Every sensor has a fixed, translated name (for example `Natural 95 · cheapest #1`); the readable title of the station it currently shows (for example `VS Petrol · Obory`) is in its `station` attribute and follows the ranking at each refresh, while the entity ids stay the same. The one exception is the favourite sensor: choosing a different favourite station creates a new one (for example `_home_2`), so the statistics of two stations are never mixed (see Notes).
 
 An **Entities** card with the 5 cheapest stations (the sensor state is the price):
 
@@ -222,7 +222,7 @@ content: |-
   {% endfor %}
 ```
 
-Each station in `stations` has `rank`, `name`, `street`, `address`, `price`, `lat`, `lng`, `updated`, `maps`, `home` and `trends`; GPS entries also include `distance_km`. The top5 sensor's `gps_area` attribute contains the method, centre, radius, selected zone (if any), any location error, and the total number of markers with valid coordinates in the circle. `gps_nearest_stations` is a separate, compact list of at most 10 nearby stations; it does not duplicate map links or trend histories. Provider-controlled text in GPS station attributes is capped to keep the complete state attributes below Home Assistant Recorder's 16 KiB limit. Use the `_home` sensor for your favourite station (its attributes include `rank`, `vs_cheapest`, `trends`, and—when inside the GPS area—`distance_km`).
+Each station in `stations` has `rank`, `name`, `title`, `street`, `city`, `address`, `price`, `lat`, `lng`, `updated`, `maps`, `home` and `trends`; GPS entries also include `distance_km` (see [Attributes](#attributes)). The top5 sensor's `gps_area` attribute contains the method, centre, radius, selected zone (if any), any location error, and the total number of markers with valid coordinates in the circle. `gps_nearest_stations` is a separate, compact list of at most 10 nearby stations; it does not duplicate map links or trend histories. Provider-controlled text in GPS station attributes is capped to keep the complete state attributes below Home Assistant Recorder's 16 KiB limit. Use the `_home` sensor for your favourite station (its attributes include `rank`, `vs_cheapest`, `trends`, and—when inside the GPS area—`distance_km`).
 
 Changing a favourite to a different station gives it a station-specific statistics identity. The previous home sensor remains registered as an archived entity so its Home Assistant long-term statistics are not combined with a different station; archived sensors are diagnostic entities, kept out of automatic dashboards and disabled (enable one in its entity settings to look at its history), and choosing that station again re-enables it; removing a fuel in **Configure** removes its sensors, archived ones included; returning to a previously selected station reuses only that station's verified identity. GPS trend history uses full marker URLs and records new samples only for the current five cheapest stations and selected favourite. Samples for stations that temporarily leave the displayed five are retained until the existing 35-day expiry and can be used again if the station returns; expired or empty URL-keyed logs are pruned on refresh. New City trend history is also keyed by full marker URL so equal slugs in different cities cannot share prices. Trend history from versions up to 0.4.x (keyed by station slug) moves to the station URL on the first refresh that shows the entry's original city, when exactly one station there has that slug, so upgrading keeps your trends; ambiguous legacy logs are never assigned to a station and expire after 35 days. If a saved favourite cannot be uniquely resolved in nationwide markers, it is retained until you explicitly choose a station.
 
@@ -265,7 +265,7 @@ actions:
       title: "⛽ Natural 95 under 35 Kč"
       message: >-
         {% set s = state_attr('sensor.ceny_paliv_n95_top5', 'stations')[0] %}
-        {{ s.name }}, {{ s.address }}: {{ '%.2f' | format(s.price) }} Kč/l
+        {{ s.title }}: {{ '%.2f' | format(s.price) }} Kč/l
 ```
 
 **A notification when your favourite station is the cheapest:**
@@ -313,6 +313,7 @@ Replace `notify.mobile_app_YOUR_PHONE` with your notify action, and the entity i
 - The card remembers the last known prices **per browser**: another device or a private window shows nothing during an outage.
 - Trends need history: they start the day after setup and reach 30 days after a month (a `*` marks a shorter history).
 - Sensor names are fixed (for example "Natural 95 · cheapest #1"); the station is in the `station` attribute.
+- Streets and towns are written without accents (mBenzin's station links have none); station names keep theirs.
 - Texts in English and Czech only.
 
 ## Troubleshooting

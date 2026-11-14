@@ -112,18 +112,18 @@ Všechny senzory ukazují cenu v Kč/l (CNG v Kč/kg) a nesou uvedení zdroje `C
 | `gps_nearest_stations` | GPS režim: nejvýše 10 nejbližších stanic, zkráceně (název, město, adresa, cena, souřadnice, datum, vzdálenost) |
 | `language`, `labels`, `logos` | jazyk karty, její texty a stažená loga |
 
-Každá stanice v `stations` (i v `home`) má `rank`, `name`, `chain`, `address`, `street`, `price`, `lat`, `lng`, `updated` (vlastní údaj mBenzinu, např. `Dnes`), `updated_date`, `maps` (odkaz do Google Maps), `home` (zda je to vaše oblíbená) a `trends`; v GPS režimu navíc `distance_km`. `trends` má klíče `1`, `2`, `7`, `14` a `30` (dny); každý je `null`, dokud neexistuje starší cena, jinak obsahuje `dir` (`up`, `down`, `flat`), `delta` (Kč), `ref_date` a `ref_price`.
+Každá stanice v `stations` (i v `home`) má `rank`, `name`, `title` (čitelný popis: název a ulice, a když stanice ulici nemá, obec, např. `VS Petrol · Obory`), `chain`, `street` (adresa bez opakovaného názvu stanice), `city`, `address` (text adresy od mBenzinu, který často začíná názvem stanice), `price`, `lat`, `lng`, `updated` (vlastní údaj mBenzinu, např. `Dnes`), `updated_date`, `maps` (odkaz do Google Maps), `home` (zda je to vaše oblíbená) a `trends`; v GPS režimu navíc `distance_km`. Ulice a obec pocházejí z odkazů mBenzinu na stanice, které jsou bez diakritiky. `trends` má klíče `1`, `2`, `7`, `14` a `30` (dny); každý je `null`, dokud neexistuje starší cena, jinak obsahuje `dir` (`up`, `down`, `flat`), `delta` (Kč), `ref_date` a `ref_price`.
 
 **`sensor.ceny_paliv_<palivo>_home`** — stav: cena u vaší oblíbené stanice; dlouhodobé statistiky (`state_class: measurement`).
 
 | Atribut | Obsah |
 |---|---|
-| `station`, `price`, `latitude`, `longitude`, `maps`, `distance_km` | kde stanice je (`distance_km` v GPS režimu) |
+| `station`, `price`, `latitude`, `longitude`, `maps`, `distance_km` | čitelný popis stanice (jako `title` výše) a kde stanice je (`distance_km` v GPS režimu) |
 | `updated`, `updated_date`, `age_days` | kdy stanice naposledy aktualizovala cenu |
 | `rank`, `fresh_count`, `vs_cheapest`, `cheapest_name` | její pořadí mezi stanicemi s aktuální cenou, kolik jich je, o kolik je dražší než nejlevnější a která to je |
 | `trends` | jako výše |
 
-**`sensor.ceny_paliv_<palivo>_1` … `_5`** — stav: cena n-té nejlevnější stanice; atributy `station`, `price`, `latitude` a `longitude` pro mapu (bez souřadnic, když je to vaše oblíbená stanice, kterou kreslí senzor oblíbené stanice). Pozice bez stanice má stav `unknown`.
+**`sensor.ceny_paliv_<palivo>_1` … `_5`** — stav: cena n-té nejlevnější stanice; atributy `station` (čitelný popis), `price`, `latitude` a `longitude` pro mapu (bez souřadnic, když je to vaše oblíbená stanice, kterou kreslí senzor oblíbené stanice). Pozice bez stanice má stav `unknown`.
 
 ## Jak se data aktualizují
 
@@ -202,7 +202,7 @@ Loga jsou ochranné známky svých majitelů a slouží jen k označení stanic;
 
 ## 5. Bez karty: standardní karty
 
-Každý senzor má pevný přeložený název (např. `Natural 95 · 1. nejlevnější`); adresa stanice, kterou právě ukazuje, je v atributu `station` a při každé aktualizaci sleduje pořadí, identifikátory entit zůstávají stejné. Jedinou výjimkou je senzor oblíbené stanice: výběr jiné oblíbené stanice vytvoří nový senzor (např. `_home_2`), aby se nikdy nesmíchaly statistiky dvou stanic (viz Poznámky).
+Každý senzor má pevný přeložený název (např. `Natural 95 · 1. nejlevnější`); čitelný popis stanice, kterou právě ukazuje (např. `VS Petrol · Obory`), je v atributu `station` a při každé aktualizaci sleduje pořadí, identifikátory entit zůstávají stejné. Jedinou výjimkou je senzor oblíbené stanice: výběr jiné oblíbené stanice vytvoří nový senzor (např. `_home_2`), aby se nikdy nesmíchaly statistiky dvou stanic (viz Poznámky).
 
 Karta **Entity** s 5 nejlevnějšími stanicemi (stav senzoru je cena):
 
@@ -228,7 +228,7 @@ content: |-
   {% endfor %}
 ```
 
-Každá stanice v `stations` má `rank`, `name`, `street`, `address`, `price`, `lat`, `lng`, `updated`, `maps`, `home` a `trends`; v GPS režimu navíc `distance_km`. Atribut `gps_area` senzoru top5 obsahuje způsob výběru, střed, poloměr, případnou zónu, chybu polohy a celkový počet markerů s platnými souřadnicemi v kruhu. `gps_nearest_stations` je oddělený kompaktní seznam nejvýše 10 blízkých stanic; neopakuje odkazy na mapy ani historii trendů. Text od poskytovatele se v GPS atributech omezuje, aby se celý stavový JSON vešel pod limit 16 KiB Home Assistant Recorderu. Pro oblíbenou stanici použijte senzor `_home` (obsahuje `rank`, `vs_cheapest`, `trends` a při poloze uvnitř GPS oblasti také `distance_km`).
+Každá stanice v `stations` má `rank`, `name`, `title`, `street`, `city`, `address`, `price`, `lat`, `lng`, `updated`, `maps`, `home` a `trends`; v GPS režimu navíc `distance_km` (viz [Atributy](#atributy)). Atribut `gps_area` senzoru top5 obsahuje způsob výběru, střed, poloměr, případnou zónu, chybu polohy a celkový počet markerů s platnými souřadnicemi v kruhu. `gps_nearest_stations` je oddělený kompaktní seznam nejvýše 10 blízkých stanic; neopakuje odkazy na mapy ani historii trendů. Text od poskytovatele se v GPS atributech omezuje, aby se celý stavový JSON vešel pod limit 16 KiB Home Assistant Recorderu. Pro oblíbenou stanici použijte senzor `_home` (obsahuje `rank`, `vs_cheapest`, `trends` a při poloze uvnitř GPS oblasti také `distance_km`).
 
 Při změně oblíbené stanice dostane nová stanice vlastní identitu statistik. Předchozí senzor zůstane registrovaný jako archivovaná entita, aby se dlouhodobé statistiky Home Assistantu nesloučily s jinou stanicí; archivované senzory jsou diagnostické entity, které se nedostanou do automatických dashboardů, a jsou zakázané (historii zobrazíte, když entitu v jejím nastavení povolíte); opětovný výběr té stanice je znovu povolí; odebrání paliva v **Konfigurovat** odstraní jeho senzory včetně archivovaných; při návratu k dříve vybrané stanici se obnoví pouze její ověřená identita. GPS historie používá celé URL markeru a nové vzorky zapisuje jen pro aktuálních pět nejlevnějších stanic a oblíbenou stanici. Záznamy stanic, které dočasně vypadnou z první pětice, zůstávají po stávající 35denní dobu a lze na ně navázat po návratu stanice; při aktualizaci se odstraňují prošlé nebo prázdné URL záznamy. Nová městská historie je také klíčována celým URL, aby se stejný slug v různých městech nesloučil. Historie trendů z verzí do 0.4.x (klíčovaná slugem stanice) se při první aktualizaci, která zobrazuje původní město konfigurace, přesune na URL stanice, pokud má daný slug v tomto městě právě jedna stanice – trendy tak aktualizaci přežijí. Nejednoznačné staré záznamy se ke stanici nikdy nepřiřazují a po 35 dnech zaniknou. Pokud oblíbenou stanici nelze v celorepublikových datech určit jednoznačně, uložený výběr zůstane zachován, dokud výslovně nevyberete jinou stanici.
 
@@ -271,7 +271,7 @@ actions:
       title: "⛽ Natural 95 pod 35 Kč"
       message: >-
         {% set s = state_attr('sensor.ceny_paliv_n95_top5', 'stations')[0] %}
-        {{ s.name }}, {{ s.address }}: {{ '%.2f' | format(s.price) }} Kč/l
+        {{ s.title }}: {{ '%.2f' | format(s.price) }} Kč/l
 ```
 
 **Upozornění, když je vaše oblíbená stanice nejlevnější:**
@@ -319,6 +319,7 @@ Místo `notify.mobile_app_VAS_TELEFON` použijte svou akci pro upozornění a m�
 - Karta si poslední známé ceny pamatuje **v každém prohlížeči zvlášť**: jiné zařízení nebo anonymní okno během výpadku nic neukáže.
 - Trendy potřebují historii: začnou den po přidání a 30denní je k dispozici po měsíci (hvězdička označuje kratší historii).
 - Názvy senzorů jsou pevné (např. „Natural 95 · 1. nejlevnější“); stanice je v atributu `station`.
+- Ulice a obce jsou bez diakritiky (odkazy mBenzinu na stanice ji nemají); názvy stanic ji mají.
 - Texty jen v češtině a angličtině.
 
 ## Řešení potíží

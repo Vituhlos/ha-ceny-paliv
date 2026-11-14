@@ -880,9 +880,11 @@ class CenyPalivOptionsFlow(_FuelStationSteps, OptionsFlow):
         else:
             unique_id = entry.unique_id if (entry.unique_id or "").startswith("gps-") else f"gps-{uuid4()}"
         updates: dict[str, Any] = {"unique_id": unique_id}
-        if entry.title == _entry_title(
+        # only an automatic title (spaces compared loosely: before 0.6 a "Sedlec---Prcice" title kept every dash as a
+        # space); a title the user typed is theirs
+        if " ".join(entry.title.split()) == _entry_title(
             entry.options.get(CONF_AREA_MODE, AREA_MODE_CITY), entry.options.get(CONF_CITY, entry.data.get(CONF_CITY, ""))
-        ):  # only an automatic title; a title the user typed is theirs
+        ):
             updates["title"] = _entry_title(self._area_mode, self._city)
         self.hass.config_entries.async_update_entry(entry, **updates)
         self._update_favourite_registry(entry)

@@ -168,7 +168,7 @@ class CenyPalivHomeSensor(CenyPalivSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         home = self._home or {}
         # price: the bare number for the map marker, which is too narrow for the state with its unit
-        attrs = {"station": home.get("address"), "price": home.get("price"), "latitude": home.get("lat"), "longitude": home.get("lng")}
+        attrs = {"station": home.get("title"), "price": home.get("price"), "latitude": home.get("lat"), "longitude": home.get("lng")}
         attrs.update({k: home.get(k) for k in HOME_ATTRIBUTES})
         attrs.update(cp_fuel=self._fuel, cp_role="home", cp_config_id=self._entry_id)
         return attrs
@@ -245,7 +245,7 @@ class CenyPalivPositionSensor(CenyPalivSensor):
         if s:
             # the favourite station is drawn by its own sensor on the map: no coordinates here
             attrs.update(
-                station=s["address"],
+                station=s["title"],  # 'VS Petrol · Obory'
                 price=s["price"],  # the map marker label (the state with its unit does not fit)
                 latitude=None if s["home"] else s["lat"],
                 longitude=None if s["home"] else s["lng"],
