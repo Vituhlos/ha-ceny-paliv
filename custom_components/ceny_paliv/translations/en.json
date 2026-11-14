@@ -345,5 +345,19 @@
     "refresh_failed": {
       "message": "Not all prices could be refreshed from mBenzin.cz. Failed: {failed}. Previous prices kept: {kept}."
     }
+  },
+  "issues": {
+    "no_data": {
+      "title": "No fuel prices from mBenzin.cz for {title}",
+      "description": "mBenzin.cz has not sent prices for {fuels} since {since}, so their sensors are unavailable. Check that {url} works and that your access key is still valid. If it continues, write to reklama@mbenzin.cz. This message disappears with the next successful refresh; you can also call the action `ceny_paliv.refresh`."
+    },
+    "zone_missing": {
+      "title": "The zone of {title} no longer exists",
+      "description": "The GPS area of {title} is centred on the zone {zone}, which no longer exists, so no stations are shown. Restore the zone, or open Settings → Devices & services → Ceny paliv → Configure and choose another zone or location source."
+    },
+    "invalid_location": {
+      "title": "The GPS area of {title} has no valid centre",
+      "description": "The location the GPS area of {title} is centred on has no valid coordinates, so no stations are shown. Set the home location in Settings → System → General, or open Settings → Devices & services → Ceny paliv → Configure and choose another location source."
+    }
   }
 }

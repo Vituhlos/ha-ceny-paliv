@@ -161,7 +161,10 @@ rules:
     status: done
     comment: The access key can be replaced without losing settings or history.
   repair-issues:
-    status: todo
+    status: done
+    comment: >-
+      Issues for prices missing over 24 hours, a deleted zone and an invalid GPS centre; raised and cleared by the
+      coordinator, deleted with the entry (tests/test_repairs.py). A short outage raises none.
   stale-devices:
     status: exempt
     comment: >-
