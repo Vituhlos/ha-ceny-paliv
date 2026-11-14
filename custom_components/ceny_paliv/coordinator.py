@@ -58,6 +58,25 @@ _LOGGER = logging.getLogger(__name__)
 type CenyPalivConfigEntry = ConfigEntry[CenyPalivCoordinator]
 
 
+def _marker_fields(markers: list[Any]) -> dict[str, Any]:
+    """The field names mBenzin sends and one sample, the first station of the nationwide list.
+
+    The sample is never a station of the user's area, so a diagnostics file shared in an issue does not tell
+    where the user lives. Long values are cut.
+    """
+    stations = [marker for marker in markers if isinstance(marker, dict)]
+    sample = stations[0] if stations else {}
+    return {
+        "count": len(markers),
+        "fields": sorted({str(key) for marker in stations for key in marker}),
+        "sample": {
+            str(key): value[:120] if isinstance(value, str) else value
+            for key, value in sample.items()
+            if value is None or isinstance(value, (str, int, float, bool))
+        },
+    }
+
+
 def no_data_issue_id(entry_id: str) -> str:
     return f"no_data_{entry_id}"
 
@@ -79,6 +98,8 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         # fuels whose last refresh failed, with the error: their sensors are unavailable (entity.py)
         self.failed_fuels: dict[str, str] = {}
         self._snapshot_max_age: timedelta | None = None  # set while the refresh action runs
+        # for diagnostics: which fields mBenzin sends per fuel, and the first station of the nationwide list
+        self.marker_fields: dict[str, dict[str, Any]] = {}
         if (
             entry.options.get(CONF_AREA_MODE) == AREA_MODE_GPS
             and entry.options.get(CONF_LOCATION_METHOD) == LOCATION_ZONE
@@ -253,6 +274,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                     "next_update": next_update_at(now).isoformat(timespec="seconds"),
                 }
                 continue
+            self.marker_fields[fuel] = _marker_fields(snapshot.markers)
             now = dt_util.now()
             result[fuel] = build_payload(
                 snapshot.markers,

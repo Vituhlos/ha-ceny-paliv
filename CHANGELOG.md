@@ -4,6 +4,9 @@
 
 ### New
 
+- **Diagnostics show what mBenzin.cz sends**: the field names of its stations per fuel, their number, and one example
+  station (the first of the nationwide list, never one of your area). This tells whether a field could give the
+  streets and towns their accents.
 - **Readable station names**: every station gets a `title` such as "VS Petrol · Obory" (the name and the street, or
   the town when it has no street), a `street` without the repeated station name (also when mBenzin writes the name
   without accents, as "Am oil Milicin parkoviste") and its `city`. The `station` attribute of the favourite and

@@ -336,7 +336,7 @@ To look deeper: **Settings → Devices & services → Ceny paliv → ⋮ → Ena
 - Entity ids are `sensor.ceny_paliv_<fuel>_…`; a second configuration for the same fuel receives distinct Home Assistant entity IDs. Use `config_id` to bind a dashboard card to one area.
 - The daily price log used for the trends is stored by Home Assistant and fills up over time (a `*` next to a trend in the card marks a trend computed from a shorter history).
 - **Settings → Repairs** tells you when something needs you: a fuel without prices from mBenzin.cz for more than 24 hours (check the website and your key), a deleted zone the GPS area was centred on, or a GPS centre without valid coordinates. The message disappears by itself once the cause is gone.
-- To report a problem, attach the diagnostics: **Settings → Devices & services → Ceny paliv → ⋮ → Download diagnostics**. The file shows the settings and how the last refresh of each fuel went; the access key, the GPS centre and the favourite stations are replaced by `**REDACTED**`, and the station lists are left out.
+- To report a problem, attach the diagnostics: **Settings → Devices & services → Ceny paliv → ⋮ → Download diagnostics**. The file shows the settings and how the last refresh of each fuel went; the access key, the GPS centre and the favourite stations are replaced by `**REDACTED**`, and the station lists are left out. It also lists the fields mBenzin.cz sends for a station, with one example: the first station of the nationwide list, never one of your area.
 
 ## Development tests
 

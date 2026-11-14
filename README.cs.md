@@ -342,7 +342,7 @@ Pro hlubší pohled: **Nastavení → Zařízení a služby → Ceny paliv → �
 - Entity se jmenují `sensor.ceny_paliv_<palivo>_…`; druhá konfigurace stejného paliva má v Home Assistantu vlastní ID. Pro přiřazení karty použijte `config_id`.
 - Denní záznam cen potřebný pro trendy ukládá Home Assistant a postupně se plní (hvězdička u trendu v kartě označuje trend z kratší historie).
 - **Nastavení → Opravy** vás upozorní, když je potřeba váš zásah: palivo bez cen z mBenzin.cz déle než 24 hodin (ověřte web a svůj klíč), smazaná zóna, kolem které byla GPS oblast, nebo střed GPS oblasti bez platných souřadnic. Zpráva sama zmizí, jakmile příčina pomine.
-- K hlášení problému přiložte diagnostiku: **Nastavení → Zařízení a služby → Ceny paliv → ⋮ → Stáhnout diagnostiku** (anglicky Download diagnostics). Soubor ukazuje nastavení a průběh poslední aktualizace každého paliva; přístupový klíč, střed GPS oblasti a oblíbené stanice jsou nahrazené `**REDACTED**` a seznamy stanic v něm nejsou.
+- K hlášení problému přiložte diagnostiku: **Nastavení → Zařízení a služby → Ceny paliv → ⋮ → Stáhnout diagnostiku** (anglicky Download diagnostics). Soubor ukazuje nastavení a průběh poslední aktualizace každého paliva; přístupový klíč, střed GPS oblasti a oblíbené stanice jsou nahrazené `**REDACTED**` a seznamy stanic v něm nejsou. Obsahuje také seznam polí, která mBenzin.cz u stanice posílá, s jednou ukázkou: první stanicí celostátního seznamu, nikdy stanicí z vaší oblasti.
 
 ## Vývojářské testy
 
