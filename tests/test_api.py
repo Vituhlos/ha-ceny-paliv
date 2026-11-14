@@ -1495,3 +1495,29 @@ def test_stations_show_mbenzins_address_with_accents(marker, now):
         ("Petrol · Pražská 310", "Pražská 310", "Praha", "Pražská 310, Praha"),
         ("VS Petrol · Praha 97", "Praha 97", "Praha", "Praha 97"),
     ]
+
+
+def test_a_long_run_of_numbers_in_an_address_is_handled_at_once(marker):
+    """mBenzin's text cannot stall Home Assistant: the regular expression this replaced needed minutes for this."""
+    import time
+
+    from custom_components.ceny_paliv.api import street_and_town
+
+    hostile = "Lhota" + " 1111111111" * 18 + " !"
+    station = {**marker("Benzina-", 30, name="Benzina", city="Lhota"), "addr": f"silnice 6, {hostile}"}
+    started = time.monotonic()
+    street, town = street_and_town(station)
+    assert time.monotonic() - started < 1
+    assert street == "silnice 6"
+    assert town == hostile  # it does not end with a number, so nothing is cut
+    station["addr"] = "silnice 6, Lhota" + " 12" * 10_000
+    assert street_and_town(station) == ("silnice 6", "Lhota")
+
+
+def test_a_long_freshness_text_is_unknown_at_once(now):
+    import time
+
+    started = time.monotonic()
+    assert parse_fresh("1" * 200_000, now.date()) is None
+    assert time.monotonic() - started < 1
+    assert parse_fresh("před 3 dny", now.date()) == now.date() - timedelta(days=3)
