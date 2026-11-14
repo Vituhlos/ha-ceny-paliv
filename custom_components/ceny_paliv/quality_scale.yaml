@@ -74,16 +74,18 @@ rules:
     status: done
     comment: README "Settings" table describes every setup field, the access key included.
   entity-unavailable:
-    status: todo
+    status: done
     comment: >-
-      When one fuel cannot be refreshed, the coordinator keeps its previous prices with fetch_error and the sensors
-      stay available (a test asserts it). The rule wants them unavailable while the service cannot be reached.
+      A fuel that cannot be refreshed makes its sensors unavailable (entity.py); every fuel failing raises
+      UpdateFailed. The card shows the last known states meanwhile.
   integration-owner:
     status: done
     comment: codeowners is @Vituhlos; documentation, issue tracker and logo pack point to this repository.
   log-when-unavailable:
-    status: todo
-    comment: A partial refresh logs a warning on every refresh instead of once.
+    status: done
+    comment: >-
+      A failing fuel is logged once and its recovery once (coordinator.py); a full outage is logged by the
+      DataUpdateCoordinator, which also logs the recovery.
   parallel-updates:
     status: done
     comment: PARALLEL_UPDATES = 0 in sensor.py; the coordinator does all the fetching.

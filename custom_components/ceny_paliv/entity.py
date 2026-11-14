@@ -42,6 +42,11 @@ class CenyPalivEntity(CoordinatorEntity[CenyPalivCoordinator]):
         )
 
     @property
+    def available(self) -> bool:
+        """Unavailable while mBenzin.cz cannot refresh this fuel (all fuels: the coordinator's own failure)."""
+        return super().available and self._fuel not in self.coordinator.failed_fuels
+
+    @property
     def _payload(self) -> dict[str, Any]:
         return (self.coordinator.data or {}).get(self._fuel) or {}
 

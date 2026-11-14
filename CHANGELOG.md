@@ -4,6 +4,12 @@
 
 ### Changed
 
+- **Sensors are unavailable while mBenzin.cz cannot be reached** (quality scale: entity-unavailable,
+  log-when-unavailable). When one fuel fails, only its sensors become unavailable; when every fuel fails, all of them.
+  The failure and the recovery are logged once instead of a warning on every refresh. The card keeps showing the last
+  known prices with the warning "mBenzin.cz cannot be reached — showing the last known prices"; it stores them in the
+  browser, so they also survive a page reload. **Breaking:** automations that read the price of a failed fuel now see
+  `unavailable` instead of the previous price, and the card's "Last refresh failed" note is replaced by that warning.
 - **Each area is a device; sensors have translated names** (quality scale: devices, has-entity-name, entity-translations,
   icon-translations). Every configured area is a service device ("Ceny paliv Praha", manufacturer mBenzin.cz), and its
   sensors are named under it in the Home Assistant language, for example "Natural 95 · cheapest #1"

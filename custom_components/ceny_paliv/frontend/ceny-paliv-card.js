@@ -204,6 +204,63 @@ const STYLE = `
 // A state Home Assistant restored for an entity no integration provides (yet): it carries no data or attributes.
 const restored = (state) => !!(state && state.attributes && state.attributes.restored);
 
+// Home Assistant drops the attributes of an unavailable entity, and the sensors of a fuel are unavailable while
+// mBenzin.cz cannot refresh it. The card therefore keeps the last known state of each sensor (in this browser, so
+// also across reloads) and shows it with a warning instead of an empty card.
+const LAST_KNOWN_KEY = 'ceny-paliv-last-known';
+const lastKnown = new Map();
+let lastKnownLoaded = false;
+
+function browserStorage() {
+  try { return window.localStorage || null; } catch (e) { return null; }
+}
+
+function withLastKnown(hass) {
+  const store = browserStorage();
+  if (!lastKnownLoaded) {
+    lastKnownLoaded = true;
+    try {
+      const saved = JSON.parse((store && store.getItem(LAST_KNOWN_KEY)) || '{}');
+      for (const id of Object.keys(saved)) lastKnown.set(id, saved[id]);
+    } catch (e) { /* no or broken storage: start empty */ }
+  }
+  const area = (a) => `${a.cp_config_id}|${a.cp_fuel}`;
+  const live = new Set();  // areas and fuels whose top5 sensor is available: nothing of theirs is revived
+  const gone = [];
+  let changed = false;
+  for (const id in hass.states) {
+    if (!id.startsWith('sensor.ceny_paliv_')) continue;
+    const s = hass.states[id];
+    const a = s.attributes || {};
+    if (s.state === 'unavailable') {
+      // a restored state belongs to an entity no integration provides (a removed area): never revive it
+      if (!a.restored) gone.push(id);
+      continue;
+    }
+    if (!a.cp_role || a.cp_role === 'home_archive') continue;
+    if (a.cp_role === 'top5') live.add(area(a));
+    const known = lastKnown.get(id);
+    if (!known || known.last_updated !== s.last_updated) {
+      lastKnown.set(id, { state: s.state, last_updated: s.last_updated, attributes: a });
+      changed = true;
+    }
+  }
+  if (changed && store) {
+    const keep = {};
+    lastKnown.forEach((v, id) => { if (id in hass.states) keep[id] = v; });
+    try { store.setItem(LAST_KNOWN_KEY, JSON.stringify(keep)); } catch (e) { /* full or blocked: memory only */ }
+  }
+  let states = null;
+  for (const id of gone) {
+    const known = lastKnown.get(id);
+    // with its top5 available, an unavailable sensor is an archived favourite, not an outage
+    if (!known || live.has(area(known.attributes))) continue;
+    states = states || Object.assign({}, hass.states);
+    states[id] = Object.assign({}, known, { entity_id: id, attributes: Object.assign({}, known.attributes, { cp_stale: true }) });
+  }
+  return states ? Object.assign({}, hass, { states }) : hass;
+}
+
 // TOP 5 sensors of one fuel (legacy entities are matched by entity id).
 function topCandidates(hass, fuel) {
   const tops = [];
@@ -255,6 +312,7 @@ class CenyPalivCard extends HTMLElement {
   }
 
   set hass(hass) {
+    hass = withLastKnown(hass);
     this._hass = hass;
     if (!this._config) return;
     const previousIds = this._ids;
@@ -673,8 +731,8 @@ class CenyPalivCard extends HTMLElement {
     const topAttrs = this._hass.states[this._ids.top5].attributes || {};
     const stationName = String(a.station || '').trim() || T('my_station');
     const ok = !['unavailable', 'unknown'].includes(e.state);
-    const stale = a.age_days == null || Number(a.age_days) > 1;
-    const updated = a.age_days == 0 ? T('updated_today') : (a.age_days == 1 ? T('updated_yesterday')
+    const stale = a.cp_stale || a.age_days == null || Number(a.age_days) > 1;
+    const updated = a.cp_stale ? T('stale') : a.age_days == 0 ? T('updated_today') : (a.age_days == 1 ? T('updated_yesterday')
       : T('price_from', { d: this._day(a.updated_date, { day: 'numeric', month: 'numeric', year: 'numeric' }) || a.updated || '—' }));
     const tr = a.trends || {};
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -760,11 +818,11 @@ class CenyPalivCard extends HTMLElement {
       ? this._dateTime(d, { hour: 'numeric', minute: '2-digit' })
       : this._dateTime(d, { weekday: 'short', hour: 'numeric', minute: '2-digit' }));
     const fa = at.fetched_at ? new Date(at.fetched_at) : null;
-    const la = at.last_attempt ? new Date(at.last_attempt) : null;
     const nu = at.next_update ? new Date(at.next_update) : null;
     const hidden = (at.excluded || 0) + (all.length - fresh.length);
-    const alert = at.fetch_error
-      ? `<div class="alert warning" role="status"><ha-icon icon="mdi:alert-outline"></ha-icon><span>${esc(T('refresh_failed', { at: la ? T('at') + time(la) : '', err: at.fetch_error }))}</span></div>`
+    // a failed refresh makes the sensors unavailable; the card then shows their last known state (withLastKnown)
+    const alert = at.cp_stale
+      ? `<div class="alert warning" role="status"><ha-icon icon="mdi:alert-outline"></ha-icon><span>${esc(T('stale'))}</span></div>`
       : '';
     const lines = [`<span>${esc(T('table_updated', { t: fa ? time(fa) : '—', n: nu ? time(nu) : '—' }))}</span>`];
     if (at.city_total) lines.push(`<span>${esc(T('hidden', { h: hidden, t: at.city_total, age: maxAge > 1 ? T('days_l', { n: maxAge }) : (maxAge === 1 ? T('yesterday_l') : T('today_l')) }))}</span>`);
