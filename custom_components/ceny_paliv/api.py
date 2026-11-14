@@ -412,7 +412,7 @@ def _usable_marker(marker: dict[str, Any]) -> bool:
 
 
 def pretty(slug: str) -> str:
-    """'Sedlec---Prcice' -> 'Sedlec Prcice': dashes are spaces, and a run of them is one."""
+    """Dashes are spaces, and a run of them is one: 'Brandys-nad-Labem---Stara-Boleslav' -> one space each."""
     return " ".join(slug.replace("-", " ").split())
 
 

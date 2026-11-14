@@ -1411,16 +1411,16 @@ def test_titles_name_the_station_by_street_or_town():
     assert station_title("Petrol", "Prazska 310", "Neveklov") == "Petrol · Prazska 310"
     assert station_title("VS Petrol", "", "Obory") == "VS Petrol · Obory"
     assert station_title("VS Petrol", "") == "VS Petrol"
-    # a run of dashes in a town's URL is one space ("Sedlec-Prčice" -> "Sedlec---Prcice")
-    assert pretty("Sedlec---Prcice") == "Sedlec Prcice"
+    # "Brandýs nad Labem - Stará Boleslav" is "Brandys-nad-Labem---Stara-Boleslav" in mBenzin's links
+    assert pretty("Brandys-nad-Labem---Stara-Boleslav") == "Brandys nad Labem Stara Boleslav"
 
 
 def test_stations_carry_a_readable_title_and_their_town(marker, now):
     markers = [
-        marker("Benzina-Korenov-parkoviste", 30, name="Benzina Kořenov", city="Sedlec---Prcice"),
+        marker("Benzina-Korenov-parkoviste", 30, name="Benzina Kořenov", city="Brandys-nad-Labem---Stara-Boleslav"),
         marker("VS-Petrol-", 31, name="VS Petrol", city="Obory"),
     ]
-    for city in ("Sedlec---Prcice", "Obory"):
+    for city in ("Brandys-nad-Labem---Stara-Boleslav", "Obory"):
         stations = payload(markers, now, city=city)["stations"]
         assert len(stations) == 1
         station = stations[0]
@@ -1431,5 +1431,6 @@ def test_stations_carry_a_readable_title_and_their_town(marker, now):
         else:
             assert station["street"] == "parkoviste"
             assert station["title"] == "Benzina Kořenov · parkoviste"
-            assert station["city"] == "Sedlec Prcice"
-    assert payload(markers, now, city="Sedlec---Prcice")["city_name"] == "Sedlec Prcice"
+            assert station["city"] == "Brandys nad Labem Stara Boleslav"
+    city_name = payload(markers, now, city="Brandys-nad-Labem---Stara-Boleslav")["city_name"]
+    assert city_name == "Brandys nad Labem Stara Boleslav"
