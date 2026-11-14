@@ -313,5 +313,37 @@
         "name": "{fuel} · {position}. nejlevnější"
       }
     }
+  },
+  "services": {
+    "refresh": {
+      "name": "Aktualizovat ceny",
+      "description": "Načte ceny paliv z mBenzin.cz hned, bez čekání na další šestihodinovou aktualizaci. Ceny stažené před méně než 30 minutami se použijí znovu, takže opakované volání mBenzin.cz nezahltí.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Oblast",
+          "description": "Oblast Ceny paliv, která se má aktualizovat. Prázdné = všechny oblasti."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_failed": {
+      "message": "mBenzin.cz neodpověděl pro žádné palivo ({errors})."
+    },
+    "invalid_auth": {
+      "message": "mBenzin.cz už nepřijímá přístupový klíč."
+    },
+    "no_loaded_entries": {
+      "message": "Žádná oblast Ceny paliv není nastavená a spuštěná."
+    },
+    "entry_not_found": {
+      "message": "Oblast Ceny paliv s ID {entry_id} neexistuje."
+    },
+    "entry_not_loaded": {
+      "message": "Oblast Ceny paliv {title} neběží; její stav najdete v Nastavení → Zařízení a služby."
+    },
+    "refresh_failed": {
+      "message": "Ne všechny ceny se podařilo z mBenzin.cz aktualizovat. Selhalo: {failed}. Ponechány předchozí ceny: {kept}."
+    }
   }
 }

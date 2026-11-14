@@ -72,6 +72,8 @@ UPDATE_INTERVAL = timedelta(hours=6)
 # that refresh from a whole-second loop time, so a cache living exactly UPDATE_INTERVAL would often serve the
 # refresh its own six-hour-old snapshot and stretch the real refresh period to twelve hours.
 MARKER_CACHE_TTL = UPDATE_INTERVAL - timedelta(minutes=10)
+# The refresh action downloads again only data older than this, so repeated calls cannot flood mBenzin.cz.
+FORCED_REFRESH_MIN_AGE = timedelta(minutes=30)
 # Upper bound for a provider Retry-After value, so a broken header cannot block a key until restart.
 MAX_RETRY_AFTER = timedelta(hours=24)
 

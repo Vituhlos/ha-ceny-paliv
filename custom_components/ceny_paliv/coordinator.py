@@ -1,6 +1,7 @@
 """Data update coordinator for Ceny paliv."""
 from __future__ import annotations
 
+from datetime import timedelta
 import logging
 from typing import Any
 
@@ -41,6 +42,7 @@ from .const import (
     DEFAULT_FUELS,
     DEFAULT_LANGUAGE,
     DOMAIN,
+    FORCED_REFRESH_MIN_AGE,
     LOCATION_HOME,
     LOCATION_ZONE,
     UPDATE_INTERVAL,
@@ -62,8 +64,9 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self._store: Store[dict[str, dict]] = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}")
         self._history: dict[str, dict[str, list[list]]] | None = None
         self._key_rejections = 0  # consecutive refreshes in which every fuel was refused for the key
-        # fuels whose last refresh failed: their sensors are unavailable (entity.py)
-        self.failed_fuels: set[str] = set()
+        # fuels whose last refresh failed, with the error: their sensors are unavailable (entity.py)
+        self.failed_fuels: dict[str, str] = {}
+        self._snapshot_max_age: timedelta | None = None  # set while the refresh action runs
         if (
             entry.options.get(CONF_AREA_MODE) == AREA_MODE_GPS
             and entry.options.get(CONF_LOCATION_METHOD) == LOCATION_ZONE
@@ -132,6 +135,14 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         except (TypeError, ValueError, OverflowError):
             return None, "invalid_coordinates"
 
+    async def async_refresh_now(self) -> None:
+        """The refresh action: download again every fuel whose data is older than FORCED_REFRESH_MIN_AGE."""
+        self._snapshot_max_age = FORCED_REFRESH_MIN_AGE
+        try:
+            await self.async_refresh()
+        finally:
+            self._snapshot_max_age = None
+
     async def _async_update_data(self) -> dict[str, dict[str, Any]]:
         if self._history is None:
             self._history = await self._store.async_load() or {}
@@ -161,7 +172,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         for fuel in self.fuels:
             try:
                 snapshot = await async_fetch_snapshot(
-                    session, key, fuel, cache=shared_marker_cache(self.hass)
+                    session, key, fuel, cache=shared_marker_cache(self.hass), max_age=self._snapshot_max_age
                 )
             except MBenzinError as err:
                 now = dt_util.now()
@@ -204,7 +215,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             # 401/403 is certain; an HTML answer only after it repeats (6 h later), so an outage page cannot
             # ask for a new key. Home Assistant then shows the "Reauthenticate" prompt.
             if any(err.definite for err in auth_errors) or self._key_rejections >= 2:
-                raise ConfigEntryAuthFailed("mBenzin.cz no longer accepts the access key")
+                raise ConfigEntryAuthFailed(translation_domain=DOMAIN, translation_key="invalid_auth")
         else:
             self._key_rejections = 0
 
@@ -212,24 +223,24 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         for payload in result.values():
             payload["logos"] = logos
 
-        failed = set(errors)
-        if not result or failed == set(self.fuels):
+        if not result or set(errors) == set(self.fuels):
             # every fuel failed: the coordinator makes all sensors unavailable, logs it once and logs the recovery
-            self.failed_fuels = failed
+            self.failed_fuels = errors
             raise UpdateFailed(
-                "Ceny paliv refresh failed (mBenzin.cz): "
-                + ", ".join(f"{fuel}: {err}" for fuel, err in errors.items())
+                translation_domain=DOMAIN,
+                translation_key="update_failed",
+                translation_placeholders={"errors": ", ".join(f"{fuel}: {err}" for fuel, err in errors.items())},
             )
         # one fuel failing while the others refresh: log each change once, not on every refresh
-        for fuel in sorted(failed - self.failed_fuels):
+        for fuel in sorted(errors.keys() - self.failed_fuels.keys()):
             _LOGGER.warning(
                 "Ceny paliv: %s prices cannot be refreshed from mBenzin.cz (%s); its sensors are unavailable",
                 fuel,
                 errors[fuel],
             )
         if self.last_update_success:  # after a full outage the coordinator already logged the recovery
-            for fuel in sorted(self.failed_fuels - failed):
+            for fuel in sorted(self.failed_fuels.keys() - errors.keys()):
                 _LOGGER.info("Ceny paliv: %s prices are refreshed again", fuel)
-        self.failed_fuels = failed
+        self.failed_fuels = errors
         await self._store.async_save(self._history)
         return result

@@ -164,6 +164,7 @@ class MarkerSnapshot:
 class _MarkerCacheEntry:
     expires_at: float
     snapshot: MarkerSnapshot | None = None
+    loaded_at: float = 0.0
 
 
 def _consume_task_exception(task: asyncio.Task[Any]) -> None:
@@ -192,22 +193,33 @@ class SharedMarkerCache:
         self._lock = asyncio.Lock()
 
     async def async_get_snapshot(
-        self, session: aiohttp.ClientSession, key: str, fuel: str
+        self,
+        session: aiohttp.ClientSession,
+        key: str,
+        fuel: str,
+        *,
+        max_age: dt.timedelta | None = None,
     ) -> MarkerSnapshot:
-        """Return cached data or join the single flight, enforcing key-wide 429 cooldowns."""
+        """Return cached data or join the single flight, enforcing key-wide 429 cooldowns.
+
+        With max_age, cached data older than that is downloaded again (the refresh action). If that download
+        cannot be made (no connection, 429 cooldown), the cached data is returned: it is still within its lifetime.
+        """
         key_hash = hashlib.sha256(key.encode()).hexdigest()
         cache_key = (key_hash, fuel)
         async with self._lock:
             now = self._monotonic()
             self._prune(now)
             entry = self._entries.get(cache_key)
-            if entry is not None:
+            if entry is not None and (max_age is None or now - entry.loaded_at <= max_age.total_seconds()):
                 self._entries.move_to_end(cache_key)
                 assert entry.snapshot is not None
                 return deepcopy(entry.snapshot)
 
             backoff_until = self._key_backoffs.get(key_hash)
             if backoff_until is not None and backoff_until > now:
+                if entry is not None:
+                    return deepcopy(entry.snapshot)
                 raise RateLimited(backoff_until - now)
 
             task = self._inflight.get(cache_key)
@@ -216,7 +228,12 @@ class SharedMarkerCache:
                 task.add_done_callback(_consume_task_exception)
                 self._inflight[cache_key] = task
 
-        return deepcopy(await asyncio.shield(task))
+        try:
+            return deepcopy(await asyncio.shield(task))
+        except (CannotConnect, RateLimited):
+            if entry is None:  # entry is only kept here for a download forced by max_age
+                raise
+            return deepcopy(entry.snapshot)
 
     async def async_get(
         self, session: aiohttp.ClientSession, key: str, fuel: str
@@ -262,6 +279,7 @@ class SharedMarkerCache:
                 self._entries[cache_key] = _MarkerCacheEntry(
                     now + self.ttl,
                     snapshot=snapshot,
+                    loaded_at=now,
                 )
                 self._entries.move_to_end(cache_key)
                 self._trim()
@@ -322,10 +340,11 @@ async def async_fetch_snapshot(
     fuel: str,
     *,
     cache: SharedMarkerCache | None = None,
+    max_age: dt.timedelta | None = None,
 ) -> MarkerSnapshot:
     """Fetch markers with their actual response time for date-safe processing."""
     if cache is not None:
-        return await cache.async_get_snapshot(session, key, fuel)
+        return await cache.async_get_snapshot(session, key, fuel, max_age=max_age)
     markers = await _async_fetch_markers(session, key, fuel)
     return MarkerSnapshot(markers=markers, fetched_at=_now_prague())
 

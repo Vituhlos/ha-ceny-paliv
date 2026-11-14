@@ -4,6 +4,11 @@
 
 ### New
 
+- **Action `ceny_paliv.refresh`** (quality scale: action-setup, docs-actions, action-exceptions): loads the prices now,
+  for one area or all of them. Prices downloaded less than 30 minutes ago are reused, so it cannot flood mBenzin.cz;
+  if mBenzin.cz does not answer, prices still within their lifetime are kept. It reports what could not be refreshed.
+- **Translated error messages** (quality scale: exception-translations): the refresh failure, a refused key and the
+  action's errors are shown in English or Czech.
 - **Diagnostics** (quality scale: diagnostics): Settings → Devices & services → Ceny paliv → ⋮ → Download diagnostics
   gives the settings and the state of the last refresh of each fuel, for bug reports. The access key, the GPS centre
   and the favourite stations are redacted, and the station lists are left out.

@@ -1093,7 +1093,7 @@ async def test_coordinator_sensors_and_failed_refresh(
         saved = await entry.runtime_data._store.async_load()
         assert saved["n95"][markers[0]["url"]][-1][1] == 35
 
-        async def partial_failure(session, key, fuel, *, cache=None):
+        async def partial_failure(session, key, fuel, *, cache=None, max_age=None):
             if fuel == "n95":
                 raise CannotConnect()
             return MarkerSnapshot(markers=[marker("Levna", 32)], fetched_at=dt_util.now())
@@ -1126,9 +1126,12 @@ async def test_coordinator_sensors_and_failed_refresh(
             await coordinator.async_refresh()
             await hass.async_block_till_done()
         assert not coordinator.last_update_success
-        failures = [r for r in caplog.records if r.levelname == "ERROR" and "refresh failed (mBenzin.cz)" in r.getMessage()]
+        failures = [r for r in caplog.records if r.levelname == "ERROR" and "could not be reached" in r.getMessage()]
         assert len(failures) == 1
-        assert "n95: RateLimited, diesel: RateLimited" in failures[0].getMessage()
+        # quality scale exception-translations: the message comes from translations/en.json
+        assert failures[0].getMessage().endswith(
+            "mBenzin.cz could not be reached for any fuel (n95: RateLimited, diesel: RateLimited)"
+        )
         assert hass.states.get("sensor.ceny_paliv_diesel_top5").state == "unavailable"
         assert coordinator.data["n95"]["stations"]
 
@@ -1467,6 +1470,9 @@ async def test_refused_key_starts_reauth(
             await hass.async_block_till_done()
             assert bool(reauth_flows()) is (refresh == refreshes_until_reauth)
         assert hass.states.get("sensor.ceny_paliv_n95_top5").state == "unavailable"
+        refused = entry.runtime_data.last_exception
+        assert refused.translation_key == "invalid_auth"
+        assert str(refused) == "mBenzin.cz no longer accepts the access key"
         assert await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -1479,7 +1485,7 @@ async def test_one_refused_fuel_does_not_ask_for_a_new_key(hass, enable_custom_i
     )
     entry.add_to_hass(hass)
 
-    async def fetch(session, key, fuel, *, cache=None):
+    async def fetch(session, key, fuel, *, cache=None, max_age=None):
         if fuel == "diesel":
             raise InvalidAuth(definite=True)
         return MarkerSnapshot(markers=[marker("Levna", 33)], fetched_at=dt_util.now())
