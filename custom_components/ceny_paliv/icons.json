@@ -14,5 +14,10 @@
         "default": "mdi:gas-station"
       }
     }
+  },
+  "services": {
+    "refresh": {
+      "service": "mdi:refresh"
+    }
   }
 }

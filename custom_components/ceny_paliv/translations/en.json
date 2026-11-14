@@ -313,5 +313,37 @@
         "name": "{fuel} · cheapest #{position}"
       }
     }
+  },
+  "services": {
+    "refresh": {
+      "name": "Refresh prices",
+      "description": "Loads the fuel prices from mBenzin.cz now instead of waiting for the next six-hourly refresh. Prices downloaded less than 30 minutes ago are reused, so repeated calls do not flood mBenzin.cz.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Area",
+          "description": "The Ceny paliv area to refresh. Leave empty to refresh every area."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "update_failed": {
+      "message": "mBenzin.cz could not be reached for any fuel ({errors})."
+    },
+    "invalid_auth": {
+      "message": "mBenzin.cz no longer accepts the access key."
+    },
+    "no_loaded_entries": {
+      "message": "No Ceny paliv area is set up and running."
+    },
+    "entry_not_found": {
+      "message": "There is no Ceny paliv area with the ID {entry_id}."
+    },
+    "entry_not_loaded": {
+      "message": "The Ceny paliv area {title} is not running; see its state in Settings → Devices & services."
+    },
+    "refresh_failed": {
+      "message": "Not all prices could be refreshed from mBenzin.cz. Failed: {failed}. Previous prices kept: {kept}."
+    }
   }
 }

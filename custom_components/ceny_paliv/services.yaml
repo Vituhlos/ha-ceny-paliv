@@ -1,0 +1,6 @@
+refresh:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: ceny_paliv

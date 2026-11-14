@@ -17,6 +17,7 @@ from .api import release_shared_marker_cache
 from .const import CARD_URL, CARD_VERSION, DOMAIN, LOGO_URL
 from .coordinator import CenyPalivConfigEntry, CenyPalivCoordinator
 from .logos import ID_RE, logo_dir
+from .services import async_setup_services
 
 PLATFORMS = ["sensor"]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)  # set up in the UI only
@@ -60,6 +61,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(CenyPalivCardView(card))
     hass.http.register_view(CenyPalivLogoView(hass))
     add_extra_js_url(hass, f"{CARD_URL}?v={CARD_VERSION}")
+    async_setup_services(hass)
     return True
 
 

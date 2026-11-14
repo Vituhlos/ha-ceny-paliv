@@ -178,6 +178,26 @@ Changing a favourite to a different station gives it a station-specific statisti
 
 After an explicit favourite change, Home Assistant may give the new home sensor a suffixed entity ID because the old ID remains attached to its archived statistics. The dashboard card resolves the current sensor automatically; standard YAML cards that refer directly to the old `_home` entity should be updated to the new home sensor entity ID.
 
+## Actions
+
+### `ceny_paliv.refresh` — refresh the prices now
+
+Loads the prices from mBenzin.cz without waiting for the next six-hourly refresh, for example before a trip.
+
+| Field | Required | What it does |
+|---|---|---|
+| `config_entry_id` | no | The area to refresh (pick it in the action editor). Without it, every area is refreshed. |
+
+- Prices downloaded less than **30 minutes** ago are reused, so calling it often does not flood mBenzin.cz; during an HTTP 429 cooldown nothing is downloaded.
+- If mBenzin.cz does not answer, prices still within their lifetime are kept and the action reports them as kept; a fuel with no prices left fails, and its sensors become unavailable.
+- The action fails with a message when an area does not exist or is not running, or when some prices could not be refreshed (it names the area and fuel).
+
+```yaml
+action: ceny_paliv.refresh
+data:
+  config_entry_id: 01JC0EXAMPLE  # optional: the area picked in the action editor
+```
+
 ## Removing the integration
 
 1. **Settings → Devices & services → Ceny paliv**, then **⋮ → Delete** for each configured area. Its sensors and its stored price history are deleted with it.

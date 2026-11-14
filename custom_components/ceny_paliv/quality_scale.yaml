@@ -6,8 +6,8 @@
 rules:
   # Bronze
   action-setup:
-    status: exempt
-    comment: No service actions yet. The refresh action (0.6) is registered in async_setup.
+    status: done
+    comment: ceny_paliv.refresh is registered in async_setup (services.py), so it exists before any entry loads.
   appropriate-polling:
     status: done
     comment: One nationwide download per fuel every 6 hours, shared by all entries with the same key.
@@ -31,8 +31,8 @@ rules:
     status: todo
     comment: The mBenzin client is inside the integration; it moves to the aiombenzin library on PyPI (0.7).
   docs-actions:
-    status: exempt
-    comment: No service actions yet.
+    status: done
+    comment: README "Actions" (and the Czech README) describes ceny_paliv.refresh, its field and its errors.
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions:
@@ -64,8 +64,10 @@ rules:
 
   # Silver
   action-exceptions:
-    status: exempt
-    comment: No service actions yet.
+    status: done
+    comment: >-
+      ServiceValidationError for a missing, foreign or stopped area; HomeAssistantError naming what could not be
+      refreshed (tests/test_services.py).
   config-entry-unloading: done
   docs-configuration-parameters:
     status: done
@@ -140,7 +142,10 @@ rules:
     status: done
     comment: entity.sensor.* names in translations/en.json and cs.json, with {fuel} and {position} placeholders.
   exception-translations:
-    status: todo
+    status: done
+    comment: >-
+      Every HomeAssistantError the integration raises (UpdateFailed, ConfigEntryAuthFailed, the action's errors)
+      uses a translation_key from the exceptions section of en.json and cs.json.
   icon-translations:
     status: done
     comment: icons.json; no entity sets _attr_icon.

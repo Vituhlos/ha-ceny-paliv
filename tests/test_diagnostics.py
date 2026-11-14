@@ -109,7 +109,7 @@ async def test_gps_diagnostics_hide_the_centre_and_show_a_failing_fuel(
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        async def diesel_fails(session, key, fuel, *, cache=None):
+        async def diesel_fails(session, key, fuel, *, cache=None, max_age=None):
             if fuel == "diesel":
                 raise CannotConnect()
             return snapshot

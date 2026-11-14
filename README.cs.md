@@ -184,6 +184,26 @@ Při změně oblíbené stanice dostane nová stanice vlastní identitu statisti
 
 Po výslovné změně oblíbené stanice může Home Assistant nové entitě oblíbené stanice přidělit příponu, protože původní ID zůstává archivované kvůli statistikám. Karta dashboardu aktuální senzor najde automaticky; v běžných YAML kartách s přímým odkazem na původní entitu `_home` bude nutné odkaz aktualizovat na nové ID.
 
+## Akce
+
+### `ceny_paliv.refresh` — aktualizovat ceny hned
+
+Načte ceny z mBenzin.cz bez čekání na další šestihodinovou aktualizaci, třeba před cestou.
+
+| Pole | Povinné | Co dělá |
+|---|---|---|
+| `config_entry_id` | ne | Oblast, která se má aktualizovat (vyberete ji v editoru akce). Bez něj se aktualizují všechny oblasti. |
+
+- Ceny stažené před méně než **30 minutami** se použijí znovu, takže časté volání mBenzin.cz nezahltí; během čekání po chybě 429 se nestahuje nic.
+- Když mBenzin.cz neodpoví, ceny, které jsou ještě platné, zůstanou a akce je ohlásí jako ponechané; palivo, pro které žádné ceny nezbyly, selže a jeho senzory budou nedostupné.
+- Akce skončí chybou s popisem, když oblast neexistuje nebo neběží, nebo když se některé ceny nepodařilo aktualizovat (uvede oblast a palivo).
+
+```yaml
+action: ceny_paliv.refresh
+data:
+  config_entry_id: 01JC0EXAMPLE  # volitelné: oblast vybraná v editoru akce
+```
+
 ## Odebrání integrace
 
 1. **Nastavení → Zařízení a služby → Ceny paliv**, u každé nastavené oblasti **⋮ → Smazat** (anglicky Delete). Spolu s ní se smažou její senzory i uložená historie cen.
