@@ -21,8 +21,10 @@ rules:
     status: todo
     comment: config_flow.py is covered at 94 %; the rule needs every path.
   config-flow:
-    status: todo
-    comment: Setup is UI-only and data/options are split correctly, but most fields lack a data_description.
+    status: done
+    comment: >-
+      Setup is UI-only, the key is in data and the rest in options, and every field has a data_description in
+      English and Czech (test_every_setting_field_has_a_description).
   dependency-transparency:
     status: todo
     comment: The mBenzin client is inside the integration; it moves to the aiombenzin library on PyPI (0.7).
@@ -32,8 +34,8 @@ rules:
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions:
-    status: todo
-    comment: The README does not say how to remove the integration and the logo folder.
+    status: done
+    comment: README "Removing the integration" (and the Czech README), including the logo folder.
   entity-event-setup:
     status: exempt
     comment: Entities do not subscribe to events; the coordinator's zone listener is removed with the entry.
@@ -64,19 +66,19 @@ rules:
     comment: No service actions yet.
   config-entry-unloading: done
   docs-configuration-parameters:
-    status: todo
-    comment: The options (area, radius, fuels, older prices, logos) are not described one by one.
+    status: done
+    comment: README "Settings" table describes every option of Configure.
   docs-installation-parameters:
-    status: todo
-    comment: The setup fields are only partly described.
+    status: done
+    comment: README "Settings" table describes every setup field, the access key included.
   entity-unavailable:
     status: todo
     comment: >-
       When one fuel cannot be refreshed, the coordinator keeps its previous prices with fetch_error and the sensors
       stay available (a test asserts it). The rule wants them unavailable while the service cannot be reached.
   integration-owner:
-    status: todo
-    comment: codeowners still names the upstream author.
+    status: done
+    comment: codeowners is @Vituhlos; documentation, issue tracker and logo pack point to this repository.
   log-when-unavailable:
     status: todo
     comment: A partial refresh logs a warning on every refresh instead of once.

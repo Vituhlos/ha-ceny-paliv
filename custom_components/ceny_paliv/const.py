@@ -11,7 +11,7 @@ CARD_VERSION = "0.5.3"
 # Optional station logos (pack in the GitHub repository, downloaded on request, see logos.py)
 LOGO_URL = "/ceny_paliv_static/logos"  # served from <config>/ceny_paliv_logos/
 LOGO_DIR_NAME = "ceny_paliv_logos"
-_PACK = "https://raw.githubusercontent.com/donthedandy/ha-ceny-paliv/main/logos"
+_PACK = "https://raw.githubusercontent.com/Vituhlos/ha-ceny-paliv/main/logos"
 LOGO_INDEX_URL = f"{_PACK}/index.json"
 LOGO_RAW_URL = _PACK + "/{id}.png"
 

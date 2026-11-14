@@ -1,4 +1,4 @@
-<p align="center"><img src="https://raw.githubusercontent.com/donthedandy/ha-ceny-paliv/main/docs/logo.png" alt="Ceny paliv" width="420"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/Vituhlos/ha-ceny-paliv/main/docs/logo.png" alt="Ceny paliv" width="420"></p>
 
 # ⛽ Ceny paliv – ceny paliv v Home Assistantu
 
@@ -39,7 +39,7 @@ Co je dobré vědět:
 
 ## 2. Instalace přes HACS
 
-1. V HACS otevřete menu **⋮ → Vlastní repozitáře** a přidejte `https://github.com/donthedandy/ha-ceny-paliv` s kategorií **Integrace** (Integration).
+1. V HACS otevřete menu **⋮ → Vlastní repozitáře** a přidejte `https://github.com/Vituhlos/ha-ceny-paliv` s kategorií **Integrace** (Integration).
 2. Vyhledejte **Ceny paliv**, stáhněte ho a **restartujte** Home Assistant.
 3. Otevřete **Nastavení → Zařízení a služby → Přidat integraci → Ceny paliv** a postupně zadejte:
    1. **přístupový klíč**,
@@ -52,6 +52,26 @@ Co je dobré vědět:
 Režim oblasti, zdroj a bod polohy, poloměr, paliva, jazyk, oblíbené stanice i loga můžete později změnit tlačítkem **Konfigurovat** u integrace. Starší konfigurace bez volby oblasti zůstávají v městském režimu. Domácí souřadnice se znovu načtou při aktualizaci; změna zóny vyvolá okamžitou aktualizaci. Po odstranění zóny budou výsledky GPS prázdné, dokud ji neobnovíte nebo nevyberete jiný způsob.
 
 > Texty samotného nastavení se řídí jazykem Home Assistantu (čeština i angličtina jsou k dispozici). Volba jazyka v kroku „Paliva a jazyk“ určuje jen popisky v kartě pro dashboard.
+
+### Nastavení
+
+Vše kromě přístupového klíče se zadává při přidání integrace a dá se později změnit tlačítkem **Konfigurovat**. Přístupový klíč změníte přes **⋮ → Překonfigurovat** (anglicky Reconfigure; nebo když si o nový řekne Home Assistant).
+
+| Volba | Kdy | Co dělá |
+|---|---|---|
+| Přístupový klíč | přidání, ⋮ → Překonfigurovat | Váš osobní klíč k mBenzin.cz; před uložením se ověří skutečným stažením dat. |
+| Oblast vyhledávání | vždy | **Město**: stanice jednoho města. **GPS okolí**: stanice v okruhu kolem bodu. |
+| Zdroj polohy | GPS okolí | Střed: poloha domácnosti v Home Assistantu, uložená zóna, bod na mapě nebo ruční souřadnice. |
+| Zóna | zdroj polohy Zóna | Zóna, jejíž střed se použije; přesun zóny vyvolá aktualizaci, smazaná zóna nechá oblast prázdnou. |
+| Střed GPS oblasti | zdroj polohy Mapa | Bod vybraný na mapě. |
+| Zeměpisná šířka, délka | zdroj polohy Ruční | Ve stupních (−90 až 90, −180 až 180). |
+| Poloměr (km) | GPS okolí | 5–50 km, výchozí 40 km. |
+| Město | Město | Jen stanice tohoto města, ne celého okolí. |
+| Paliva | vždy | Jedno nebo více z Natural 95, Natural 98, Diesel, Diesel Plus, LPG, CNG, AdBlue; každé dostane vlastní senzory. |
+| Jazyk textů v dashboardu | vždy | Angličtina nebo čeština pro popisky karty; názvy entit a obrazovky nastavení se řídí jazykem Home Assistantu. |
+| Zobrazit i starší ceny | vždy | Započítají se ceny staré až 1 (výchozí), 3 nebo 7 dní; LPG a AdBlue vždy 7 dní, CNG 3. |
+| Oblíbená stanice | pro každé palivo | Volitelná (**—** = žádná); dostane vlastní senzor s historií, trendy a pořadím. Výběr jiné stanice založí nový senzor. |
+| Loga | vždy | Řetězce, jejichž loga se stáhnou z balíčku log; viz [Loga čerpacích stanic](#4-loga-čerpacích-stanic-volitelné). |
 
 ## Senzory
 
@@ -126,7 +146,7 @@ Karta u každé stanice ukazuje kulaté logo jejího řetězce. Bez loga nakresl
 
 Chcete-li skutečná loga, otevřete **Nastavení → Zařízení a služby → Ceny paliv → Konfigurovat**, přejděte na krok **Loga čerpacích stanic** a zaškrtněte řetězce. Stáhnou se (pár KB každé) z [balíčku log](logos/) v tomto repozitáři do složky `ceny_paliv_logos` v konfiguraci Home Assistantu a karta je najde sama. Odškrtnutím logo odstraníte. Při prvním nastavení jsou předvybrané řetězce z vašeho města. Nestahuje se nic, co nezaškrtnete, a balíček se s integrací neinstaluje.
 
-Balíček je také ke stažení jako **`ceny-paliv-logos.zip`** u každého [vydání](https://github.com/donthedandy/ha-ceny-paliv/releases): pokud to raději uděláte ručně, rozbalte ho do `<config>/ceny_paliv_logos/` (nové soubory se načtou po restartu nebo znovunačtení integrace). Můžete tam dát i vlastní čtvercové PNG pojmenované podle řetězce malými písmeny, bez diakritiky, s pomlčkami místo mezer (`eurobit.png`, `robin-oil.png`): takové soubory se používají a nikdy se nemažou. Chcete-li soubory z jiné složky, nastavte na kartě `logo_path: /local/logos/` (soubory pojmenované podle řetězce, např. `/local/logos/orlen.png`).
+Balíček je také ke stažení jako **`ceny-paliv-logos.zip`** u každého [vydání](https://github.com/Vituhlos/ha-ceny-paliv/releases): pokud to raději uděláte ručně, rozbalte ho do `<config>/ceny_paliv_logos/` (nové soubory se načtou po restartu nebo znovunačtení integrace). Můžete tam dát i vlastní čtvercové PNG pojmenované podle řetězce malými písmeny, bez diakritiky, s pomlčkami místo mezer (`eurobit.png`, `robin-oil.png`): takové soubory se používají a nikdy se nemažou. Chcete-li soubory z jiné složky, nastavte na kartě `logo_path: /local/logos/` (soubory pojmenované podle řetězce, např. `/local/logos/orlen.png`).
 
 Loga jsou ochranné známky svých majitelů a slouží jen k označení stanic; projekt s nimi nijak nesouvisí. Zdroje a postup při žádosti o odstranění jsou v [logos/SOURCES.md](logos/SOURCES.md).
 
@@ -163,6 +183,13 @@ Každá stanice v `stations` má `rank`, `name`, `street`, `address`, `price`, `
 Při změně oblíbené stanice dostane nová stanice vlastní identitu statistik. Předchozí senzor zůstane registrovaný jako archivovaná entita, aby se dlouhodobé statistiky Home Assistantu nesloučily s jinou stanicí; nově archivované senzory jsou zakázané (historii zobrazíte, když entitu v jejím nastavení povolíte) a opětovný výběr té stanice je znovu povolí; při návratu k dříve vybrané stanici se obnoví pouze její ověřená identita. GPS historie používá celé URL markeru a nové vzorky zapisuje jen pro aktuálních pět nejlevnějších stanic a oblíbenou stanici. Záznamy stanic, které dočasně vypadnou z první pětice, zůstávají po stávající 35denní dobu a lze na ně navázat po návratu stanice; při aktualizaci se odstraňují prošlé nebo prázdné URL záznamy. Nová městská historie je také klíčována celým URL, aby se stejný slug v různých městech nesloučil. Historie trendů z verzí do 0.4.x (klíčovaná slugem stanice) se při první aktualizaci, která zobrazuje původní město konfigurace, přesune na URL stanice, pokud má daný slug v tomto městě právě jedna stanice – trendy tak aktualizaci přežijí. Nejednoznačné staré záznamy se ke stanici nikdy nepřiřazují a po 35 dnech zaniknou. Pokud oblíbenou stanici nelze v celorepublikových datech určit jednoznačně, uložený výběr zůstane zachován, dokud výslovně nevyberete jinou stanici.
 
 Po výslovné změně oblíbené stanice může Home Assistant nové entitě oblíbené stanice přidělit příponu, protože původní ID zůstává archivované kvůli statistikám. Karta dashboardu aktuální senzor najde automaticky; v běžných YAML kartách s přímým odkazem na původní entitu `_home` bude nutné odkaz aktualizovat na nové ID.
+
+## Odebrání integrace
+
+1. **Nastavení → Zařízení a služby → Ceny paliv**, u každé nastavené oblasti **⋮ → Smazat** (anglicky Delete). Spolu s ní se smažou její senzory i uložená historie cen.
+2. Odstraňte z dashboardů karty `custom:ceny-paliv-card`. Kartu poskytuje sama integrace, nic dalšího se neodinstalovává.
+3. **HACS → Ceny paliv → ⋮ → Odebrat** (Remove) a restartujte Home Assistant.
+4. Volitelně smažte složku `ceny_paliv_logos` v konfiguraci Home Assistantu: stažená loga se automaticky neodstraňují.
 
 ## Poznámky
 

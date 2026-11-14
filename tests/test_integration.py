@@ -1677,3 +1677,21 @@ async def test_area_and_location_choices_are_translated_by_home_assistant(
         for selector in (area_selector, method_selector):
             key = selector.config["translation_key"]
             assert set(selectors[key]["options"]) == set(selector.config["options"]), (language, key)
+
+
+def test_every_setting_field_has_a_description():
+    """Quality scale config-flow: every field of setup, Configure, reauth and reconfigure is explained."""
+    from pathlib import Path
+
+    from custom_components.ceny_paliv import const
+
+    folder = Path(const.__file__).parent / "translations"
+    english = json.loads((folder / "en.json").read_text("utf-8"))
+    for language in ("en", "cs"):
+        strings = json.loads((folder / f"{language}.json").read_text("utf-8"))
+        for section in ("config", "options"):
+            steps = strings[section]["step"]
+            assert set(steps) == set(english[section]["step"]), (language, section)
+            for name, step in steps.items():
+                assert set(step.get("data_description", {})) == set(step.get("data", {})), (language, section, name)
+                assert all(text.strip() for text in step.get("data_description", {}).values())
