@@ -174,7 +174,7 @@ def test_gps_station_options_are_radius_first_unique_and_skip_malformed_markers(
     near = {
         **marker("Shared", 30, name="Shell"),
         "url": "/Ceny-benzinu-a-nafty/Praha/Shared/101",
-        "address": "Václavské náměstí 1",
+        "addr": "Václavské náměstí 1",  # mBenzin's own field
     }
     duplicate_slug = {
         **near,
@@ -1434,3 +1434,52 @@ def test_stations_carry_a_readable_title_and_their_town(marker, now):
             assert station["city"] == "Brandys nad Labem Stara Boleslav"
     city_name = payload(markers, now, city="Brandys-nad-Labem---Stara-Boleslav")["city_name"]
     assert city_name == "Brandys nad Labem Stara Boleslav"
+
+
+@pytest.mark.parametrize(
+    ("slug", "city", "name", "addr", "street", "town"),
+    [
+        # mBenzin's address: street, comma, town, with accents
+        ("F1-Gas-Selbska-152732", "As", "F1 Gas", "Selbská 15/2732, Aš", "Selbská 15/2732", "Aš"),
+        # a village without streets: the town and a house number, no street
+        ("Benzina-", "Lhota-12", "Benzina", "Lhota 12", "", "Lhota 12"),
+        # a street without the town: the town comes from the link
+        ("Petrol-Prazska-310", "Neveklov", "Petrol", "Pražská 310", "Pražská 310", "Neveklov"),
+        # more parts: the town is the one that matches the link, the rest is the street
+        ("MOL-Brnenska-1", "Jihlava", "MOL", "Brněnská 1, Jihlava, Vysočina", "Brněnská 1", "Jihlava"),
+        # an address that repeats the station name loses it
+        ("Benzina-Korenov-parkoviste", "Korenov", "Benzina Kořenov", "Benzina Kořenov parkoviště, Kořenov",
+         "parkoviště", "Kořenov"),
+        # extra spaces are one
+        ("Orlen-Hlavni-1", "Tabor", "Orlen", "  Hlavní   1 ,  Tábor ", "Hlavní 1", "Tábor"),
+        # a street named after its own town is still a street (whole words are compared)
+        ("Shell-Taborska-5", "Tabor", "Shell", "Táborská 5", "Táborská 5", "Tabor"),
+        ("Shell-Taborska-5", "Tabor", "Shell", "Táborská 5, Tábor", "Táborská 5", "Tábor"),
+        # a town of several words, with the house number the link adds
+        ("Silmet-", "Krasna-Hora-nad-Vltavou-38", "Silmet", "Krásná Hora nad Vltavou 38", "",
+         "Krásná Hora nad Vltavou 38"),
+    ],
+)
+def test_street_and_town_come_from_mbenzins_address(marker, slug, city, name, addr, street, town):
+    from custom_components.ceny_paliv.api import street_and_town
+
+    station = {**marker(slug, 30, name=name, city=city), "addr": addr}
+    assert street_and_town(station) == (street, town)
+
+
+@pytest.mark.parametrize("addr", [None, "", "   ", 5])
+def test_without_an_address_street_and_town_come_from_the_link(marker, addr):
+    from custom_components.ceny_paliv.api import street_and_town
+
+    station = {**marker("Orlen-Bratri-Stefanu-69", 30, name="Orlen", city="Hradec-Kralove"), "addr": addr}
+    assert street_and_town(station) == ("Bratri Stefanu 69", "Hradec Kralove")
+
+
+def test_stations_show_mbenzins_address_with_accents(marker, now):
+    with_addr = {**marker("Petrol-Prazska-310", 30, name="Petrol"), "addr": "Pražská 310, Praha"}
+    village = {**marker("VS-Petrol-", 31, name="VS Petrol"), "addr": "Praha 97"}
+    stations = payload([with_addr, village], now)["stations"]
+    assert [(s["title"], s["street"], s["city"], s["address"]) for s in stations] == [
+        ("Petrol · Pražská 310", "Pražská 310", "Praha", "Pražská 310, Praha"),
+        ("VS Petrol · Praha 97", "", "Praha 97", "Praha 97"),
+    ]

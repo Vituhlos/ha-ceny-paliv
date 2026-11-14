@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Streets and towns with accents**: they now come from the address mBenzin.cz sends with each station
+  (`Selbská 15/2732, Aš`) instead of the station's link, which has no accents. A village without streets shows the
+  village and its house number ("Benzina · Lhota 12"); a street named after its own town stays a street. The
+  `address` attribute of a station is mBenzin's address. Stations without an address keep the old behaviour.
+
 ## 0.6.0
 
 Quality foundation: the integration now meets the **Gold** tier of the Home Assistant integration quality scale
