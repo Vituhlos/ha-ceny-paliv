@@ -345,5 +345,19 @@
     "refresh_failed": {
       "message": "Ne všechny ceny se podařilo z mBenzin.cz aktualizovat. Selhalo: {failed}. Ponechány předchozí ceny: {kept}."
     }
+  },
+  "issues": {
+    "no_data": {
+      "title": "Žádné ceny paliv z mBenzin.cz pro {title}",
+      "description": "mBenzin.cz od {since} neposlal ceny pro {fuels}, a jejich senzory jsou proto nedostupné. Ověřte, že web {url} funguje a že váš přístupový klíč stále platí. Pokud to potrvá, napište na reklama@mbenzin.cz. Zpráva zmizí s příští úspěšnou aktualizací; můžete také zavolat akci `ceny_paliv.refresh`."
+    },
+    "zone_missing": {
+      "title": "Zóna oblasti {title} už neexistuje",
+      "description": "GPS oblast {title} má střed v zóně {zone}, která už neexistuje, a nezobrazují se proto žádné stanice. Zónu obnovte, nebo otevřete Nastavení → Zařízení a služby → Ceny paliv → Konfigurovat a zvolte jinou zónu nebo zdroj polohy."
+    },
+    "invalid_location": {
+      "title": "GPS oblast {title} nemá platný střed",
+      "description": "Poloha, kolem které je GPS oblast {title}, nemá platné souřadnice, a nezobrazují se proto žádné stanice. Nastavte polohu domácnosti v Nastavení → Systém → Obecné, nebo otevřete Nastavení → Zařízení a služby → Ceny paliv → Konfigurovat a zvolte jiný zdroj polohy."
+    }
   }
 }

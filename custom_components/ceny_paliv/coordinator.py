@@ -8,6 +8,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -43,8 +44,11 @@ from .const import (
     DEFAULT_LANGUAGE,
     DOMAIN,
     FORCED_REFRESH_MIN_AGE,
+    FUELS,
     LOCATION_HOME,
     LOCATION_ZONE,
+    SOURCE_URL,
+    STALE_DATA_AFTER,
     UPDATE_INTERVAL,
 )
 from .geography import distance_km
@@ -52,6 +56,14 @@ from .geography import distance_km
 _LOGGER = logging.getLogger(__name__)
 
 type CenyPalivConfigEntry = ConfigEntry[CenyPalivCoordinator]
+
+
+def no_data_issue_id(entry_id: str) -> str:
+    return f"no_data_{entry_id}"
+
+
+def location_issue_id(entry_id: str) -> str:
+    return f"gps_location_{entry_id}"
 
 
 class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
@@ -134,6 +146,56 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             return (float(latitude), float(longitude)), None
         except (TypeError, ValueError, OverflowError):
             return None, "invalid_coordinates"
+
+    def _async_update_issues(self, payloads: dict[str, dict[str, Any]], gps_error: str | None) -> None:
+        """Repairs: tell the user when something only they can fix keeps the prices from coming."""
+        entry = self.config_entry
+        now = dt_util.now()
+        stale = sorted(
+            (fetched_at, fuel)
+            for fuel, payload in payloads.items()
+            if (fetched_at := dt_util.parse_datetime(payload.get("fetched_at") or "")) is not None
+            and now - fetched_at > STALE_DATA_AFTER
+        )
+        if stale:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                no_data_issue_id(entry.entry_id),
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="no_data",
+                translation_placeholders={
+                    "title": entry.title,
+                    "fuels": ", ".join(FUELS.get(fuel, (fuel,))[0] for _, fuel in stale),
+                    "since": dt_util.as_local(stale[0][0]).strftime("%Y-%m-%d %H:%M"),
+                    "url": SOURCE_URL,  # hassfest wants URLs as placeholders, not in the text
+                },
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, no_data_issue_id(entry.entry_id))
+        if gps_error is None:
+            ir.async_delete_issue(self.hass, DOMAIN, location_issue_id(entry.entry_id))
+        elif gps_error == "zone_unavailable":
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                location_issue_id(entry.entry_id),
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key="zone_missing",
+                translation_placeholders={"title": entry.title, "zone": entry.options.get(CONF_ZONE_ENTITY, "")},
+            )
+        else:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                location_issue_id(entry.entry_id),
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key="invalid_location",
+                translation_placeholders={"title": entry.title},
+            )
 
     async def async_refresh_now(self) -> None:
         """The refresh action: download again every fuel whose data is older than FORCED_REFRESH_MIN_AGE."""
@@ -223,6 +285,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         for payload in result.values():
             payload["logos"] = logos
 
+        self._async_update_issues(result, gps_error)
         if not result or set(errors) == set(self.fuels):
             # every fuel failed: the coordinator makes all sensors unavailable, logs it once and logs the recovery
             self.failed_fuels = errors

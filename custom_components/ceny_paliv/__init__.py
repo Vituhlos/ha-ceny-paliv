@@ -9,13 +9,13 @@ from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
 from .api import release_shared_marker_cache
 from .const import CARD_URL, CARD_VERSION, DOMAIN, LOGO_URL
-from .coordinator import CenyPalivConfigEntry, CenyPalivCoordinator
+from .coordinator import CenyPalivConfigEntry, CenyPalivCoordinator, location_issue_id, no_data_issue_id
 from .logos import ID_RE, logo_dir
 from .services import async_setup_services
 
@@ -90,5 +90,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: CenyPalivConfigEntry) -
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: CenyPalivConfigEntry) -> None:
-    """The entry is deleted: its price history goes with it."""
+    """The entry is deleted: its price history and its Repairs issues go with it."""
     await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}").async_remove()
+    for issue_id in (no_data_issue_id(entry.entry_id), location_issue_id(entry.entry_id)):
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
