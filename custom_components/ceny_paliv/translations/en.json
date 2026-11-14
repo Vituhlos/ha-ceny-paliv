@@ -239,5 +239,21 @@
         "7": "Up to 7 days"
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "cheapest": {
+        "name": "{fuel} · cheapest"
+      },
+      "favourite": {
+        "name": "{fuel} · favourite station"
+      },
+      "archived_favourite": {
+        "name": "{fuel} · archived favourite"
+      },
+      "position": {
+        "name": "{fuel} · cheapest #{position}"
+      }
+    }
   }
 }
