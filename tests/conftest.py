@@ -1,6 +1,6 @@
 """Shared test fixtures; tests never access the network."""
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -31,3 +31,15 @@ def marker():
         }
 
     return make
+
+
+@pytest.fixture
+def mock_frontend():
+    with (
+        patch("homeassistant.components.frontend.async_setup", new=AsyncMock(return_value=True)),
+        patch("homeassistant.components.http.HomeAssistantHTTP.start", new=AsyncMock()),
+        patch("custom_components.ceny_paliv.add_extra_js_url"),
+        patch("custom_components.ceny_paliv.config_flow.async_get_clientsession", return_value=MagicMock()),
+        patch("custom_components.ceny_paliv.coordinator.async_get_clientsession", return_value=MagicMock()),
+    ):
+        yield
