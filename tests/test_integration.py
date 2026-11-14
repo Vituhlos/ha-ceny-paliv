@@ -1052,7 +1052,9 @@ async def test_removed_legacy_favourite_reuses_only_its_original_registry_identi
         assert await hass.config_entries.async_unload(entry.entry_id)
 
 
-async def test_coordinator_sensors_and_failed_refresh(hass, enable_custom_integrations, mock_frontend, marker):
+async def test_coordinator_sensors_and_failed_refresh(
+    hass, enable_custom_integrations, mock_frontend, marker, caplog
+):
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={"key": "dummy", "city": "Praha"},
@@ -1096,13 +1098,47 @@ async def test_coordinator_sensors_and_failed_refresh(hass, enable_custom_integr
                 raise CannotConnect()
             return MarkerSnapshot(markers=[marker("Levna", 32)], fetched_at=dt_util.now())
 
+        coordinator = entry.runtime_data
         fetch.side_effect = partial_failure
-        await entry.runtime_data.async_refresh()
-        await hass.async_block_till_done()
-        top = hass.states.get("sensor.ceny_paliv_n95_top5")
-        assert top.state == "33"
-        assert top.attributes["fetch_error"] == "CannotConnect"
+        caplog.clear()
+        for _ in range(2):  # quality scale log-when-unavailable: the failure is logged once
+            await coordinator.async_refresh()
+            await hass.async_block_till_done()
+        assert caplog.text.count("n95 prices cannot be refreshed from mBenzin.cz (CannotConnect)") == 1
+        # quality scale entity-unavailable: only the failing fuel's sensors are unavailable
+        for entity_id in ("sensor.ceny_paliv_n95_top5", "sensor.ceny_paliv_n95_home", "sensor.ceny_paliv_n95_1"):
+            assert hass.states.get(entity_id).state == "unavailable"
         assert hass.states.get("sensor.ceny_paliv_diesel_top5").state == "32"
+        assert coordinator.data["n95"]["fetch_error"] == "CannotConnect"  # the last prices are kept
+
+        fetch.side_effect = None
+        fetch.return_value = snapshot
+        caplog.clear()
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert caplog.text.count("n95 prices are refreshed again") == 1
+        assert hass.states.get("sensor.ceny_paliv_n95_top5").state == "33"
+
+        # every fuel failing: the coordinator itself fails, every sensor is unavailable, and the old data stays
+        fetch.side_effect = RateLimited()
+        caplog.clear()
+        for _ in range(2):
+            await coordinator.async_refresh()
+            await hass.async_block_till_done()
+        assert not coordinator.last_update_success
+        failures = [r for r in caplog.records if r.levelname == "ERROR" and "refresh failed (mBenzin.cz)" in r.getMessage()]
+        assert len(failures) == 1
+        assert "n95: RateLimited, diesel: RateLimited" in failures[0].getMessage()
+        assert hass.states.get("sensor.ceny_paliv_diesel_top5").state == "unavailable"
+        assert coordinator.data["n95"]["stations"]
+
+        # the recovery after a full outage is logged once, by the coordinator, not again per fuel
+        fetch.side_effect = None
+        caplog.clear()
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert "refreshed again" not in caplog.text
+        assert hass.states.get("sensor.ceny_paliv_diesel_top5").state == "33"
         assert await hass.config_entries.async_unload(entry.entry_id)
 
 

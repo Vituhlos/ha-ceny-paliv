@@ -62,6 +62,8 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self._store: Store[dict[str, dict]] = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}")
         self._history: dict[str, dict[str, list[list]]] | None = None
         self._key_rejections = 0  # consecutive refreshes in which every fuel was refused for the key
+        # fuels whose last refresh failed: their sensors are unavailable (entity.py)
+        self.failed_fuels: set[str] = set()
         if (
             entry.options.get(CONF_AREA_MODE) == AREA_MODE_GPS
             and entry.options.get(CONF_LOCATION_METHOD) == LOCATION_ZONE
@@ -153,7 +155,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         )
         homes = self.homes
         result: dict[str, dict[str, Any]] = {}
-        errors: list[str] = []
+        errors: dict[str, str] = {}
         auth_errors: list[InvalidAuth] = []
 
         for fuel in self.fuels:
@@ -164,7 +166,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             except MBenzinError as err:
                 now = dt_util.now()
                 err_name = type(err).__name__
-                errors.append(f"{fuel}: {err_name}")
+                errors[fuel] = err_name
                 if isinstance(err, InvalidAuth):
                     auth_errors.append(err)
                 previous = (self.data or {}).get(fuel)
@@ -210,9 +212,24 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         for payload in result.values():
             payload["logos"] = logos
 
-        if not result:
-            raise UpdateFailed("Ceny paliv refresh failed (mBenzin.cz): " + ", ".join(errors))
-        if errors:
-            _LOGGER.warning("Ceny paliv partial refresh: %s", ", ".join(errors))
+        failed = set(errors)
+        if not result or failed == set(self.fuels):
+            # every fuel failed: the coordinator makes all sensors unavailable, logs it once and logs the recovery
+            self.failed_fuels = failed
+            raise UpdateFailed(
+                "Ceny paliv refresh failed (mBenzin.cz): "
+                + ", ".join(f"{fuel}: {err}" for fuel, err in errors.items())
+            )
+        # one fuel failing while the others refresh: log each change once, not on every refresh
+        for fuel in sorted(failed - self.failed_fuels):
+            _LOGGER.warning(
+                "Ceny paliv: %s prices cannot be refreshed from mBenzin.cz (%s); its sensors are unavailable",
+                fuel,
+                errors[fuel],
+            )
+        if self.last_update_success:  # after a full outage the coordinator already logged the recovery
+            for fuel in sorted(self.failed_fuels - failed):
+                _LOGGER.info("Ceny paliv: %s prices are refreshed again", fuel)
+        self.failed_fuels = failed
         await self._store.async_save(self._history)
         return result

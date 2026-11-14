@@ -41,10 +41,10 @@ const context = {
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults };`,
+  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown };`,
   context,
 );
-const { CenyPalivCard, CenyPalivCardEditor, editorDefaults } = context.testExports;
+const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown } = context.testExports;
 
 const sensor = (fuel, role, configId, extra = {}) => ({
   state: "32.00",
@@ -554,4 +554,72 @@ test("prices always show the required source 'Ceny: mbenzin.cz' as a link", () =
   card._moreInfo = () => assert.fail("more-info must not open");
   card._click({ composedPath: () => [{ tagName: "A" }, { dataset: { moreInfo: "sensor.t" } }] });
   assert.equal(context.window.opened.length, opened);
+});
+
+// What Home Assistant shows for an unavailable sensor: no attributes beyond its name.
+const unavailable = () => ({ state: "unavailable", last_updated: "2026-11-14T06:00:00Z", attributes: { friendly_name: "x" } });
+
+test("during an outage the card shows the last known sensors with a warning", () => {
+  const ids = ["sensor.ceny_paliv_n95_top5", "sensor.ceny_paliv_n95_home", "sensor.ceny_paliv_n95_1"];
+  const labels = { stale: "mBenzin.cz je nedostupný — zobrazeny poslední známé ceny" };
+  const live = {
+    [ids[0]]: sensor("n95", "top5", "outage", { stations: [], labels }),
+    [ids[1]]: sensor("n95", "home", "outage", { station: "Orlen", trends: {}, age_days: 0 }),
+    [ids[2]]: sensor("n95", "position", "outage", { latitude: 50.1, longitude: 14.4, price: 32 }),
+  };
+  const hass = { language: "cs", localize: () => "", states: { ...live } };
+  assert.equal(withLastKnown(hass), hass); // nothing unavailable: Home Assistant's own object
+  const down = { ...hass, states: Object.fromEntries(ids.map((id) => [id, unavailable()])) };
+  const view = withLastKnown(down);
+  assert.equal(view.localize, hass.localize); // everything else of hass is kept
+  for (const id of ids) {
+    assert.equal(view.states[id].state, "32.00");
+    assert.equal(view.states[id].attributes.cp_stale, true);
+  }
+  assert.equal(view.states[ids[2]].attributes.latitude, 50.1); // the map keeps its markers
+
+  const card = Object.create(CenyPalivCard.prototype);
+  Object.assign(card, {
+    _hass: view,
+    _ids: { top5: ids[0], home: ids[1], pos: [ids[2]] },
+    _config: { fuel: "n95" }, _n: 5, _compact: false, _footer: false, _show: ["home", "list"],
+  });
+  assert.match(card._listHtml(), /class="alert warning"[^]*nedostupný — zobrazeny poslední známé ceny/);
+  assert.match(card._homeHtml(), /secondary warn[^]*nedostupný — zobrazeny poslední známé ceny/);
+});
+
+test("an archived favourite or a removed area is never revived from the last known state", () => {
+  const top = "sensor.ceny_paliv_lpg_top5";
+  const home = "sensor.ceny_paliv_lpg_home";
+  const orphan = "sensor.ceny_paliv_lpg_top5_2";
+  withLastKnown({ states: {
+    [top]: sensor("lpg", "top5", "kept"),
+    [home]: sensor("lpg", "home", "kept"),
+    [orphan]: sensor("lpg", "top5", "removed"),
+  } });
+  const view = withLastKnown({ states: {
+    [top]: sensor("lpg", "top5", "kept"), // the area still refreshes: the favourite was changed
+    [home]: unavailable(),
+    [orphan]: { ...unavailable(), attributes: { restored: true } },
+  } });
+  assert.equal(view.states[home].state, "unavailable");
+  assert.equal(view.states[orphan].state, "unavailable");
+});
+
+test("the last known states survive a page reload in this browser only", () => {
+  const saved = {};
+  const storage = { getItem: (k) => saved[k] ?? null, setItem: (k, v) => { saved[k] = v; } };
+  const load = (window) => {
+    const ctx = { ...context, window };
+    vm.runInNewContext(`${source}\nglobalThis.fn = withLastKnown;`, ctx);
+    return ctx.fn;
+  };
+  const id = "sensor.ceny_paliv_cng_top5";
+  load({ localStorage: storage })({ states: { [id]: sensor("cng", "top5", "reload"), "sensor.other": { state: "1", attributes: {} } } });
+  assert.deepEqual(Object.keys(JSON.parse(saved["ceny-paliv-last-known"])), [id]);
+  const view = load({ localStorage: storage })({ states: { [id]: unavailable() } });
+  assert.equal(view.states[id].attributes.cp_role, "top5");
+  // a blocked storage (private mode) only loses the reload case
+  const blocked = { get localStorage() { throw new Error("blocked"); } };
+  assert.equal(load(blocked)({ states: { [id]: unavailable() } }).states[id].state, "unavailable");
 });
