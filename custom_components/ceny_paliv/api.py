@@ -435,22 +435,29 @@ def street_of(name: str, address: str) -> str:
     return " ".join(words)
 
 
+_HOUSE_NUMBER = re.compile(r"(?:\s+\d+[\w/]*)+$")
+
+
+def _without_house_number(town: str) -> str:
+    """'Bochov 213' -> 'Bochov': mBenzin puts the house number after the town."""
+    return _HOUSE_NUMBER.sub("", town).strip() or town
+
+
 def street_and_town(marker: dict[str, Any]) -> tuple[str, str]:
     """The station's street and town, with accents from mBenzin's `addr` ('Selbská 15/2732, Aš') when it has one.
 
-    Without `addr` both come from the station's link, which has no accents ('Selbska 15/2732', 'As'). A village
-    address has no street ('Lhota 12'): then the whole address is the town and the street is empty.
+    Without `addr` both come from the station's link, which has no accents ('Selbska 15/2732', 'As'). The town
+    never carries a house number. A village without streets is addressed by its name and number ('Lhota 12'):
+    that is its street, and the village its town.
     """
     name = marker["name"] if isinstance(marker.get("name"), str) else ""
     slug_town = pretty(city_of(marker) or "")
+    town = _without_house_number(slug_town)
     addr = marker.get("addr")
     if not isinstance(addr, str) or not " ".join(addr.split()):
-        return street_of(name, pretty(_safe_station_slug(marker) or "")), slug_town
+        return street_of(name, pretty(_safe_station_slug(marker) or "")), town
     parts = [" ".join(part.split()) for part in addr.split(",") if part.strip()]
-    # the town's words, without the house number mBenzin's links sometimes add ('Lhota-12')
-    town_words = _fold(slug_town).split()
-    while town_words and town_words[-1].isdigit():
-        town_words.pop()
+    town_words = _fold(town).split()
 
     def is_town(part: str) -> bool:
         # whole words: 'Táborská 5' in Tábor is a street, 'Lhota 12' in Lhota is the village itself
@@ -458,11 +465,13 @@ def street_and_town(marker: dict[str, Any]) -> tuple[str, str]:
 
     if len(parts) == 1:
         if is_town(parts[0]):
-            return "", parts[0]  # a village: the town and a house number
-        return street_of(name, parts[0]), slug_town
+            village = _without_house_number(parts[0])
+            # 'Lhota 12' is the address line of a village; 'Lhota' alone has no street at all
+            return ("" if village == parts[0] else parts[0]), village
+        return street_of(name, parts[0]), town
     # the town is the part that matches the town of the link, else the last one ('Pražská 310, Neveklov')
     index = next((i for i in range(1, len(parts)) if is_town(parts[i])), len(parts) - 1)
-    return street_of(name, ", ".join(parts[:index])), parts[index]
+    return street_of(name, ", ".join(parts[:index])), _without_house_number(parts[index])
 
 
 def station_title(name: str, street: str, city: str | None = None) -> str:

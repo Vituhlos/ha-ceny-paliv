@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Towns without house numbers**: mBenzin.cz writes the house number after the town ("silnice 6, Bochov 213"), and
+  some station links do too; the `city` of a station is now just the town ("Bochov"). A village without streets keeps
+  its address line ("Lhota 12") as the street, so the card shows it as before. The full address stays in `address`.
+
 ## 0.6.1
 
 ### Changed
