@@ -4,6 +4,8 @@
 
 ### New
 
+- **Documentation** (quality scale: the Gold `docs-*` rules): the README, in English and Czech, now has use cases, how
+  the data is updated, every attribute of every sensor, examples, known limitations and troubleshooting.
 - **Repairs** (quality scale: repair-issues): Settings → Repairs shows when a fuel has had no prices from mBenzin.cz
   for more than 24 hours, when the zone of a GPS area was deleted, or when the GPS centre has no valid coordinates.
   Each message says what to do and disappears by itself once the cause is gone, or when the area is deleted.
