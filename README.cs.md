@@ -196,6 +196,7 @@ Po výslovné změně oblíbené stanice může Home Assistant nové entitě obl
 - **E10** mBenzin nerozlišuje: u Natural 95 jde o cenu pro všechny 95oktanové benzíny.
 - Entity se jmenují `sensor.ceny_paliv_<palivo>_…`; druhá konfigurace stejného paliva má v Home Assistantu vlastní ID. Pro přiřazení karty použijte `config_id`.
 - Denní záznam cen potřebný pro trendy ukládá Home Assistant a postupně se plní (hvězdička u trendu v kartě označuje trend z kratší historie).
+- K hlášení problému přiložte diagnostiku: **Nastavení → Zařízení a služby → Ceny paliv → ⋮ → Stáhnout diagnostiku** (anglicky Download diagnostics). Soubor ukazuje nastavení a průběh poslední aktualizace každého paliva; přístupový klíč, střed GPS oblasti a oblíbené stanice jsou nahrazené `**REDACTED**` a seznamy stanic v něm nejsou.
 
 ## Vývojářské testy
 

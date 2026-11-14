@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### New
+
+- **Diagnostics** (quality scale: diagnostics): Settings → Devices & services → Ceny paliv → ⋮ → Download diagnostics
+  gives the settings and the state of the last refresh of each fuel, for bug reports. The access key, the GPS centre
+  and the favourite stations are redacted, and the station lists are left out.
+
 ### Changed
 
 - **Sensors are unavailable while mBenzin.cz cannot be reached** (quality scale: entity-unavailable,

@@ -190,6 +190,7 @@ After an explicit favourite change, Home Assistant may give the new home sensor 
 - **E10** is not distinguished by mBenzin: "Natural 95" is the price shown for 95-octane petrol.
 - Entity ids are `sensor.ceny_paliv_<fuel>_…`; a second configuration for the same fuel receives distinct Home Assistant entity IDs. Use `config_id` to bind a dashboard card to one area.
 - The daily price log used for the trends is stored by Home Assistant and fills up over time (a `*` next to a trend in the card marks a trend computed from a shorter history).
+- To report a problem, attach the diagnostics: **Settings → Devices & services → Ceny paliv → ⋮ → Download diagnostics**. The file shows the settings and how the last refresh of each fuel went; the access key, the GPS centre and the favourite stations are replaced by `**REDACTED**`, and the station lists are left out.
 
 ## Development tests
 
