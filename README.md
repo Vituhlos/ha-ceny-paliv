@@ -297,6 +297,20 @@ sequence:
 
 Replace `notify.mobile_app_YOUR_PHONE` with your notify action, and the entity ids with yours (Settings → Entities, search "Ceny paliv").
 
+## Upgrading from 0.5
+
+Nothing to do: update in HACS and restart Home Assistant. Entity ids, history, statistics, settings and dashboard cards
+carry over. What happens on the first start:
+
+- Each area becomes a device and its sensors move under it; their names come from the translations (for example
+  `Natural 95 · cheapest #1` instead of the station's name, which is now in the `station` attribute).
+- An automatic area title with a run of spaces is tidied ("Ceny paliv Brandys nad Labem Stara Boleslav").
+- Archived favourite sensors become diagnostic entities.
+- The favourite station's price history starts its station statistics, filled with up to 35 days already stored.
+- From now on a fuel's sensors are **unavailable** while mBenzin.cz cannot be reached (they kept the last price
+  before); automations that read them may need a condition. The card still shows the last known prices.
+- If you added `donthedandy/ha-ceny-paliv` to HACS, replace it with `https://github.com/Vituhlos/ha-ceny-paliv`.
+
 ## Removing the integration
 
 1. **Settings → Devices & services → Ceny paliv**, then **⋮ → Delete** for each configured area. Its sensors and its stored price history are deleted with it. The long-term statistics of your favourite stations stay in Home Assistant (to delete them: **Developer tools → Statistics**, search `ceny_paliv`).

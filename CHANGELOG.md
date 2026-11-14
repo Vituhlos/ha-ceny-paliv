@@ -2,8 +2,14 @@
 
 ## Unreleased
 
+Upgrading from 0.5 needs no action: entity ids, history, statistics and settings carry over (see the README,
+"Upgrading from 0.5"). The breaking changes are marked below.
+
 ### New
 
+- **Automatic upgrade from 0.5**: the config entry moves to minor version 2, and an automatic area title with a run of
+  spaces (written by 0.5 for towns such as "Brandýs nad Labem - Stará Boleslav") is tidied, since the area's device
+  is named after it. A title you typed is kept; an entry from a newer version is not touched.
 - **Diagnostics show what mBenzin.cz sends**: the field names of its stations per fuel, their number, and one example
   station (the first of the nationwide list, never one of your area). This tells whether a field could give the
   streets and towns their accents.
