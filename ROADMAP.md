@@ -22,6 +22,9 @@ konfigurační průvodce 94 %.
 
 ## 0.6 – kvalitativní základ (Bronze → Gold)
 
+Vydáno jako **0.6.0** (14. 11. 2026, #29–#41): Bronze 19/20, Silver 10/10, Gold 21/21. Zbývá diakritika ulic a obcí
+(podle diagnostiky z 0.6.0: buď pole od mBenzinu, nebo seznam obcí).
+
 - `quality_scale.yaml`, kontrola v CI, měření pokrytí, tento plán.
 - Zařízení pro každou oblast; entity pojmenované přes zařízení (`has_entity_name`) a překlady názvů, ikon
   a chybových hlášek; kategorie entit; méně entit (senzory pozic vypnuté nebo pryč); odstranění zařízení,
