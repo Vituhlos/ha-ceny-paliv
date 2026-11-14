@@ -16,6 +16,9 @@
         "description": "Choose the original city list or a GPS circle. GPS uses only Home Assistant's configured location, a saved zone, a point selected on the map, or manually entered coordinates.",
         "data": {
           "area_mode": "Search area"
+        },
+        "data_description": {
+          "area_mode": "City shows the stations of one city. GPS area shows the stations within a radius of a point you choose."
         }
       },
       "location_method": {
@@ -23,6 +26,9 @@
         "description": "Choose how to set the centre of the search area. No phone location or GPS tracker is used.",
         "data": {
           "location_method": "Location source"
+        },
+        "data_description": {
+          "location_method": "Where the centre of the GPS area comes from: Home Assistant's home location, a saved zone, a point on the map or typed coordinates."
         }
       },
       "location_zone": {
@@ -30,6 +36,9 @@
         "description": "Select an existing zone. Its coordinates are read again when the zone changes; deleting the zone leaves the GPS results empty until it is restored or another method is selected.",
         "data": {
           "zone_entity": "Zone"
+        },
+        "data_description": {
+          "zone_entity": "The zone whose centre is used. If the zone moves, the prices are refreshed for its new position."
         }
       },
       "location_map": {
@@ -37,6 +46,9 @@
         "description": "Tap or drag the marker to choose the centre. The map is prefilled with the saved point or Home Assistant's configured home location.",
         "data": {
           "location": "GPS centre"
+        },
+        "data_description": {
+          "location": "The point at the centre of the search area."
         }
       },
       "location_manual": {
@@ -45,6 +57,10 @@
         "data": {
           "latitude": "Latitude",
           "longitude": "Longitude"
+        },
+        "data_description": {
+          "latitude": "Decimal degrees, for example 50.0875 for Prague.",
+          "longitude": "Decimal degrees, for example 14.4214 for Prague."
         }
       },
       "gps_radius": {
@@ -52,6 +68,9 @@
         "description": "Choose a radius from 5 to 50 km. The default is 40 km.",
         "data": {
           "gps_radius_km": "Radius (km)"
+        },
+        "data_description": {
+          "gps_radius_km": "Stations farther from the centre than this are left out."
         }
       },
       "city": {
@@ -59,6 +78,9 @@
         "description": "Choose your city. Only the stations of this city are shown, not those of the whole region.",
         "data": {
           "city": "City"
+        },
+        "data_description": {
+          "city": "Only the stations of this city are listed, not those of the surrounding region."
         }
       },
       "fuels": {
@@ -71,7 +93,8 @@
         },
         "data_description": {
           "language": "Sets the language of the labels in the ready-made dashboard views (for example \"My station\"). The language of this setup follows Home Assistant's language.",
-          "max_age_days": "Prices are counted only when this fresh. Small stations update their prices on mBenzin.cz less often, so with 1 day they often drop out of the list. Older prices are shown with their date."
+          "max_age_days": "Prices are counted only when this fresh. Small stations update their prices on mBenzin.cz less often, so with 1 day they often drop out of the list. Older prices are shown with their date.",
+          "fuels": "Each fuel gets its own sensors and its own card."
         }
       },
       "station": {
@@ -79,6 +102,9 @@
         "description": "Your usual station in {city} for {fuel}. It gets its own sensor with price history, trends and its rank in town. Leave \"—\" for none.",
         "data": {
           "station": "Favourite station"
+        },
+        "data_description": {
+          "station": "Its sensor keeps a price history. Choosing another station later starts a new sensor, so the histories of two stations are never mixed."
         }
       },
       "logos": {
@@ -86,6 +112,9 @@
         "description": "Tick the chains whose logos you want on the card. They are downloaded from the Ceny paliv logo pack on GitHub into your Home Assistant config folder (a few KB each). The chains of your city are preselected. Logos are trademarks of their owners and are shown only to identify the stations; this project is not affiliated with them. Untick everything to use letter badges instead.",
         "data": {
           "logos": "Logos"
+        },
+        "data_description": {
+          "logos": "Chains to download logos for. Nothing is downloaded for chains you leave unticked."
         }
       },
       "reauth_confirm": {
@@ -132,6 +161,9 @@
         "description": "Choose the original city list or a GPS circle. Existing entries without this setting continue to use city mode.",
         "data": {
           "area_mode": "Search area"
+        },
+        "data_description": {
+          "area_mode": "City shows the stations of one city. GPS area shows the stations within a radius of a point you choose."
         }
       },
       "location_method": {
@@ -139,6 +171,9 @@
         "description": "Choose how to set the centre. No phone location or GPS tracker is used.",
         "data": {
           "location_method": "Location source"
+        },
+        "data_description": {
+          "location_method": "Where the centre of the GPS area comes from: Home Assistant's home location, a saved zone, a point on the map or typed coordinates."
         }
       },
       "location_zone": {
@@ -146,6 +181,9 @@
         "description": "The zone is resolved again as it changes. A deleted or invalid zone produces no GPS-area stations.",
         "data": {
           "zone_entity": "Zone"
+        },
+        "data_description": {
+          "zone_entity": "The zone whose centre is used. If the zone moves, the prices are refreshed for its new position."
         }
       },
       "location_map": {
@@ -153,6 +191,9 @@
         "description": "Tap or drag the marker to choose the centre. The previous point or Home Assistant home location is suggested.",
         "data": {
           "location": "GPS centre"
+        },
+        "data_description": {
+          "location": "The point at the centre of the search area."
         }
       },
       "location_manual": {
@@ -161,6 +202,10 @@
         "data": {
           "latitude": "Latitude",
           "longitude": "Longitude"
+        },
+        "data_description": {
+          "latitude": "Decimal degrees, for example 50.0875 for Prague.",
+          "longitude": "Decimal degrees, for example 14.4214 for Prague."
         }
       },
       "gps_radius": {
@@ -168,6 +213,9 @@
         "description": "Choose a radius from 5 to 50 km. The default is 40 km.",
         "data": {
           "gps_radius_km": "Radius (km)"
+        },
+        "data_description": {
+          "gps_radius_km": "Stations farther from the centre than this are left out."
         }
       },
       "city": {
@@ -175,6 +223,9 @@
         "description": "Choose the city to use in city mode.",
         "data": {
           "city": "City"
+        },
+        "data_description": {
+          "city": "Only the stations of this city are listed, not those of the surrounding region."
         }
       },
       "fuels": {
@@ -187,7 +238,8 @@
         },
         "data_description": {
           "language": "Sets the language of the labels in the ready-made dashboard views (for example \"My station\"). The language of this setup follows Home Assistant's language.",
-          "max_age_days": "Prices are counted only when this fresh. Small stations update their prices on mBenzin.cz less often, so with 1 day they often drop out of the list. Older prices are shown with their date."
+          "max_age_days": "Prices are counted only when this fresh. Small stations update their prices on mBenzin.cz less often, so with 1 day they often drop out of the list. Older prices are shown with their date.",
+          "fuels": "Each fuel gets its own sensors and its own card."
         }
       },
       "station": {
@@ -195,6 +247,9 @@
         "description": "Your usual station in {city} for {fuel}. Leave \"—\" for none.",
         "data": {
           "station": "Favourite station"
+        },
+        "data_description": {
+          "station": "Its sensor keeps a price history. Choosing another station later starts a new sensor, so the histories of two stations are never mixed."
         }
       },
       "logos": {
@@ -202,6 +257,9 @@
         "description": "Tick the chains whose logos you want on the card. They are downloaded from the Ceny paliv logo pack on GitHub into your Home Assistant config folder (a few KB each). The chains of your city are preselected. Logos are trademarks of their owners and are shown only to identify the stations; this project is not affiliated with them. Untick everything to use letter badges instead.",
         "data": {
           "logos": "Logos"
+        },
+        "data_description": {
+          "logos": "Chains to download logos for. Nothing is downloaded for chains you leave unticked."
         }
       }
     },

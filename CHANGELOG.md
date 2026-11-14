@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **This repository is now the project's home**: the documentation, issue tracker, HACS instructions and logo pack
+  point to `Vituhlos/ha-ceny-paliv`, and the code owner is @Vituhlos. If you added the original repository to HACS,
+  replace it with `https://github.com/Vituhlos/ha-ceny-paliv` to keep getting updates.
+- Every setup and Configure field now has a short description, in English and Czech.
+- The README describes every setting in a table and how to remove the integration.
+
 ## 0.5.3
 
 ### Changed

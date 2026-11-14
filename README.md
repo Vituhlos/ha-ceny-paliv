@@ -1,4 +1,4 @@
-<p align="center"><img src="https://raw.githubusercontent.com/donthedandy/ha-ceny-paliv/main/docs/logo.png" alt="Ceny paliv" width="420"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/Vituhlos/ha-ceny-paliv/main/docs/logo.png" alt="Ceny paliv" width="420"></p>
 
 # ⛽ Ceny paliv – Czech fuel prices for Home Assistant
 
@@ -33,7 +33,7 @@ mBenzin blocks plain scraping with a browser check, but they give a **personal a
 
 ## 2. Install with HACS
 
-1. HACS → ⋮ → **Custom repositories** → add `https://github.com/donthedandy/ha-ceny-paliv`, category **Integration**.
+1. HACS → ⋮ → **Custom repositories** → add `https://github.com/Vituhlos/ha-ceny-paliv`, category **Integration**.
 2. Search for **Ceny paliv**, download it, **restart** Home Assistant.
 3. Settings → Devices & services → **Add integration** → **Ceny paliv**, then:
    1. paste your **access key**
@@ -46,6 +46,26 @@ mBenzin blocks plain scraping with a browser check, but they give a **personal a
 You can change the area mode, location method or point, radius, fuels, language, favourite stations and logos later: the integration's **Configure** button. Existing entries without an area mode remain in City mode. Home Assistant home coordinates are read at refresh time; zone changes trigger a refresh, while a deleted zone produces an empty GPS result until it is restored or replaced.
 
 > The setup screens follow Home Assistant's own language (English and Czech are provided). The language chosen in step 3 only sets the labels of the dashboard card.
+
+### Settings
+
+Everything except the access key is asked during setup and can be changed later with **Configure**. The access key is changed with **⋮ → Reconfigure** (or when Home Assistant asks for a new one).
+
+| Setting | When | What it does |
+|---|---|---|
+| Access key | setup, Reconfigure | Your personal mBenzin.cz key; checked with a real download before it is saved. |
+| Search area | always | **City**: the stations of one city. **GPS area**: the stations within a radius of a point. |
+| Location source | GPS area | The centre: Home Assistant's home location, a saved zone, a point on the map, or manual coordinates. |
+| Zone | location source Zone | The zone whose centre is used; a moved zone triggers a refresh, a deleted one leaves the area empty. |
+| GPS centre | location source Map | The point picked on the map. |
+| Latitude, Longitude | location source Manual | Decimal degrees (−90 to 90, −180 to 180). |
+| Radius (km) | GPS area | 5–50 km, 40 km by default. |
+| City | City | Only that city's stations, not the surrounding region. |
+| Fuels | always | One or more of Natural 95, Natural 98, Diesel, Diesel Plus, LPG, CNG, AdBlue; each gets its own sensors. |
+| Language of the dashboard texts | always | English or Čeština for the card's labels; entity names and setup screens follow Home Assistant's language. |
+| Show older prices too | always | Prices up to 1 (default), 3 or 7 days old count; LPG and AdBlue always allow 7 days, CNG 3. |
+| Favourite station | per fuel | Optional (**—** for none); gets its own sensor with history, trends and rank. Choosing another station starts a new sensor. |
+| Logos | always | Chains whose logos are downloaded from the logo pack; see [Station logos](#4-station-logos-optional). |
 
 ## Entities
 
@@ -120,7 +140,7 @@ The card shows a round logo for the chain of each station. Without a logo it dra
 
 To have the real logos, open **Settings → Devices & services → Ceny paliv → Configure** and go to the **Station logos** step: tick the chains you want. They are downloaded (a few KB each) from the [logo pack](logos/) in this repository into the folder `ceny_paliv_logos` of your Home Assistant configuration and the card finds them by itself. Untick a chain to remove its logo. The chains of your city are preselected the first time. Nothing is downloaded unless you tick it, and the pack is not installed with the integration.
 
-The pack is also published as **`ceny-paliv-logos.zip`** in each [release](https://github.com/donthedandy/ha-ceny-paliv/releases): unzip it into `<config>/ceny_paliv_logos/` if you prefer to do it by hand (restart or reload the integration to pick up new files). You can drop your own square PNG there too, named after the chain in lower case, without accents, with dashes for spaces (`eurobit.png`, `robin-oil.png`): such files are used and never deleted. To use files from another folder, set `logo_path: /local/logos/` on the card (files named like the chain, for example `/local/logos/orlen.png`).
+The pack is also published as **`ceny-paliv-logos.zip`** in each [release](https://github.com/Vituhlos/ha-ceny-paliv/releases): unzip it into `<config>/ceny_paliv_logos/` if you prefer to do it by hand (restart or reload the integration to pick up new files). You can drop your own square PNG there too, named after the chain in lower case, without accents, with dashes for spaces (`eurobit.png`, `robin-oil.png`): such files are used and never deleted. To use files from another folder, set `logo_path: /local/logos/` on the card (files named like the chain, for example `/local/logos/orlen.png`).
 
 The logos are trademarks of their owners, used only to identify the stations; this project is not affiliated with them. The sources and the removal policy are in [logos/SOURCES.md](logos/SOURCES.md).
 
@@ -158,6 +178,13 @@ Changing a favourite to a different station gives it a station-specific statisti
 
 After an explicit favourite change, Home Assistant may give the new home sensor a suffixed entity ID because the old ID remains attached to its archived statistics. The dashboard card resolves the current sensor automatically; standard YAML cards that refer directly to the old `_home` entity should be updated to the new home sensor entity ID.
 
+## Removing the integration
+
+1. **Settings → Devices & services → Ceny paliv**, then **⋮ → Delete** for each configured area. Its sensors and its stored price history are deleted with it.
+2. Remove the `custom:ceny-paliv-card` cards from your dashboards. The card is served by the integration, so there is nothing else to uninstall.
+3. **HACS → Ceny paliv → ⋮ → Remove**, then restart Home Assistant.
+4. Optionally delete the folder `ceny_paliv_logos` in your Home Assistant configuration folder: downloaded logos are not removed automatically.
+
 ## Notes
 
 - **E10** is not distinguished by mBenzin: "Natural 95" is the price shown for 95-octane petrol.
@@ -176,7 +203,7 @@ CI additionally runs hassfest, the HACS validation, ruff and a check that the ma
 
 ## 🇨🇿 Česky
 
-Úplný český popis (získání klíče, instalace přes HACS, senzory, dashboard) najdete v **[README.cs.md](README.cs.md)**. Stručně: klíč zdarma na reklama@mbenzin.cz, HACS → Vlastní repozitáře → `https://github.com/donthedandy/ha-ceny-paliv` (Integrace) → restart → Přidat integraci **Ceny paliv**.
+Úplný český popis (získání klíče, instalace přes HACS, senzory, dashboard) najdete v **[README.cs.md](README.cs.md)**. Stručně: klíč zdarma na reklama@mbenzin.cz, HACS → Vlastní repozitáře → `https://github.com/Vituhlos/ha-ceny-paliv` (Integrace) → restart → Přidat integraci **Ceny paliv**.
 
 ## License
 

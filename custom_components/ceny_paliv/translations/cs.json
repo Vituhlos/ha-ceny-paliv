@@ -16,6 +16,9 @@
         "description": "Vyberte původní seznam měst nebo GPS kruh. GPS používá pouze polohu nastavenou v Home Assistantu, uloženou zónu, bod z mapy nebo ručně zadané souřadnice.",
         "data": {
           "area_mode": "Oblast vyhledávání"
+        },
+        "data_description": {
+          "area_mode": "Město zobrazí stanice jednoho města. GPS okolí zobrazí stanice v okruhu kolem bodu, který zvolíte."
         }
       },
       "location_method": {
@@ -23,6 +26,9 @@
         "description": "Vyberte způsob určení středu oblasti. Nepoužívá se poloha telefonu ani GPS tracker.",
         "data": {
           "location_method": "Zdroj polohy"
+        },
+        "data_description": {
+          "location_method": "Odkud se vezme střed GPS oblasti: poloha domácnosti v Home Assistantu, uložená zóna, bod na mapě nebo zadané souřadnice."
         }
       },
       "location_zone": {
@@ -30,6 +36,9 @@
         "description": "Vyberte existující zónu. Souřadnice se znovu načtou při změně zóny; po jejím odstranění budou výsledky GPS prázdné, dokud ji neobnovíte nebo nevyberete jiný způsob.",
         "data": {
           "zone_entity": "Zóna"
+        },
+        "data_description": {
+          "zone_entity": "Zóna, jejíž střed se použije. Když se zóna přesune, ceny se načtou pro její novou polohu."
         }
       },
       "location_map": {
@@ -37,6 +46,9 @@
         "description": "Klepnutím nebo přetažením značky zvolte střed. Mapa se předvyplní uloženým bodem nebo konfigurační polohou domácnosti v Home Assistantu.",
         "data": {
           "location": "Střed GPS oblasti"
+        },
+        "data_description": {
+          "location": "Bod ve středu oblasti vyhledávání."
         }
       },
       "location_manual": {
@@ -45,6 +57,10 @@
         "data": {
           "latitude": "Zeměpisná šířka",
           "longitude": "Zeměpisná délka"
+        },
+        "data_description": {
+          "latitude": "Ve stupních, např. 50.0875 pro Prahu.",
+          "longitude": "Ve stupních, např. 14.4214 pro Prahu."
         }
       },
       "gps_radius": {
@@ -52,6 +68,9 @@
         "description": "Zvolte poloměr 5–50 km. Výchozí hodnota je 40 km.",
         "data": {
           "gps_radius_km": "Poloměr (km)"
+        },
+        "data_description": {
+          "gps_radius_km": "Stanice dál od středu se nezobrazí."
         }
       },
       "city": {
@@ -59,6 +78,9 @@
         "description": "Vyberte město. Zobrazí se pouze čerpací stanice z tohoto města, nikoli z celého kraje.",
         "data": {
           "city": "Město"
+        },
+        "data_description": {
+          "city": "Nabídnou se jen stanice tohoto města, ne celého okolí."
         }
       },
       "fuels": {
@@ -71,7 +93,8 @@
         },
         "data_description": {
           "language": "Určuje jazyk popisků v hotových pohledech dashboardu (např. „Moje stanice“). Jazyk samotného nastavení se řídí jazykem Home Assistantu.",
-          "max_age_days": "Do přehledu se počítají jen takto čerstvé ceny. Menší stanice aktualizují ceny na mBenzin.cz méně často, takže s 1 dnem z přehledu často vypadnou. Starší ceny se zobrazí s datem."
+          "max_age_days": "Do přehledu se počítají jen takto čerstvé ceny. Menší stanice aktualizují ceny na mBenzin.cz méně často, takže s 1 dnem z přehledu často vypadnou. Starší ceny se zobrazí s datem.",
+          "fuels": "Každé palivo dostane vlastní senzory a vlastní kartu."
         }
       },
       "station": {
@@ -79,6 +102,9 @@
         "description": "Vaše nejčastější čerpací stanice v městě {city} pro palivo {fuel}. Dostane vlastní senzor s historií cen, trendy a pořadím ve městě. Pokud žádnou nechcete, ponechte „—“.",
         "data": {
           "station": "Oblíbená stanice"
+        },
+        "data_description": {
+          "station": "Její senzor uchovává historii cen. Pozdější výběr jiné stanice založí nový senzor, aby se historie dvou stanic nikdy nesmíchaly."
         }
       },
       "logos": {
@@ -86,6 +112,9 @@
         "description": "Zaškrtněte řetězce, jejichž loga chcete mít v kartě. Stáhnou se z balíčku log Ceny paliv na GitHubu do konfigurační složky Home Assistantu (každé má jen pár KB). Řetězce z vašeho města jsou předvybrané. Loga jsou ochranné známky svých majitelů a slouží jen k označení stanic; projekt s nimi nijak nesouvisí. Pokud nezaškrtnete nic, karta použije barevné odznaky s iniciálami.",
         "data": {
           "logos": "Loga"
+        },
+        "data_description": {
+          "logos": "Řetězce, jejichž loga se stáhnou. Pro nezaškrtnuté řetězce se nic nestahuje."
         }
       },
       "reauth_confirm": {
@@ -132,6 +161,9 @@
         "description": "Vyberte původní seznam měst nebo GPS kruh. Stávající konfigurace bez této volby zůstávají v městském režimu.",
         "data": {
           "area_mode": "Oblast vyhledávání"
+        },
+        "data_description": {
+          "area_mode": "Město zobrazí stanice jednoho města. GPS okolí zobrazí stanice v okruhu kolem bodu, který zvolíte."
         }
       },
       "location_method": {
@@ -139,6 +171,9 @@
         "description": "Vyberte způsob určení středu. Poloha telefonu ani GPS tracker se nepoužívají.",
         "data": {
           "location_method": "Zdroj polohy"
+        },
+        "data_description": {
+          "location_method": "Odkud se vezme střed GPS oblasti: poloha domácnosti v Home Assistantu, uložená zóna, bod na mapě nebo zadané souřadnice."
         }
       },
       "location_zone": {
@@ -146,6 +181,9 @@
         "description": "Poloha zóny se načítá znovu při její změně. Odstraněná nebo neplatná zóna nemá žádné stanice GPS oblasti.",
         "data": {
           "zone_entity": "Zóna"
+        },
+        "data_description": {
+          "zone_entity": "Zóna, jejíž střed se použije. Když se zóna přesune, ceny se načtou pro její novou polohu."
         }
       },
       "location_map": {
@@ -153,6 +191,9 @@
         "description": "Klepnutím nebo přetažením značky zvolte střed. Nabídne se předchozí bod nebo poloha domácnosti v Home Assistantu.",
         "data": {
           "location": "Střed GPS oblasti"
+        },
+        "data_description": {
+          "location": "Bod ve středu oblasti vyhledávání."
         }
       },
       "location_manual": {
@@ -161,6 +202,10 @@
         "data": {
           "latitude": "Zeměpisná šířka",
           "longitude": "Zeměpisná délka"
+        },
+        "data_description": {
+          "latitude": "Ve stupních, např. 50.0875 pro Prahu.",
+          "longitude": "Ve stupních, např. 14.4214 pro Prahu."
         }
       },
       "gps_radius": {
@@ -168,6 +213,9 @@
         "description": "Zvolte poloměr 5–50 km. Výchozí hodnota je 40 km.",
         "data": {
           "gps_radius_km": "Poloměr (km)"
+        },
+        "data_description": {
+          "gps_radius_km": "Stanice dál od středu se nezobrazí."
         }
       },
       "city": {
@@ -175,6 +223,9 @@
         "description": "Vyberte město pro městský režim.",
         "data": {
           "city": "Město"
+        },
+        "data_description": {
+          "city": "Nabídnou se jen stanice tohoto města, ne celého okolí."
         }
       },
       "fuels": {
@@ -187,7 +238,8 @@
         },
         "data_description": {
           "language": "Určuje jazyk popisků v hotových pohledech dashboardu (např. „Moje stanice“). Jazyk samotného nastavení se řídí jazykem Home Assistantu.",
-          "max_age_days": "Do přehledu se počítají jen takto čerstvé ceny. Menší stanice aktualizují ceny na mBenzin.cz méně často, takže s 1 dnem z přehledu často vypadnou. Starší ceny se zobrazí s datem."
+          "max_age_days": "Do přehledu se počítají jen takto čerstvé ceny. Menší stanice aktualizují ceny na mBenzin.cz méně často, takže s 1 dnem z přehledu často vypadnou. Starší ceny se zobrazí s datem.",
+          "fuels": "Každé palivo dostane vlastní senzory a vlastní kartu."
         }
       },
       "station": {
@@ -195,6 +247,9 @@
         "description": "Vaše nejčastější čerpací stanice v městě {city} pro palivo {fuel}. Pokud žádnou nechcete, ponechte „—“.",
         "data": {
           "station": "Oblíbená stanice"
+        },
+        "data_description": {
+          "station": "Její senzor uchovává historii cen. Pozdější výběr jiné stanice založí nový senzor, aby se historie dvou stanic nikdy nesmíchaly."
         }
       },
       "logos": {
@@ -202,6 +257,9 @@
         "description": "Zaškrtněte řetězce, jejichž loga chcete mít v kartě. Stáhnou se z balíčku log Ceny paliv na GitHubu do konfigurační složky Home Assistantu (každé má jen pár KB). Řetězce z vašeho města jsou předvybrané. Loga jsou ochranné známky svých majitelů a slouží jen k označení stanic; projekt s nimi nijak nesouvisí. Pokud nezaškrtnete nic, karta použije barevné odznaky s iniciálami.",
         "data": {
           "logos": "Loga"
+        },
+        "data_description": {
+          "logos": "Řetězce, jejichž loga se stáhnou. Pro nezaškrtnuté řetězce se nic nestahuje."
         }
       }
     },
