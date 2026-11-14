@@ -2,6 +2,7 @@
 from datetime import timedelta
 import hashlib
 import json
+import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -1115,6 +1116,82 @@ async def test_coordinator_sensors_and_failed_refresh(hass, enable_custom_integr
         assert top.attributes["fetch_error"] == "CannotConnect"
         assert hass.states.get("sensor.ceny_paliv_diesel_top5").state == "32"
         assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_entities_share_the_area_device_and_translated_names(
+    hass, enable_custom_integrations, mock_frontend, marker
+):
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers.device_registry import DeviceEntryType
+
+    from custom_components.ceny_paliv import sensor
+
+    assert sensor.PARALLEL_UPDATES == 0
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Ceny paliv Praha",
+        data={"key": "dummy", "city": "Praha"},
+        options={"fuels": ["n95", "cng"], "homes": {"n95": "Oblibena"}},
+        unique_id="Praha",
+    )
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    # an entity registered by 0.5 keeps its entity id (and so its history): the unique id has not changed
+    registry.async_get_or_create(
+        "sensor", DOMAIN, f"{entry.entry_id}_n95_top5", suggested_object_id="my_cheapest", config_entry=entry
+    )
+    snapshot = MarkerSnapshot(markers=[marker("Oblibena", 35), marker("Levna", 33)], fetched_at=dt_util.now())
+    with patch("custom_components.ceny_paliv.coordinator.async_fetch_snapshot", new=AsyncMock(return_value=snapshot)):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        [device] = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+        assert device.identifiers == {(DOMAIN, entry.entry_id)}
+        assert device.name == "Ceny paliv Praha"
+        assert device.entry_type is DeviceEntryType.SERVICE
+        assert device.manufacturer == "mBenzin.cz"
+        entities = er.async_entries_for_config_entry(registry, entry.entry_id)
+        assert len(entities) == 2 * 6 + 1  # per fuel: top5 and 5 positions; the n95 favourite
+        assert {e.device_id for e in entities} == {device.id}
+        assert all(e.has_entity_name for e in entities)
+        assert registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_n95_top5") == "sensor.my_cheapest"
+
+        names = {
+            entity_id: hass.states.get(entity_id).attributes["friendly_name"]
+            for entity_id in (
+                "sensor.my_cheapest",
+                "sensor.ceny_paliv_n95_home",
+                "sensor.ceny_paliv_n95_2",
+                "sensor.ceny_paliv_cng_top5",
+            )
+        }
+        assert names == {
+            "sensor.my_cheapest": "Ceny paliv Praha Natural 95 · cheapest",
+            "sensor.ceny_paliv_n95_home": "Ceny paliv Praha Natural 95 · favourite station",
+            "sensor.ceny_paliv_n95_2": "Ceny paliv Praha Natural 95 · cheapest #2",
+            "sensor.ceny_paliv_cng_top5": "Ceny paliv Praha CNG · cheapest",
+        }
+        assert hass.states.get("sensor.ceny_paliv_cng_top5").attributes["unit_of_measurement"] == "Kč/kg"
+        # the station is no longer in the name, so the attribute carries it
+        assert hass.states.get("sensor.ceny_paliv_n95_2").attributes["station"]
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+def test_entity_translations_and_icons_cover_every_sensor():
+    from pathlib import Path
+
+    from custom_components.ceny_paliv import sensor
+
+    root = Path(sensor.__file__).parent
+    keys = {"cheapest", "favourite", "archived_favourite", "position"}
+    assert keys == set(re.findall(r'_attr_translation_key = "(\w+)"', (root / "sensor.py").read_text("utf-8")))
+    for language in ("en", "cs"):
+        names = json.loads((root / "translations" / f"{language}.json").read_text("utf-8"))["entity"]["sensor"]
+        assert set(names) == keys
+        assert all("{fuel}" in item["name"] for item in names.values())
+        assert "{position}" in names["position"]["name"]
+    icons = json.loads((root / "icons.json").read_text("utf-8"))["entity"]["sensor"]
+    assert set(icons) == keys
 
 
 async def test_upgrade_keeps_legacy_city_trend_history(

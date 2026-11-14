@@ -121,8 +121,6 @@ LABELS: dict[str, dict[str, str]] = {
         "e10_note": "(E10 not distinguished)",
         "tap_station": "tap a station to open Google Maps",
         "vs_yesterday": "vs yesterday",
-        "name_cheapest": "cheapest",
-        "name_home": "favourite station",
         "source": "Ceny: mbenzin.cz",
     },
     "cs": {
@@ -159,8 +157,6 @@ LABELS: dict[str, dict[str, str]] = {
         "e10_note": "(E10 se nerozlišuje)",
         "tap_station": "klepnutím na stanici otevřete Google Maps",
         "vs_yesterday": "oproti včerejšku",
-        "name_cheapest": "nejlevnější",
-        "name_home": "oblíbená stanice",
         "source": "Ceny: mbenzin.cz",
     },
 }

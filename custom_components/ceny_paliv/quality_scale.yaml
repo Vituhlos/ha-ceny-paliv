@@ -15,8 +15,8 @@ rules:
     status: done
     comment: Icons ship in custom_components/ceny_paliv/brand/ (Home Assistant 2026.3+).
   common-modules:
-    status: todo
-    comment: The coordinator is in coordinator.py; the base entity still lives in sensor.py, not entity.py.
+    status: done
+    comment: The coordinator is in coordinator.py, the base entity in entity.py.
   config-flow-test-coverage:
     status: todo
     comment: config_flow.py is covered at 94 %; the rule needs every path.
@@ -41,8 +41,8 @@ rules:
     comment: Entities do not subscribe to events; the coordinator's zone listener is removed with the entry.
   entity-unique-id: done
   has-entity-name:
-    status: todo
-    comment: Entities set has_entity_name = False and build their names in code.
+    status: done
+    comment: has_entity_name = True in entity.py; names come from translation keys under the area device.
   runtime-data: done
   test-before-configure:
     status: done
@@ -83,8 +83,8 @@ rules:
     status: todo
     comment: A partial refresh logs a warning on every refresh instead of once.
   parallel-updates:
-    status: todo
-    comment: PARALLEL_UPDATES is not set in sensor.py.
+    status: done
+    comment: PARALLEL_UPDATES = 0 in sensor.py; the coordinator does all the fetching.
   reauthentication-flow: done
   test-coverage:
     status: done
@@ -92,8 +92,8 @@ rules:
 
   # Gold
   devices:
-    status: todo
-    comment: Entities are not grouped under a device.
+    status: done
+    comment: One service device per config entry (area), named after the entry, manufacturer mBenzin.cz.
   diagnostics:
     status: todo
   discovery:
@@ -121,7 +121,7 @@ rules:
     status: todo
   dynamic-devices:
     status: todo
-    comment: Comes with devices.
+    comment: The single area device is created with its entry; still to decide whether the rule is exempt.
   entity-category:
     status: todo
   entity-device-class:
@@ -130,12 +130,13 @@ rules:
   entity-disabled-by-default:
     status: todo
   entity-translations:
-    status: todo
+    status: done
+    comment: entity.sensor.* names in translations/en.json and cs.json, with {fuel} and {position} placeholders.
   exception-translations:
     status: todo
   icon-translations:
-    status: todo
-    comment: Icons are set in code (_attr_icon).
+    status: done
+    comment: icons.json; no entity sets _attr_icon.
   reconfiguration-flow:
     status: done
     comment: The access key can be replaced without losing settings or history.
@@ -143,7 +144,7 @@ rules:
     status: todo
   stale-devices:
     status: todo
-    comment: Comes with devices.
+    comment: The area device goes with its entry; still to decide whether the rule is exempt.
 
   # Platinum
   async-dependency:

@@ -4,6 +4,11 @@
 
 ### Changed
 
+- **Each area is a device; sensors have translated names** (quality scale: devices, has-entity-name, entity-translations,
+  icon-translations). Every configured area is a service device ("Ceny paliv Praha", manufacturer mBenzin.cz), and its
+  sensors are named under it in the Home Assistant language, for example "Natural 95 · cheapest #1"
+  ("Natural 95 · 1. nejlevnější"). **Breaking:** the position and favourite sensors are no longer named after the
+  station they show; the station is in their `station` attribute. Entity IDs and history stay as they are.
 - **This repository is now the project's home**: the documentation, issue tracker, HACS instructions and logo pack
   point to `Vituhlos/ha-ceny-paliv`, and the code owner is @Vituhlos. If you added the original repository to HACS,
   replace it with `https://github.com/Vituhlos/ha-ceny-paliv` to keep getting updates.

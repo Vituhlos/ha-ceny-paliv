@@ -83,7 +83,7 @@ Pro každé palivo `<palivo>` (`n95`, `benzinplus`, `diesel`, `dieselplus`, `lpg
 | `sensor.ceny_paliv_<palivo>_home` | cena u vaší oblíbené stanice (jen pokud jste nějakou vybrali), trendy, pořadí, statistika |
 | `sensor.ceny_paliv_<palivo>_1` … `_5` | 5 nejlevnějších stanic se zeměpisnou šířkou a délkou pro kartu mapy |
 
-Senzory se jmenují podle stanice, kterou právě ukazují (např. `1 · Orlen – Bratri Stefanu 69`). Identifikátory stávajících senzorů se při přepnutí oblasti nemění. Ceny se obnovují každých 6 hodin. Pokud se aktualizace nepovede (třeba kvůli chybě 429), zůstanou zachována poslední data a atribut `fetch_error` uvede důvod. Celorepubliková data se sdílejí mezi konfiguracemi se stejným klíčem a palivem po dobu necelých 6 hodin, takže každá plánovaná aktualizace stáhne čerstvá data. GPS výpočty i výběr oblíbené stanice v kruhu používají tutéž cache; změna oblasti nevytváří další požadavek na mBenzin. Ruční aktualizace i znovunačtení integrace cache využívají; restart Home Assistantu ji vymaže. Relativní údaj o aktuálnosti se vyhodnocuje podle původního času odpovědi v českém časovém pásmu.
+Každá nastavená oblast je zařízení typu služba (pojmenované podle záznamu, např. `Ceny paliv Praha`) a její senzory mají pod ním přeložené názvy, např. `Ceny paliv Praha Natural 95 · 1. nejlevnější`; stanici, kterou senzor pozice nebo oblíbené stanice právě ukazuje, najdete v atributu `station`. Identifikátory stávajících senzorů se při aktualizaci ani při přepnutí oblasti nemění. Ceny se obnovují každých 6 hodin. Pokud se aktualizace nepovede (třeba kvůli chybě 429), zůstanou zachována poslední data a atribut `fetch_error` uvede důvod. Celorepubliková data se sdílejí mezi konfiguracemi se stejným klíčem a palivem po dobu necelých 6 hodin, takže každá plánovaná aktualizace stáhne čerstvá data. GPS výpočty i výběr oblíbené stanice v kruhu používají tutéž cache; změna oblasti nevytváří další požadavek na mBenzin. Ruční aktualizace i znovunačtení integrace cache využívají; restart Home Assistantu ji vymaže. Relativní údaj o aktuálnosti se vyhodnocuje podle původního času odpovědi v českém časovém pásmu.
 
 ## 3. Karta pro dashboard (je součástí, nic dalšího se neinstaluje)
 
@@ -152,7 +152,7 @@ Loga jsou ochranné známky svých majitelů a slouží jen k označení stanic;
 
 ## 5. Bez karty: standardní karty
 
-Každý senzor se jmenuje podle toho, co právě ukazuje (např. `1 · Orlen – Bratri Stefanu 69`), takže stanici zobrazí jakákoli standardní karta, bez šablony. Názvy sledují pořadí a mění se při každé aktualizaci; identifikátory entit zůstávají stejné. Jedinou výjimkou je senzor oblíbené stanice: výběr jiné oblíbené stanice vytvoří nový senzor (např. `_home_2`), aby se nikdy nesmíchaly statistiky dvou stanic (viz Poznámky).
+Každý senzor má pevný přeložený název (např. `Natural 95 · 1. nejlevnější`); adresa stanice, kterou právě ukazuje, je v atributu `station` a při každé aktualizaci sleduje pořadí, identifikátory entit zůstávají stejné. Jedinou výjimkou je senzor oblíbené stanice: výběr jiné oblíbené stanice vytvoří nový senzor (např. `_home_2`), aby se nikdy nesmíchaly statistiky dvou stanic (viz Poznámky).
 
 Karta **Entity** s 5 nejlevnějšími stanicemi (stav senzoru je cena):
 
