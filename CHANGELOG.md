@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.1
 
 ### Changed
 
@@ -8,6 +8,11 @@
   (`Selbská 15/2732, Aš`) instead of the station's link, which has no accents. A village without streets shows the
   village and its house number ("Benzina · Lhota 12"); a street named after its own town stays a street. The
   `address` attribute of a station is mBenzin's address. Stations without an address keep the old behaviour.
+
+### Known limitations
+
+- Only one real mBenzin.cz address was seen before release (in the diagnostics of 0.6.0); the other address shapes
+  handled are assumptions, checked on a live dashboard after release.
 
 ## 0.6.0
 
