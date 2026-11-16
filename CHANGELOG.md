@@ -7,6 +7,11 @@
 - **Station details and navigation in the card**: tapping a station of the top 5 opens a panel (a bottom sheet on
   phones) with its price, price date, rank among the area's up-to-date stations, distance and trends, and buttons to
   navigate there with Mapy.com, Google Maps or Waze. Before, a tap opened Google Maps directly.
+- **The card's own 30-day graph**: your station against the area's cheapest price (its daily lowest) and the area's
+  average, drawn by the card in the theme's colours, with a day's values on hover or touch. It replaces Home
+  Assistant's statistics graph, and shows the area's prices even without a favourite station. For it, the top5
+  sensor (the area's cheapest price) now keeps long-term statistics (`state_class: measurement`); its line starts
+  with this version.
 - **Sort the stations by price, distance or "worth it"** above the list (`sort:` sets the first order): "worth it"
   is the price per litre with the fuel burnt driving there and back, from your fill-up (`tank_litres`, 40 l) and
   consumption (`consumption`, 6.5 l/100 km). In a GPS area the ten nearest stations join the five cheapest for these

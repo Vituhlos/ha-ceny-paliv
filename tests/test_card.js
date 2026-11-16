@@ -41,10 +41,10 @@ const context = {
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween };`,
+  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel };`,
   context,
 );
-const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween } = context.testExports;
+const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel } = context.testExports;
 
 const sensor = (fuel, role, configId, extra = {}) => ({
   state: "32.00",
@@ -635,28 +635,83 @@ test("the last known states survive a page reload in this browser only", () => {
   assert.equal(load(blocked)({ states: { [id]: unavailable() } }).states[id].state, "unavailable");
 });
 
-test("the 30-day graph shows the station's own statistics, or the sensor's before 0.6", async () => {
-  const configs = [];
-  context.window.loadCardHelpers = async () => ({
-    createCardElement: (config) => { configs.push(config); return new Element(); },
-  });
-  const graphOf = async (attributes) => {
-    configs.length = 0;
-    const card = {
-      _extraReady: false,
-      _hass: { states: { "sensor.home": { state: "38.9", attributes } } },
-      _ids: { home: "sensor.home", pos: [] },
-      _show: ["graph"],
-      _n: 5,
-      _mapHeight: 0,
-      _children: null,
-      shadowRoot: { getElementById: () => ({ replaceChildren() {}, appendChild() {} }) },
-    };
-    await CenyPalivCard.prototype._buildExtra.call(card);
-    return Array.from(configs.find((c) => c.type === "statistics-graph").entities);
+test("the 30-day graph: your station's own statistics, the area's cheapest (daily minimum) and its average", () => {
+  const top = { state: "38", attributes: { cp_role: "top5", cp_fuel: "n95", cp_config_id: "a", labels: { my_station: "Mine", series_cheapest: "Cheapest", series_average: "Average" } } };
+  const states = {
+    "sensor.ceny_paliv_n95_top5": top,
+    "sensor.ceny_paliv_n95_home": { state: "38.9", attributes: { statistic_id: "ceny_paliv:n95_0123456789ab" } },
+    "sensor.ceny_paliv_n95_area_average": { state: "39.4", attributes: { cp_role: "area_average", cp_fuel: "n95", cp_config_id: "a" } },
+    "sensor.ceny_paliv_n95_area_average_2": { state: "40", attributes: { cp_role: "area_average", cp_fuel: "n95", cp_config_id: "b" } },
   };
-  assert.deepEqual(await graphOf({ statistic_id: "ceny_paliv:n95_0123456789ab" }), ["ceny_paliv:n95_0123456789ab"]);
-  assert.deepEqual(await graphOf({}), ["sensor.home"]);
+  const card = new CenyPalivCard();
+  card._config = { fuel: "n95" };
+  card._hass = { states };
+  card._ids = { top5: "sensor.ceny_paliv_n95_top5", home: "sensor.ceny_paliv_n95_home", pos: [] };
+  same(card._graphSeries().map((x) => [x.key, x.id, x.type, x.label]), [
+    ["mine", "ceny_paliv:n95_0123456789ab", "mean", "Mine"],
+    ["cheapest", "sensor.ceny_paliv_n95_top5", "min", "Cheapest"],
+    ["average", "sensor.ceny_paliv_n95_area_average", "mean", "Average"], // of this area, not the other one
+  ]);
+  // before 0.6 the favourite had no statistics of its own: the sensor's; no favourite: the area only
+  states["sensor.ceny_paliv_n95_home"].attributes = {};
+  assert.equal(card._graphSeries()[0].id, "sensor.ceny_paliv_n95_home");
+  card._ids.home = null;
+  same(card._graphSeries().map((x) => x.key), ["cheapest", "average"]);
+});
+
+test("daily values by local day and a chart broken where a day is missing", () => {
+  const noon = (d) => new Date(2026, 10, d, 12).getTime();
+  same(dailyValues([{ start: noon(10), mean: 38.5 }, { start: new Date(2026, 10, 11, 12).toISOString(), mean: 38.7 }, { start: noon(12), mean: null }], "mean"),
+    { "2026-11-10": 38.5, "2026-11-11": 38.7 });
+  same(graphDays(new Date(2026, 10, 2), 4), ["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02"]);
+
+  const days = ["d1", "d2", "d3", "d4", "d5"];
+  const model = chartModel([
+    { values: { d1: 38.2, d2: 38.4, d4: 38.9 } }, // a gap on d3; d4 alone is a dot
+    { values: {} },
+  ], days, 248);
+  assert.equal(model.lo, 38);
+  assert.equal(model.hi, 39);
+  same(model.ticks.map((t) => t.v), [39, 38.5, 38]);
+  assert.equal(model.lines[0].path.split("M").length - 1, 2); // two pieces
+  assert.equal(model.lines[0].dots.length, 1);
+  assert.equal(model.lines[1].path, "");
+  assert.equal(model.x(0), 40);
+  assert.equal(model.x(4), 240); // 248 - 8 on the right
+  assert.equal(chartModel([{ values: {} }], days, 248), null);
+});
+
+test("the graph loads the daily statistics once per hour and draws them with their latest values", async () => {
+  const calls = [];
+  const today = new Date(); today.setHours(12, 0, 0, 0);
+  const ms = (back) => today.getTime() - back * 86400000;
+  const card = new CenyPalivCard();
+  card._config = { fuel: "n95" };
+  card._show = ["graph"];
+  card._ids = { top5: "sensor.ceny_paliv_n95_top5", home: null, pos: [] };
+  card._hass = {
+    language: "en", locale: { number_format: "comma_decimal" },
+    states: { "sensor.ceny_paliv_n95_top5": { state: "38", attributes: { cp_role: "top5", cp_fuel: "n95", cp_config_id: "a", fuel_label: "Natural 95", city_name: "Brno",
+      labels: { graph_title: "Prices over 30 days", series_cheapest: "Cheapest", graph_empty: "No history yet" } } } },
+    callWS: async (msg) => { calls.push(msg); return { "sensor.ceny_paliv_n95_top5": [{ start: ms(2), min: 38.4, mean: 38.9 }, { start: ms(1), min: 38.1, mean: 38.6 }] }; },
+  };
+  assert.match(card._graphHtml(), /No history yet/); // nothing loaded yet
+  await card._loadStats();
+  await card._loadStats(); // the same hour: no second request
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].type, "recorder/statistics_during_period");
+  same(calls[0].statistic_ids, ["sensor.ceny_paliv_n95_top5"]);
+  assert.equal(calls[0].period, "day");
+  const html = card._graphHtml();
+  assert.match(html, /<svg viewBox="0 0 360 160" role="img" aria-label="Prices over 30 days: Cheapest: 38\.10 Kč\/l"/);
+  assert.match(html, /class="line cheapest" d="M[\d.]+,[\d.]+L[\d.]+,[\d.]+"/); // the daily minimum, two days joined
+  assert.match(html, /<span class="name">Cheapest<\/span> <span class="value">38\.10<\/span>/);
+
+  // the recorder cannot answer: the graph says there is no history, nothing breaks
+  card._hass = { ...card._hass, callWS: async () => { throw new Error("no recorder"); } };
+  card._statsKey = null;
+  await card._loadStats();
+  assert.match(card._graphHtml(), /No history yet/);
 });
 
 test("navigation links put each service's coordinates in its own order", () => {
