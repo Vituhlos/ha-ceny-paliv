@@ -121,7 +121,10 @@ class CenyPalivSensor(CenyPalivEntity, SensorEntity):
 
 
 class CenyPalivTop5Sensor(CenyPalivSensor):
+    """The area's cheapest price. state_class=measurement: long-term statistics, the card's 30-day graph."""
+
     _attr_translation_key = "cheapest"
+    _attr_state_class = SensorStateClass.MEASUREMENT
     # read by the card from the live state; recording them every refresh only fills the database
     _unrecorded_attributes = frozenset(
         {"stations", "home", "gps_area", "gps_nearest_stations", "labels", "logos"}

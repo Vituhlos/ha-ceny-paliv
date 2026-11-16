@@ -63,6 +63,66 @@ function kmBetween(lat1, lng1, lat2, lng2) {
   return 2 * 6371.0088 * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
+// ------------------------------------------------------------------ the 30-day graph
+const GRAPH_DAYS = 30;
+const GRAPH_HEIGHT = 160;
+const GRAPH_PAD = { left: 40, right: 8, top: 8, bottom: 20 };
+
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// The days of the graph, oldest first, ending with `today` (local days, as the recorder's daily rows).
+function graphDays(today, count) {
+  const out = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    out.push(isoDay(d));
+  }
+  return out;
+}
+
+// One value per local day from the recorder's daily statistics (`start` in ms, or ISO on older versions).
+function dailyValues(rows, type) {
+  const out = {};
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const v = Number(r && r[type]);
+    const start = typeof r.start === 'number' ? r.start : Date.parse(r.start);
+    if (r[type] == null || !isFinite(v) || !isFinite(start)) continue;
+    out[isoDay(new Date(start))] = v;
+  }
+  return out;
+}
+
+// The chart's geometry: a path per series (broken where a day has no value), dots for days with no neighbour,
+// and a y range in half-crowns with three labels. Null when there is nothing to draw.
+function chartModel(series, days, width) {
+  const values = [];
+  for (const s of series) for (const d of days) if (s.values[d] != null) values.push(s.values[d]);
+  if (!values.length) return null;
+  let lo = Math.floor(Math.min(...values) * 2) / 2;
+  let hi = Math.ceil(Math.max(...values) * 2) / 2;
+  if (hi - lo < 1) { const mid = (lo + hi) / 2; lo = mid - 0.5; hi = mid + 0.5; }
+  hi = lo + Math.ceil(hi - lo);  // a whole number of crowns: the middle label falls on a half crown, never on 39.25
+  const p = GRAPH_PAD;
+  const step = days.length > 1 ? (width - p.left - p.right) / (days.length - 1) : 0;
+  const x = (i) => p.left + i * step;
+  const y = (v) => p.top + (hi - v) * (GRAPH_HEIGHT - p.top - p.bottom) / (hi - lo);
+  const lines = series.map((s) => {
+    let path = '';
+    const dots = [];
+    days.forEach((day, i) => {
+      const v = s.values[day];
+      if (v == null) return;
+      const before = i > 0 && s.values[days[i - 1]] != null;
+      const after = i < days.length - 1 && s.values[days[i + 1]] != null;
+      path += `${before ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
+      if (!before && !after) dots.push([x(i), y(v)]);
+    });
+    return { path, dots };
+  });
+  return { lo, hi, ticks: [hi, (lo + hi) / 2, lo].map((v) => ({ v, y: y(v) })), lines, x, step };
+}
+
 // Navigation to a station. Mapy.com takes "lon,lat", Waze and Google Maps "lat,lng" (their URL documentation).
 function navigationLinks(s) {
   const lat = Number(s && s.lat);
@@ -298,6 +358,32 @@ const STYLE = `
   /* stacked on a narrow phone: each button keeps its height instead of sharing the row's width */
   @media (max-width: 420px) { .nav { flex-direction: column; } .nav a { flex: none; } }
 
+  /* the 30-day graph: lines in the theme's colours, a tooltip like the energy cards' */
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
+  .chart svg * { pointer-events: none; }
+  .chart .grid-line { stroke: var(--cp-line); stroke-width: 1; }
+  .chart text { fill: var(--cp-muted); font-size: var(--ha-font-size-xs, 10px); font-family: inherit; font-variant-numeric: tabular-nums; }
+  .chart .line { fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart .line.average { stroke-dasharray: 4 3; stroke-width: 1.5; }
+  .chart .dot { fill: currentColor; }
+  .chart .cursor { stroke: var(--cp-muted); stroke-width: 1; }
+  .mine { color: var(--cp-home); }
+  .cheapest { color: var(--cp-good-base); }
+  .average { color: var(--cp-muted); }
+  .tip {
+    position: absolute; top: 0; transform: translateX(-50%); pointer-events: none; z-index: 1;
+    display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; white-space: nowrap;
+    background: var(--cp-surface); color: var(--cp-text); border: 1px solid var(--cp-line); border-radius: 4px;
+    box-shadow: rgba(0, 0, 0, 0.2) 1px 2px 10px; font-size: var(--ha-font-size-s, 12px); line-height: 16px;
+  }
+  .tip[hidden] { display: none; }
+  .tip b, .series .value { font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; color: var(--cp-text); }
+  .series { display: flex; flex-wrap: wrap; gap: 4px var(--ha-space-4, 16px); font-size: var(--ha-font-size-s, 12px); line-height: 16px; color: var(--cp-muted); }
+  .swatch { display: inline-block; width: 12px; height: 3px; margin-inline-end: 6px; border-radius: 2px; background: currentColor; vertical-align: middle; }
+  .average .swatch { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px); }
+  .series .name { color: var(--cp-muted); }
+
   .map, .graph { border-radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px)); overflow: hidden; }
   .map.fixed { position: relative; min-width: 200px; }
   .map.fixed > * { position: absolute; inset: 0; display: block; }
@@ -392,7 +478,8 @@ class CenyPalivCard extends HTMLElement {
     root.addEventListener('click', (e) => this._click(e));
     root.addEventListener('keydown', (e) => this._key(e));
     root.addEventListener('pointerdown', (e) => this._down(e));
-    root.addEventListener('pointermove', (e) => this._move(e));
+    root.addEventListener('pointermove', (e) => { this._move(e); this._hover(e); });
+    root.addEventListener('pointerout', (e) => { if (e.target && e.target.tagName === 'svg') this._hover(null); });
     // pointerleave does not bubble to the root: moving away is caught by pointermove / pointercancel
     ['pointerup', 'pointercancel'].forEach((n) => root.addEventListener(n, () => clearTimeout(this._timer)));
   }
@@ -604,14 +691,25 @@ class CenyPalivCard extends HTMLElement {
   // layout "auto": two columns from 640 px (back to one below 600 px, so it never flip-flops)
   _fit() {
     const grid = this.shadowRoot.querySelector('.grid');
-    if (!grid || !grid.classList.contains('auto')) return;
+    if (!grid || !grid.classList.contains('auto') || !this.getBoundingClientRect) return;
     const w = this.getBoundingClientRect().width;
     if (w >= 640) grid.classList.add('wide');
     else if (w < 600) grid.classList.remove('wide');
   }
 
+  // the chart is drawn for its width: draw it again when the card's width changes
+  _refit() {
+    this._fit();
+    if (!this._hass || !this._ids || !this._show || !this._show.includes('graph')) return;
+    const width = this._measureGraph();
+    if (Math.abs(width - (this._graphWidth || 0)) < 16) return;
+    this._graphWidth = width;
+    const el = this.shadowRoot.getElementById('graph');
+    if (el && this._hass.states[this._ids.top5]) el.innerHTML = this._graphHtml();
+  }
+
   connectedCallback() {
-    if (!this._ro && window.ResizeObserver) this._ro = new ResizeObserver(() => this._fit());
+    if (!this._ro && window.ResizeObserver) this._ro = new ResizeObserver(() => this._refit());
     if (this._ro) this._ro.observe(this);
     this._fit();
   }
@@ -642,19 +740,6 @@ class CenyPalivCard extends HTMLElement {
       const entities = this._ids.pos.slice(0, this._n).filter(Boolean).map(marker);
       if (hasHome) entities.push(marker(this._ids.home));
       kids.push({ id: 'map', cls: this._mapHeight ? 'map fixed' : 'map', config: { type: 'map', theme_mode: 'auto', auto_fit: true, default_zoom: 12, hours_to_show: 0, entities } });
-    }
-    if (this._show.includes('graph') && hasHome) {
-      // the station's own statistics (kept per station by the integration since 0.6), else the sensor's
-      const home = this._hass.states[this._ids.home];
-      const statistic = (home && home.attributes && home.attributes.statistic_id) || this._ids.home;
-      kids.push({
-        id: 'graph',
-        cls: 'graph',
-        config: {
-          type: 'statistics-graph', title: '30 d', entities: [statistic], days_to_show: 30, period: 'day',
-          chart_type: 'line', stat_types: ['mean', 'min', 'max'],
-        },
-      });
     }
     this._children = [];
     for (const k of kids) {
@@ -816,8 +901,14 @@ class CenyPalivCard extends HTMLElement {
     }
     slot('home', this._show.includes('home') ? this._homeHtml() : '');
     slot('list', this._show.includes('list') ? this._listHtml() : '');
-    // only "my station" and its graph were asked for, but no favourite is set: say so instead of an empty card
-    if (!hass.states[this._ids.home] && this._show.every((p) => p === 'home' || p === 'graph')) slot(first, this._message('no_home'));
+    if (this._show.includes('graph')) {
+      this._graphWidth = this._measureGraph();
+      slot('graph', this._graphHtml());
+      this._loadStats();
+    }
+    // only "my station" was asked for, but no favourite is set: say so instead of an empty card (the graph shows the
+    // area's prices without one)
+    if (!hass.states[this._ids.home] && this._show.every((p) => p === 'home')) slot(first, this._message('no_home'));
     // only the list was asked for and it is the first card: the switch sits there; without home or list, above the map
     if (sw && !['home', 'list'].includes(first)) slot(first, `<ha-card class="card">${sw}</ha-card>`);
     this._buildExtra();
@@ -1045,6 +1136,122 @@ class CenyPalivCard extends HTMLElement {
     if (this._hass) this.hass = this._hass;
   }
 
+  // ---------------------------------------------------------------- the 30-day graph
+  // Your station (its own statistics, kept per station since 0.6), the area's cheapest price (the top5 sensor's daily
+  // minimum, recorded since 0.9) and the area's average (since 0.8), as far as each has history.
+  _graphSeries() {
+    const states = this._hass.states;
+    const top = states[this._ids.top5];
+    const home = states[this._ids.home];
+    const configId = top && top.attributes && top.attributes.cp_config_id;
+    const average = Object.keys(states).find((id) => {
+      const a = states[id].attributes || {};
+      return id.startsWith('sensor.ceny_paliv_') && a.cp_role === 'area_average' && a.cp_fuel === this._config.fuel && a.cp_config_id === configId;
+    });
+    const out = [];
+    if (home) out.push({ key: 'mine', id: (home.attributes && home.attributes.statistic_id) || this._ids.home, type: 'mean', label: this._T('my_station') });
+    if (top) out.push({ key: 'cheapest', id: this._ids.top5, type: 'min', label: this._T('series_cheapest') });
+    if (average) out.push({ key: 'average', id: average, type: 'mean', label: this._T('series_average') });
+    return out;
+  }
+
+  // Daily statistics from the recorder, loaded again for other sensors, on a new day and every hour.
+  async _loadStats() {
+    if (!this._hass || typeof this._hass.callWS !== 'function') return;
+    const series = this._graphSeries();
+    const ids = series.map((x) => x.id);
+    const key = `${ids.join('|')}|${new Date().toDateString()}|${Math.floor(Date.now() / 3600000)}`;
+    if (!ids.length || key === this._statsKey) return;
+    this._statsKey = key;
+    const end = new Date();
+    const start = new Date(end);
+    start.setDate(start.getDate() - GRAPH_DAYS);
+    start.setHours(0, 0, 0, 0);
+    let rows = {};
+    try {
+      rows = (await this._hass.callWS({
+        type: 'recorder/statistics_during_period', start_time: start.toISOString(), end_time: end.toISOString(),
+        statistic_ids: ids, period: 'day', types: ['mean', 'min'],
+      })) || {};
+    } catch (err) {
+      rows = {};  // no recorder or no history yet: the graph says so
+    }
+    if (key !== this._statsKey) return;  // a newer load (another fuel, area or favourite) owns the graph
+    const values = {};
+    for (const x of series) values[x.id] = dailyValues(rows[x.id], x.type);
+    this._stats = { key, values };
+    const el = this.shadowRoot.getElementById('graph');
+    if (el && this._hass.states[this._ids.top5]) el.innerHTML = this._graphHtml();
+  }
+
+  _measureGraph() {
+    const el = this.shadowRoot.getElementById('graph');
+    const w = el && el.getBoundingClientRect ? el.getBoundingClientRect().width : 0;
+    return w > 0 ? Math.max(240, Math.round(w - 32)) : 360;  // the card's 16 px padding on both sides
+  }
+
+  _graphHtml() {
+    const T = (k, v) => this._T(k, v);
+    const top = this._hass.states[this._ids.top5];
+    const at = (top && top.attributes) || {};
+    const loaded = (this._stats && this._stats.values) || {};
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const days = graphDays(today, GRAPH_DAYS + 1);
+    const series = this._graphSeries().map((x) => Object.assign({}, x, { values: loaded[x.id] || {} }));
+    const width = this._graphWidth || 360;
+    const model = chartModel(series, days, width);
+    this._chart = model ? { model, days, series, width } : null;
+    const unit = at.unit_of_measurement || 'Kč/l';
+    const head = `<div class="head"><span class="icon home"><ha-icon icon="mdi:chart-line"></ha-icon></span>
+      <div class="info"><span class="primary">${esc(T('graph_title'))}</span><span class="secondary">${esc(at.fuel_label || this._config.fuel)} · ${esc(at.city_name || '')}</span></div></div>`;
+    if (!model) return `<ha-card class="card graph-card">${head}<span class="note">${esc(T('graph_empty'))}</span></ha-card>`;
+    const p = GRAPH_PAD;
+    const day = (iso) => this._day(iso, { day: 'numeric', month: 'numeric' }) || iso;
+    const ticks = model.ticks.map((t) => `<line class="grid-line" x1="${p.left}" x2="${width - p.right}" y1="${t.y.toFixed(1)}" y2="${t.y.toFixed(1)}"></line>`
+      + `<text x="${p.left - 6}" y="${(t.y + 3).toFixed(1)}" text-anchor="end">${esc(this._num(t.v, 1))}</text>`).join('');
+    const xs = [0, Math.floor((days.length - 1) / 2), days.length - 1].map((i, n) => `<text x="${model.x(i).toFixed(1)}" y="${GRAPH_HEIGHT - 4}" text-anchor="${['start', 'middle', 'end'][n]}">${esc(day(days[i]))}</text>`).join('');
+    const lines = series.map((x, i) => `<g class="${x.key}"><path class="line ${x.key}" d="${model.lines[i].path}"></path>${model.lines[i].dots.map(([cx, cy]) => `<circle class="dot" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.5"></circle>`).join('')}</g>`).join('');
+    const last = (x) => { for (let i = days.length - 1; i >= 0; i -= 1) if (x.values[days[i]] != null) return x.values[days[i]]; return null; };
+    const legend = series.map((x) => {
+      const v = last(x);
+      return `<span class="${x.key}"><span class="swatch"></span><span class="name">${esc(x.label)}</span>${v == null ? '' : ` <span class="value">${esc(this._num(v))}</span>`}</span>`;
+    }).join('');
+    const summary = series.map((x) => `${x.label}: ${last(x) == null ? '—' : `${this._num(last(x))} ${unit}`}`).join(', ');
+    return `<ha-card class="card graph-card">${head}
+      <div class="chart"><svg viewBox="0 0 ${width} ${GRAPH_HEIGHT}" role="img" aria-label="${esc(T('graph_title'))}: ${esc(summary)}" data-graph>
+        ${ticks}${xs}${lines}<line class="cursor" x1="0" x2="0" y1="${p.top}" y2="${GRAPH_HEIGHT - p.bottom}" visibility="hidden"></line></svg>
+        <div class="tip" hidden></div></div>
+      <div class="series">${legend}</div></ha-card>`;
+  }
+
+  // the values of the day under the pointer, like the tooltip of Home Assistant's charts
+  _hover(e) {
+    const graph = this.shadowRoot.getElementById && this.shadowRoot.getElementById('graph');
+    const svg = graph && graph.querySelector && graph.querySelector('svg');
+    const tip = graph && graph.querySelector && graph.querySelector('.tip');
+    const cursor = svg && svg.querySelector('.cursor');
+    if (!svg || !tip || !cursor || !this._chart) return;
+    const path = e && e.composedPath ? e.composedPath() : [];
+    if (!e || !path.includes(svg)) { tip.hidden = true; cursor.setAttribute('visibility', 'hidden'); return; }
+    const { model, days, series, width } = this._chart;
+    const rect = svg.getBoundingClientRect();
+    const at = ((e.clientX - rect.left) / rect.width) * width;
+    const i = Math.max(0, Math.min(days.length - 1, Math.round((at - GRAPH_PAD.left) / (model.step || 1))));
+    const rows = series.filter((x) => x.values[days[i]] != null)
+      .map((x) => `<span class="${x.key}"><span class="swatch"></span><span class="name">${esc(x.label)}</span> <b>${esc(this._num(x.values[days[i]]))}</b></span>`);
+    if (!rows.length) { tip.hidden = true; cursor.setAttribute('visibility', 'hidden'); return; }
+    const px = model.x(i);
+    cursor.setAttribute('x1', px.toFixed(1));
+    cursor.setAttribute('x2', px.toFixed(1));
+    cursor.setAttribute('visibility', 'visible');
+    tip.innerHTML = `<span>${esc(this._day(days[i], { weekday: 'short', day: 'numeric', month: 'numeric' }) || days[i])}</span>${rows.join('')}`;
+    tip.hidden = false;
+    // kept inside the card: the tooltip's centre follows the day, its edges stay within the chart
+    const half = tip.offsetWidth / 2;
+    const left = Math.max(half, Math.min(rect.width - half, (px / width) * rect.width));
+    tip.style.left = `${left}px`;
+  }
+
   // ---------------------------------------------------------------- station details
   _stationHtml(s, rank) {
     const T = (k, v) => this._T(k, v);
@@ -1153,7 +1360,7 @@ const EDITOR_TEXT = {
     map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
     sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
     consumption: 'Consumption per 100 km in litres, kg for CNG (for "worth it")', price: 'Price', distance: 'Distance', worth: 'Worth the drive',
-    home: 'My station', list: 'Cheapest stations', map: 'Map', graph: '30-day graph',
+    home: 'My station', list: 'Cheapest stations', map: 'Map', graph: '30-day graph: my station, the cheapest, the average',
     auto: 'Automatic: 2 columns when the card is wide', columns: 'Always 2 columns', stack: 'Always 1 column',
   },
   cs: {
@@ -1161,7 +1368,7 @@ const EDITOR_TEXT = {
     map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
     sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
     consumption: 'Spotřeba na 100 km v litrech, u CNG v kg (pro „vyplatí se“)', price: 'Cena', distance: 'Vzdálenost', worth: 'Vyplatí se dojet',
-    home: 'Moje stanice', list: 'Nejlevnější stanice', map: 'Mapa', graph: 'Graf za 30 dní',
+    home: 'Moje stanice', list: 'Nejlevnější stanice', map: 'Mapa', graph: 'Graf za 30 dní: moje stanice, nejlevnější, průměr',
     auto: 'Automaticky: 2 sloupce, je-li karta široká', columns: 'Vždy 2 sloupce', stack: 'Vždy 1 sloupec',
   },
 };
@@ -1245,7 +1452,7 @@ if (!window.customCards.some((c) => c.type === 'ceny-paliv-card')) {
     type: 'ceny-paliv-card',
     name: 'Ceny paliv',
     preview: true,
-    description: 'Czech fuel prices: cheapest stations of your city, your favourite station, map and 30-day graph, with navigation to a station (data from mBenzin.cz).',
+    description: 'Czech fuel prices: cheapest stations of your city, your favourite station, map and a 30-day graph against the cheapest and the average, with navigation to a station (data from mBenzin.cz).',
   });
 }
 console.info(`%c Ceny paliv card %c ${CARD_VERSION} `, 'color:#fff;background:#f5b14c;font-weight:700', 'color:#f5b14c;background:#171a20');

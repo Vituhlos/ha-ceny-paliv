@@ -1206,6 +1206,8 @@ async def test_entities_share_the_area_device_and_translated_names(
             "sensor.ceny_paliv_n95_national_average": "Ceny paliv Praha Natural 95 · Czech average",
         }
         assert hass.states.get("sensor.ceny_paliv_cng_top5").attributes["unit_of_measurement"] == "Kč/kg"
+        # the area's cheapest price keeps long-term statistics (the card's 30-day graph)
+        assert hass.states.get("sensor.ceny_paliv_cng_top5").attributes["state_class"] == "measurement"
         # the station is no longer in the name: its readable title is in the attribute (no street: the town)
         assert hass.states.get("sensor.ceny_paliv_n95_2").attributes["station"] == "Oblibena · Praha"
         assert hass.states.get("sensor.ceny_paliv_n95_home").attributes["station"] == "Oblibena · Praha"
