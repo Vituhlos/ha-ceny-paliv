@@ -1183,7 +1183,7 @@ async def test_entities_share_the_area_device_and_translated_names(
         assert device.entry_type is DeviceEntryType.SERVICE
         assert device.manufacturer == "mBenzin.cz"
         entities = er.async_entries_for_config_entry(registry, entry.entry_id)
-        assert len(entities) == 2 * 9 + 1  # per fuel: top5, 5 positions and 3 averages; the n95 favourite
+        assert len(entities) == 2 * 10 + 1  # per fuel: top5, 5 positions, 3 averages, price events; the n95 favourite
         assert {e.device_id for e in entities} == {device.id}
         assert all(e.has_entity_name for e in entities)
         assert registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_n95_top5") == "sensor.my_cheapest"
@@ -1773,7 +1773,7 @@ async def test_removing_a_fuel_removes_its_sensors_but_not_another_areas(
             for e in er.async_entries_for_config_entry(registry, praha.entry_id)
             if "_diesel_" in e.unique_id
         ]
-        assert len(diesel_ids) == 10  # top5, favourite, 5 positions and 3 averages
+        assert len(diesel_ids) == 11  # top5, favourite, 5 positions, 3 averages and the price events
 
         hass.config_entries.async_update_entry(praha, options={"fuels": ["n95"], "homes": {}})
         await hass.async_block_till_done()
@@ -1782,6 +1782,6 @@ async def test_removing_a_fuel_removes_its_sensors_but_not_another_areas(
         assert fuels_of(praha) == ["n95"]
         assert all(hass.states.get(entity_id) is None for entity_id in diesel_ids)
         assert fuels_of(brno) == ["diesel"]
-        assert len(er.async_entries_for_config_entry(registry, brno.entry_id)) == 9
+        assert len(er.async_entries_for_config_entry(registry, brno.entry_id)) == 10
     for entry in (praha, brno):
         assert await hass.config_entries.async_unload(entry.entry_id)

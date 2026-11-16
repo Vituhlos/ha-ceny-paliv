@@ -19,7 +19,7 @@ from .coordinator import CenyPalivConfigEntry, CenyPalivCoordinator, location_is
 from .logos import ID_RE, logo_dir
 from .services import async_setup_services
 
-PLATFORMS = ["sensor"]
+PLATFORMS = ["event", "sensor"]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)  # set up in the UI only
 
 

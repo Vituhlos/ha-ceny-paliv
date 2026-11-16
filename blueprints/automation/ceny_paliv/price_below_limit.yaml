@@ -1,0 +1,77 @@
+blueprint:
+  name: Ceny paliv – price under a limit
+  description: >-
+    Tells you when a Ceny paliv price drops under your limit: the cheapest station of an area
+    (`sensor.ceny_paliv_<fuel>_top5`), your favourite station, or an average price. It tells you once each time
+    the price crosses the limit, not again while it stays under. Česky: upozornění, když cena klesne pod limit.
+  domain: automation
+  author: Ceny paliv
+  source_url: https://github.com/Vituhlos/ha-ceny-paliv/blob/main/blueprints/automation/ceny_paliv/price_below_limit.yaml
+  homeassistant:
+    min_version: "2025.1.0"
+  input:
+    price_sensor:
+      name: Price
+      description: A Ceny paliv sensor, for example `sensor.ceny_paliv_n95_top5`.
+      selector:
+        entity:
+          filter:
+            - integration: ceny_paliv
+              domain: sensor
+    limit:
+      name: Limit
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 0.1
+          unit_of_measurement: Kč
+          mode: box
+    language:
+      name: Message language
+      default: en
+      selector:
+        select:
+          options:
+            - label: English
+              value: en
+            - label: Čeština
+              value: cs
+    actions:
+      name: Actions
+      description: >-
+        What to do, for example notify your phone with `{{ title }}` and `{{ message }}`. Also available:
+        `{{ station }}` (empty for an average price), `{{ price }}`, `{{ limit }}`, `{{ unit }}` and `{{ maps }}`.
+      default:
+        - action: persistent_notification.create
+          data:
+            title: "{{ title }}"
+            message: "{{ message }}"
+      selector:
+        action: {}
+
+mode: queued
+max: 5
+
+triggers:
+  - trigger: numeric_state
+    entity_id: !input price_sensor
+    below: !input limit
+
+variables:
+  limit: !input limit
+  language: !input language
+
+actions:
+  - variables:
+      price: "{{ trigger.to_state.state | float }}"
+      unit: "{{ trigger.to_state.attributes.unit_of_measurement }}"
+      # the top5 sensor lists its stations; the favourite and position sensors name theirs
+      first: "{{ (trigger.to_state.attributes.stations or [{}])[0] }}"
+      station: "{{ trigger.to_state.attributes.station or first.title or '' }}"
+      maps: "{{ trigger.to_state.attributes.maps or first.maps or '' }}"
+      title: >-
+        {% if language == 'cs' %}⛽ Cena pod {{ limit }} {{ unit }}{% else %}⛽ Price under {{ limit }} {{ unit }}{% endif %}
+      message: >-
+        {{ trigger.to_state.name }}: {{ '%.2f' | format(price | float) }} {{ unit }}{{ (' · ' ~ station) if station }}
+  - sequence: !input actions

@@ -92,7 +92,7 @@ rules:
       DataUpdateCoordinator, which also logs the recovery.
   parallel-updates:
     status: done
-    comment: PARALLEL_UPDATES = 0 in sensor.py; the coordinator does all the fetching.
+    comment: PARALLEL_UPDATES = 0 in sensor.py and event.py; the coordinator does all the fetching.
   reauthentication-flow: done
   test-coverage:
     status: done
@@ -154,7 +154,9 @@ rules:
       the card's map draws them.
   entity-translations:
     status: done
-    comment: entity.sensor.* names in translations/en.json and cs.json, with {fuel} and {position} placeholders.
+    comment: >-
+      entity.sensor.* and entity.event.* names in translations/en.json and cs.json, with {fuel} and {position}
+      placeholders; the event types and event attributes are translated too.
   exception-translations:
     status: done
     comment: >-

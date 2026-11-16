@@ -26,7 +26,7 @@ Integrace pro HACS, která v Home Assistantu ukazuje ceny paliv z [mBenzin.cz](h
 - **Tankovat tam, kde je to nejlevnější**: karta ukáže pět nejlevnějších stanic ve vašem městě nebo kolem domova, s datem ceny a klepnutím do Google Maps.
 - **Sledovat svou obvyklou stanici**: její cenu, pořadí ve městě, o kolik je dražší než nejlevnější a jak se cena změnila za 1–30 dní, s grafem za 30 dní.
 - **Auto na dvě paliva nebo víc aut**: jedna karta na palivo (třeba Natural 95 a LPG), nebo jedna oblast na každé město, kde jezdíte.
-- **Nechat si to hlásit**: upozornění do telefonu, když se změní cena vaší stanice nebo když nejlevnější cena klesne pod váš limit (viz [Příklady](#příklady)).
+- **Nechat si to hlásit**: upozornění do telefonu, když vaše stanice zlevní, když cena klesne pod váš limit, nebo na levnou stanici poblíž na cestě (viz [Blueprinty](#blueprinty)).
 - **Venkov**: GPS kruh 5–50 km posbírá stanice několika malých obcí a volba „Zobrazit i starší ceny“ ponechá stanice, které ceny aktualizují zřídka.
 
 ## 1. Získání přístupového klíče (zdarma)
@@ -96,6 +96,7 @@ Pro každé palivo `<palivo>` (`n95`, `benzinplus`, `diesel`, `dieselplus`, `lpg
 | `sensor.ceny_paliv_<palivo>_national_average` | průměrná cena stanic s aktuální cenou v České republice; 14 krajů v atributech |
 | `sensor.ceny_paliv_<palivo>_region_average` | průměrná cena v kraji vaší oblasti |
 | `sensor.ceny_paliv_<palivo>_area_average` | průměrná cena ve vaší oblasti (město nebo GPS okolí) a srovnání |
+| `event.ceny_paliv_<palivo>_price_change` | události, když vaše oblíbená stanice zlevní nebo zdraží nebo když klesne nejnižší cena v oblasti |
 
 Každá nastavená oblast je zařízení typu služba (pojmenované podle záznamu, např. `Ceny paliv Praha`) a její senzory mají pod ním přeložené názvy, např. `Ceny paliv Praha Natural 95 · 1. nejlevnější`; stanici, kterou senzor pozice nebo oblíbené stanice právě ukazuje, najdete v atributu `station`. Identifikátory stávajících senzorů se při aktualizaci ani při přepnutí oblasti nemění. Bývalá oblíbená stanice si kvůli statistikám ponechá archivovaný senzor (diagnostický, zakázaný; viz [oddíl 5](#5-bez-karty-standardní-karty)).
 
@@ -141,6 +142,15 @@ Každá stanice v `stations` (i v `home`) má `rank`, `name`, `title` (čitelný
 | `_area_average` | průměr stanic ve vaší oblasti | `station_count`, `region`, `region_rank`, `vs_national` a `vs_region` (Kč; pod nulou: vaše oblast je levnější) |
 
 Když sledovaná osoba nebo posunutá GPS oblast přejede do jiného kraje, krajský senzor pokračuje průměrem toho kraje.
+
+**`event.ceny_paliv_<palivo>_price_change`** — entita událostí, která porovná každou aktualizaci s tou předchozí. Typy událostí:
+
+| Typ události | Kdy |
+|---|---|
+| `favourite_cheaper` / `favourite_dearer` | cena u vaší oblíbené stanice klesla / stoupla (výběr jiné oblíbené stanice není změna ceny) |
+| `cheapest_cheaper` | nejnižší cena v oblasti klesla (i když posunutá GPS oblast najde levnější stanici) |
+
+Každá událost nese `fuel`, `unit`, `area`, `station`, `address`, `price`, `previous_price`, `change` (Kč), `distance_km` (v GPS režimu) a `maps`. Identifikátor entity se nemění ani při výběru jiné oblíbené stanice, takže automatizace dál fungují. Ceny při startu jsou jen výchozí bod: restart ani nepovedená aktualizace nic nehlásí.
 
 ## Jak se data aktualizují
 
@@ -271,6 +281,16 @@ action: ceny_paliv.refresh
 data:
   config_entry_id: 01JC0EXAMPLE  # volitelné: oblast vybraná v editoru akce
 ```
+
+## Blueprinty
+
+Hotové automatizace: naimportujte je tlačítkem (nebo **Nastavení → Automatizace a scény → Blueprinty → Importovat blueprint** s odkazem na soubor) a pak z nich vytvořte automatizaci. U každého zvolíte jazyk zprávy (čeština nebo angličtina) a co se má stát, třeba upozornění do telefonu s `{{ title }}` a `{{ message }}`; ve výchozím stavu vytvoří oznámení v Home Assistantu.
+
+| Blueprint | Co dělá | |
+|---|---|---|
+| [Změna ceny oblíbené stanice](blueprints/automation/ceny_paliv/favourite_price_change.yaml) | vaše oblíbená stanice zlevnila (nebo i zdražila), aspoň o zvolenou částku; používá události změny ceny | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FVituhlos%2Fha-ceny-paliv%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fceny_paliv%2Ffavourite_price_change.yaml) |
+| [Cena pod limit](blueprints/automation/ceny_paliv/price_below_limit.yaml) | cena (nejlevnější v oblasti, oblíbená stanice nebo průměr) klesla pod váš limit; jednou při každém poklesu pod něj | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FVituhlos%2Fha-ceny-paliv%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fceny_paliv%2Fprice_below_limit.yaml) |
+| [Levná stanice poblíž](blueprints/automation/ceny_paliv/cheap_station_nearby.yaml) | když jste mimo domov, nejlevnější stanice GPS oblasti do vaší ceny a vzdálenosti, s pauzou mezi zprávami; nejlépe s oblastí, která jede s vámi | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FVituhlos%2Fha-ceny-paliv%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fceny_paliv%2Fcheap_station_nearby.yaml) |
 
 ## Příklady
 

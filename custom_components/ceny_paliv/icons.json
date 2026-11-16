@@ -1,5 +1,10 @@
 {
   "entity": {
+    "event": {
+      "price_change": {
+        "default": "mdi:bell-ring-outline"
+      }
+    },
     "sensor": {
       "cheapest": {
         "default": "mdi:gas-station"
