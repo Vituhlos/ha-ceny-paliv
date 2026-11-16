@@ -12,6 +12,9 @@
   and the Czech Republic side by side and ranks the 14 regions; `ceny-paliv-regions-card` colours a map of the
   regions by their average price, from the boundaries the integration already has (served to the card at
   `/ceny_paliv_static/regions.json`).
+- **Three more cards**: `ceny-paliv-areas-card` compares one fuel across your areas, the cheapest first;
+  `ceny-paliv-road-card` shows the nearest stations large with a big navigate button, for a phone in the car;
+  `ceny-paliv-big-card` shows one price large for a wall tablet.
 - **A badge and a tile card feature**: `ceny-paliv-badge` puts a price (the cheapest, your station's or the area
   average) at the top of a dashboard; the tile card feature `ceny-paliv-price-feature` shows under a tile of a Ceny
   paliv sensor what it says in one line (the cheapest station, your station's rank, the difference from the country),
