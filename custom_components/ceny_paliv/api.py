@@ -395,7 +395,7 @@ def street_and_town(marker: dict[str, Any]) -> tuple[str, str]:
 
 
 def station_title(name: str, street: str, city: str | None = None) -> str:
-    """'VS Petrol · Obory': the name, then the street, or the town when the station has no street."""
+    """'Benzina · Karlovarská': the name, then the street, or the town when the station has no street."""
     place = street or city
     return f"{name} · {place}" if place else name
 

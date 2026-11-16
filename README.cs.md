@@ -113,7 +113,7 @@ Všechny senzory ukazují cenu v Kč/l (CNG v Kč/kg) a nesou uvedení zdroje `C
 | `gps_nearest_stations` | GPS režim: nejvýše 10 nejbližších stanic, zkráceně (název, město, adresa, cena, souřadnice, datum, vzdálenost) |
 | `language`, `labels`, `logos` | jazyk karty, její texty a stažená loga |
 
-Každá stanice v `stations` (i v `home`) má `rank`, `name`, `title` (čitelný popis: název a ulice, a když stanice ulici nemá, obec, např. `VS Petrol · Obory`), `chain`, `street` (adresa bez opakovaného názvu stanice; u obce bez ulic její název a číslo domu), `city` (obec bez čísla domu), `address` (adresa od mBenzinu, např. `Selbská 15/2732, Aš`), `price`, `lat`, `lng`, `updated` (vlastní údaj mBenzinu, např. `Dnes`), `updated_date`, `maps` (odkaz do Google Maps), `home` (zda je to vaše oblíbená) a `trends`; v GPS režimu navíc `distance_km`. Ulice a obec pocházejí z adresy od mBenzinu, s diakritikou; u stanice bez adresy z jejího odkazu, bez diakritiky. `trends` má klíče `1`, `2`, `7`, `14` a `30` (dny); každý je `null`, dokud neexistuje starší cena, jinak obsahuje `dir` (`up`, `down`, `flat`), `delta` (Kč), `ref_date` a `ref_price`.
+Každá stanice v `stations` (i v `home`) má `rank`, `name`, `title` (čitelný popis: název a ulice, a když stanice ulici nemá, obec, např. `Benzina · Karlovarská`), `chain`, `street` (adresa bez opakovaného názvu stanice; u obce bez ulic její název a číslo domu), `city` (obec bez čísla domu), `address` (adresa od mBenzinu, např. `Selbská 15/2732, Aš`), `price`, `lat`, `lng`, `updated` (vlastní údaj mBenzinu, např. `Dnes`), `updated_date`, `maps` (odkaz do Google Maps), `home` (zda je to vaše oblíbená) a `trends`; v GPS režimu navíc `distance_km`. Ulice a obec pocházejí z adresy od mBenzinu, s diakritikou; u stanice bez adresy z jejího odkazu, bez diakritiky. `trends` má klíče `1`, `2`, `7`, `14` a `30` (dny); každý je `null`, dokud neexistuje starší cena, jinak obsahuje `dir` (`up`, `down`, `flat`), `delta` (Kč), `ref_date` a `ref_price`.
 
 **`sensor.ceny_paliv_<palivo>_home`** — stav: cena u vaší oblíbené stanice; dlouhodobé statistiky (`state_class: measurement`).
 
@@ -136,7 +136,7 @@ Každá stanice v `stations` (i v `home`) má `rank`, `name`, `title` (čitelný
 - **Když mBenzin.cz pro palivo neodpoví**, jeho senzory budou do příští úspěšné aktualizace nedostupné; výpadek i obnova se zalogují jen jednou a po 24 hodinách bez cen to ohlásí **Nastavení → Opravy**. Karta dál ukazuje poslední známé ceny s upozorněním.
 - **Započítají se jen čerstvé ceny**: ve výchozím stavu dnešní a včerejší (CNG 3 dny, LPG a AdBlue 7), s volbou „Zobrazit i starší ceny“ až 3 nebo 7 dní. Relativní údaje mBenzinu („Dnes“, „Včera“) se vyhodnocují podle času stažení v českém čase.
 - **Trendy**: jednou denně se ceny uloží místně (`.storage/ceny_paliv.<id záznamu>`, drží se 35 dní): v městském režimu všech stanic města, v GPS režimu pěti zobrazených a oblíbené. Trendy se počítají z tohoto záznamu.
-- **Dlouhodobé statistiky podle stanice**: při každé aktualizaci se cena oblíbené stanice zapíše do dlouhodobých statistik Home Assistantu přímo pod stanici (`ceny_paliv:<palivo>_<id stanice>`, s názvem např. „Natural 95 · VS Petrol · Obory“), spolu s až 35 dny jejího denního záznamu. Nepatří k žádnému senzoru ani oblasti: výběr jiné oblíbené stanice založí statistiky té stanice, opětovný výběr stanice naváže na její historii a odebrání a nové přidání integrace ji zachová. Graf za 30 dní v kartě ukazuje právě je; senzor oblíbené stanice má dál i své vlastní statistiky.
+- **Dlouhodobé statistiky podle stanice**: při každé aktualizaci se cena oblíbené stanice zapíše do dlouhodobých statistik Home Assistantu přímo pod stanici (`ceny_paliv:<palivo>_<id stanice>`, s názvem např. „Natural 95 · Benzina · Karlovarská“), spolu s až 35 dny jejího denního záznamu. Nepatří k žádnému senzoru ani oblasti: výběr jiné oblíbené stanice založí statistiky té stanice, opětovný výběr stanice naváže na její historii a odebrání a nové přidání integrace ji zachová. Graf za 30 dní v kartě ukazuje právě je; senzor oblíbené stanice má dál i své vlastní statistiky.
 
 ## 3. Karta pro dashboard (je součástí, nic dalšího se neinstaluje)
 
@@ -205,7 +205,7 @@ Loga jsou ochranné známky svých majitelů a slouží jen k označení stanic;
 
 ## 5. Bez karty: standardní karty
 
-Každý senzor má pevný přeložený název (např. `Natural 95 · 1. nejlevnější`); čitelný popis stanice, kterou právě ukazuje (např. `VS Petrol · Obory`), je v atributu `station` a při každé aktualizaci sleduje pořadí, identifikátory entit zůstávají stejné. Jedinou výjimkou je senzor oblíbené stanice: výběr jiné oblíbené stanice vytvoří nový senzor (např. `_home_2`), aby se nikdy nesmíchaly statistiky dvou stanic (viz Poznámky).
+Každý senzor má pevný přeložený název (např. `Natural 95 · 1. nejlevnější`); čitelný popis stanice, kterou právě ukazuje (např. `Benzina · Karlovarská`), je v atributu `station` a při každé aktualizaci sleduje pořadí, identifikátory entit zůstávají stejné. Jedinou výjimkou je senzor oblíbené stanice: výběr jiné oblíbené stanice vytvoří nový senzor (např. `_home_2`), aby se nikdy nesmíchaly statistiky dvou stanic (viz Poznámky).
 
 Karta **Entity** s 5 nejlevnějšími stanicemi (stav senzoru je cena):
 

@@ -67,7 +67,7 @@ Upgrading from 0.5 needs no action: entity ids, history, statistics and settings
   under the station itself (`ceny_paliv:<fuel>_<station id>`), with the up to 35 days the integration already kept.
   Choosing another favourite, choosing a station again, or removing and adding the integration no longer loses or
   mixes its history. The favourite sensor has a new `statistic_id` attribute and the card's 30-day graph uses it.
-- **Readable station names**: every station gets a `title` such as "VS Petrol · Obory" (the name and the street, or
+- **Readable station names**: every station gets a `title` such as "Benzina · Karlovarská" (the name and the street, or
   the town when it has no street), a `street` without the repeated station name (also when mBenzin writes the name
   without accents, as "Am oil Milicin parkoviste") and its `city`. The `station` attribute of the favourite and
   position sensors, and so the card's favourite station, shows the title; list rows show the town for stations

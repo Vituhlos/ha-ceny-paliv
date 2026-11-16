@@ -33,7 +33,7 @@ diagnostika z 0.6.0 ukázala, že mBenzin posílá adresu (`addr`), takže sezna
 - Akce `ceny_paliv.refresh` (registrovaná v `async_setup`, chyby přes překlady) se zarážkou proti zahlcení mBenzinu;
   `PARALLEL_UPDATES`; výpadek i obnova se zalogují jen jednou; při výpadku mBenzinu se entity stanou nedostupnými
   (pravidlo `entity-unavailable`) – poslední známé ceny zůstanou v kartě jako „poslední známá data“.
-- Čitelné názvy stanic („VS Petrol · Obory“), správná města, žádné opakování.
+- Čitelné názvy stanic („Benzina · Karlovarská“), správná města, žádné opakování.
 - Historie podle stanice v dlouhodobých statistikách HA – změna oblíbené stanice ani nové přidání integrace
   o historii nepřijde.
 - Kratší nastavení s popisem každého pole (`data_description`); loga podle řetězců v okolí automaticky.
@@ -74,4 +74,4 @@ na PyPI, integrace ji používá; `mypy --strict` v CI. Bronze 20/20, Silver 10/
 
 - Kontrola pravidlo po pravidle: u každého `done` konkrétní kód a test, který to dokazuje.
 - README s obrázky karty ve světlém i tmavém motivu; ukázková stránka a srovnání vzhledu jako nástroj v repozitáři.
-- Balíček log doplněný o řetězce z okolí (VS Petrol, Petrol, Am oil, Oktan…).
+- Balíček log doplněný o menší řetězce (Petrol, Am oil, Oktan…).

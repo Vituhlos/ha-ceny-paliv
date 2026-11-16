@@ -526,11 +526,11 @@ test("a row does not repeat the station name in its address, even without accent
 
   // from 0.6 the integration sends the street itself, and the town for a station without a street
   top.attributes.stations = [
-    { name: "VS Petrol", address: "VS Petrol", street: "", city: "Obory", price: 38.9, updated_date: today, trends: {} },
+    { name: "Robin Oil", address: "Robin Oil", street: "", city: "Lhota", price: 38.9, updated_date: today, trends: {} },
     { name: "Petrol", address: "Petrol Prazska 310", street: "Prazska 310", city: "Neveklov", price: 39, updated_date: today, trends: {} },
   ];
   const rows = card._listHtml();
-  assert.match(rows, /Dnes<\/span> · Obory/);
+  assert.match(rows, /Dnes<\/span> · Lhota/);
   assert.match(rows, /Dnes<\/span> · Prazska 310/);
 });
 
