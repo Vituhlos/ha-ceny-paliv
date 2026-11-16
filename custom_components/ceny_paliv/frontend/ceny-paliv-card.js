@@ -7,6 +7,8 @@
  *   custom:ceny-paliv-compare-card  your station, the area, the region and the country, and the 14 regions (fuel, config_id)
  *   custom:ceny-paliv-regions-card  a map of the 14 regions coloured by their average price (fuel, config_id)
  *   custom:ceny-paliv-stations-map-card  the area's stations as coloured prices around its centre (fuel, config_id)
+ *   custom:ceny-paliv-badge         a dashboard badge with a price (fuel, price: cheapest | mine | area, config_id)
+ *   custom:ceny-paliv-price-feature a tile card feature for a Ceny paliv sensor: the station, rank or comparison, the trend
  *
  * Prices come from mBenzin.cz; this project is independent and not affiliated with mBenzin.
  *
@@ -1366,7 +1368,7 @@ const EDITOR_TEXT = {
   en: {
     fuel: 'Fuel', fuels: 'Fuels (switch, or the fuels shown)', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
     map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
-    show_regions: 'Show the 14 regions', sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
+    show_regions: 'Show the 14 regions', badge_cheapest: 'The cheapest in the area', badge_mine: 'My station', badge_area: 'The area average', sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
     consumption: 'Consumption per 100 km in litres, kg for CNG (for "worth it")', price: 'Price', distance: 'Distance', worth: 'Worth the drive',
     home: 'My station', list: 'Cheapest stations', map: 'Map', graph: '30-day graph: my station, the cheapest, the average',
     auto: 'Automatic: 2 columns when the card is wide', columns: 'Always 2 columns', stack: 'Always 1 column',
@@ -1374,7 +1376,7 @@ const EDITOR_TEXT = {
   cs: {
     fuel: 'Palivo', fuels: 'Paliva (přepínač, nebo zobrazená paliva)', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
     map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
-    show_regions: 'Zobrazit 14 krajů', sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
+    show_regions: 'Zobrazit 14 krajů', badge_cheapest: 'Nejlevnější v oblasti', badge_mine: 'Moje stanice', badge_area: 'Průměr oblasti', sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
     consumption: 'Spotřeba na 100 km v litrech, u CNG v kg (pro „vyplatí se“)', price: 'Cena', distance: 'Vzdálenost', worth: 'Vyplatí se dojet',
     home: 'Moje stanice', list: 'Nejlevnější stanice', map: 'Mapa', graph: 'Graf za 30 dní: moje stanice, nejlevnější, průměr',
     auto: 'Automaticky: 2 sloupce, je-li karta široká', columns: 'Vždy 2 sloupce', stack: 'Vždy 1 sloupec',
@@ -2133,6 +2135,162 @@ for (const m of ['_stationHtml', '_openStation', '_trendTiles', '_when', '_age',
   CenyPalivStationsMapCard.prototype[m] = CenyPalivCard.prototype[m];
 }
 
+// ------------------------------------------------------------------ 11. a badge with a price
+const BADGE_STYLE = `
+  :host { display: inline-block; }
+  .badge {
+    display: inline-flex; align-items: center; gap: var(--ha-space-2, 8px); height: 36px; min-width: 36px; padding: 0 12px;
+    box-sizing: border-box; cursor: pointer; outline: none; font-family: var(--ha-font-family-body, Roboto, Noto, sans-serif);
+    border-radius: var(--ha-badge-border-radius, 18px);
+    border: var(--ha-card-border-width, 1px) solid var(--ha-card-border-color, var(--divider-color, #e0e0e0));
+    background: var(--ha-card-background, var(--card-background-color, #fff));
+  }
+  .badge:focus-visible { box-shadow: 0 0 0 2px var(--cp-home); }
+  .badge ha-icon { --mdc-icon-size: 18px; margin-inline-start: -4px; color: var(--badge-color, var(--cp-fuel)); }
+  .badge.mine ha-icon { color: var(--cp-home); }
+  .badge .text { display: flex; flex-direction: column; }
+  .badge .label { font-size: var(--ha-font-size-xs, 10px); font-weight: var(--ha-font-weight-medium, 500); line-height: 10px; letter-spacing: 0.1px; color: var(--cp-muted); }
+  .badge .content { font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); line-height: 1.2; letter-spacing: 0.1px; color: var(--cp-text); font-variant-numeric: tabular-nums; }
+`;
+const BADGE_SHOWS = { cheapest: 'top5', mine: 'home', area: 'area_average' };
+
+class CenyPalivBadge extends CenyPalivMiniCard {
+  static get defaults() { return { price: 'cheapest' }; }
+
+  static getStubConfig(hass) {
+    const found = CenyPalivCard.fuels(hass)[0];
+    return { fuel: found ? found.value : 'n95' };  // a badge's stub has no type (Home Assistant adds it)
+  }
+
+  static editorSchema(hass, L) {
+    return [
+      { name: 'fuel', required: true, selector: { select: { mode: 'dropdown', options: CenyPalivCard.fuels(hass) } } },
+      { name: 'price', selector: { select: { mode: 'dropdown', options: Object.keys(BADGE_SHOWS).map((value) => ({ value, label: L[`badge_${value}`] || value })) } } },
+    ];
+  }
+
+  setConfig(config) {
+    if (!config || !config.fuel) throw new Error('ceny-paliv-badge: set "fuel", for example "n95"');
+    super.setConfig(config);
+  }
+
+  set hass(hass) {
+    super.hass = hass;
+    // the base draws a card around a message: a badge stays a badge
+    if (!this._area && this.shadowRoot.innerHTML.includes('class="card message"')) {
+      this.shadowRoot.innerHTML = `<style>${STYLE}${BADGE_STYLE}</style><div class="badge"><ha-icon icon="mdi:gas-station-off-outline"></ha-icon><span class="text"><span class="content">—</span></span></div>`;
+    }
+  }
+
+  _render() {
+    const T = (k, v) => this._T(k, v);
+    const fuel = this._config.fuel;
+    const show = BADGE_SHOWS[this._config.price] ? this._config.price : 'cheapest';
+    const top = this._state(fuel, 'top5');
+    const st = this._state(fuel, BADGE_SHOWS[show]);
+    const at = (top && top.attributes) || {};
+    const ok = st && !['unavailable', 'unknown'].includes(st.state) && isFinite(Number(st.state));
+    const unit = at.unit_of_measurement || 'Kč/l';
+    const label = { cheapest: at.fuel_label || fuel, mine: `${at.fuel_label || fuel} · ${T('my_station')}`, area: `${at.fuel_label || fuel} · ${T('series_average')}` }[show];
+    const icon = { cheapest: 'mdi:gas-station', mine: 'mdi:gas-station-in-use', area: 'mdi:map-marker-radius' }[show];
+    const id = (this._sensors[fuel] || {})[BADGE_SHOWS[show]] || (this._sensors[fuel] || {}).top5 || '';
+    const value = ok ? `${this._num(st.state)} ${unit}` : '—';
+    return `<style>${BADGE_STYLE}</style><div class="badge ${show}" role="button" tabindex="0" data-more-info="${esc(id)}" aria-label="${esc(label)}: ${esc(value)}">
+      <ha-icon icon="${icon}"></ha-icon><span class="text"><span class="label">${esc(label)}</span><span class="content">${esc(value)}</span></span></div>`;
+  }
+}
+
+// ------------------------------------------------------------------ 12. a feature for the tile card
+// Added under a tile card of a Ceny paliv sensor (Features > Ceny paliv): what the sensor's attributes say in one
+// line, with the trend since yesterday, in a row like Home Assistant's own features.
+const FEATURE_ROLES = ['top5', 'home', 'position', 'area_average', 'region_average'];
+
+function supportsPriceFeature(hass, context) {
+  const st = context && context.entity_id && hass && hass.states && hass.states[context.entity_id];
+  return !!(st && context.entity_id.startsWith('sensor.ceny_paliv_') && FEATURE_ROLES.includes((st.attributes || {}).cp_role));
+}
+
+const FEATURE_STYLE = `
+  :host { display: block; }
+  .feature {
+    position: relative; overflow: hidden; display: flex; align-items: center; gap: var(--ha-space-2, 8px);
+    height: var(--feature-height, 42px); padding: 0 var(--ha-space-3, 12px); box-sizing: border-box;
+    border-radius: var(--feature-border-radius, 12px); color: var(--cp-text);
+    font-family: var(--ha-font-family-body, Roboto, Noto, sans-serif); font-size: var(--ha-font-size-s, 12px);
+  }
+  .feature::before { content: ""; position: absolute; inset: 0; background: var(--cp-neutral); opacity: 0.2; }
+  .feature > * { position: relative; }
+  .feature .what { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .feature .change { flex: none; display: inline-flex; align-items: center; gap: 2px; font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; --mdc-icon-size: 14px; }
+`;
+
+class CenyPalivPriceFeature extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+  }
+
+  static getStubConfig() { return { type: 'custom:ceny-paliv-price-feature' }; }
+
+  setConfig(config) {
+    if (!config) throw new Error('ceny-paliv-price-feature: missing configuration');
+    this._config = config;
+    this._render();
+  }
+
+  set hass(hass) { this._hass = hass; this._render(); }
+  set context(context) { this._context = context; this._render(); }
+
+  _labels() {
+    const st = this._state();
+    const a = (st && st.attributes) || {};
+    if (a.labels) return a.labels;
+    // the texts are on the area's top5 sensor
+    for (const other of Object.values(this._hass.states)) {
+      const o = other.attributes || {};
+      if (o.cp_role === 'top5' && o.cp_fuel === a.cp_fuel && o.cp_config_id === a.cp_config_id && o.labels) return o.labels;
+    }
+    return {};
+  }
+
+  _state() {
+    return this._hass && this._context && this._context.entity_id ? this._hass.states[this._context.entity_id] : null;
+  }
+
+  _render() {
+    if (!this._hass || !this._context || !this._config) return;
+    const st = this._state();
+    if (!supportsPriceFeature(this._hass, this._context)) { this.shadowRoot.innerHTML = ''; return; }
+    const sig = `${this._context.entity_id}|${st.state}|${st.last_updated}|${this._hass.language}`;
+    if (sig === this._sig) return;
+    this._sig = sig;
+    const T = (k, v) => this._T(k, v);
+    const a = st.attributes || {};
+    let what = '';
+    let trend = null;
+    if (a.cp_role === 'top5') {
+      const first = (a.stations || [])[0];
+      what = first ? (first.title || first.name || '') : T('no_recent');
+      trend = first && first.trends && first.trends['1'];
+    } else if (a.cp_role === 'home') {
+      const vs = Number(a.vs_cheapest);
+      what = [a.rank != null ? T('rank_of', { rank: a.rank, n: a.fresh_count }) : T('not_ranked'),
+        isFinite(vs) ? (vs <= 0 ? T('cheapest_badge') : T('more_than_cheapest', { d: this._num(vs) })) : ''].filter(Boolean).join(' · ');
+      trend = a.trends && a.trends['1'];
+    } else if (a.cp_role === 'position') {
+      what = a.station || '';
+    } else {
+      const vs = Number(a.vs_national);
+      what = [a.region || '', isFinite(vs) ? `${T('compare_country')} ${vs > 0 ? '+' : vs < 0 ? '−' : '±'}${this._num(Math.abs(vs))}` : ''].filter(Boolean).join(' · ');
+    }
+    const r = this._arrow(trend);
+    this.shadowRoot.innerHTML = `<style>${STYLE}${FEATURE_STYLE}</style><div class="feature">
+      <span class="what">${esc(what)}</span>
+      ${trend ? `<span class="change ${r.cls}" title="${esc(T('vs_yesterday'))}"><ha-icon icon="${r.icon}"></ha-icon>${esc(r.txt)}</span>` : ''}</div>`;
+  }
+}
+for (const m of ['_T', '_numberLocale', '_num', '_arrow']) CenyPalivPriceFeature.prototype[m] = CenyPalivCard.prototype[m];
+
 // ------------------------------------------------------------------ the editor of the small cards
 class CenyPalivMiniEditor extends HTMLElement {
   setConfig(config) { this._config = config; this._render(); }
@@ -2146,7 +2304,7 @@ class CenyPalivMiniEditor extends HTMLElement {
     const stale = !!this._config.config_id && !areas.some((a) => a.value === this._config.config_id);
     const schema = [
       ...(areas.length > 1 || stale ? [{ name: 'config_id', selector: { select: { mode: 'dropdown', options: areas } } }] : []),
-      ...this.card.editorSchema(this._hass),
+      ...this.card.editorSchema(this._hass, L),
     ];
     const key = JSON.stringify([code, schema, this._config]);
     if (key === this._key) return;
@@ -2187,6 +2345,16 @@ if (!customElements.get('ceny-paliv-mini-editor')) customElements.define('ceny-p
 for (const [type, cls, name, description] of MINI_CARDS) {
   if (!customElements.get(type)) customElements.define(type, cls);
   if (!window.customCards.some((c) => c.type === type)) window.customCards.push({ type, name, preview: true, description });
+}
+if (!customElements.get('ceny-paliv-badge')) customElements.define('ceny-paliv-badge', CenyPalivBadge);
+window.customBadges = window.customBadges || [];
+if (!window.customBadges.some((b) => b.type === 'ceny-paliv-badge')) {
+  window.customBadges.push({ type: 'ceny-paliv-badge', name: 'Ceny paliv', preview: true, description: 'A fuel price: the cheapest in the area, your station or the area average.' });
+}
+if (!customElements.get('ceny-paliv-price-feature')) customElements.define('ceny-paliv-price-feature', CenyPalivPriceFeature);
+window.customCardFeatures = window.customCardFeatures || [];
+if (!window.customCardFeatures.some((f) => f.type === 'ceny-paliv-price-feature')) {
+  window.customCardFeatures.push({ type: 'ceny-paliv-price-feature', name: 'Ceny paliv: price details', isSupported: supportsPriceFeature });
 }
 
 console.info(`%c Ceny paliv card %c ${CARD_VERSION} `, 'color:#fff;background:#f5b14c;font-weight:700', 'color:#f5b14c;background:#171a20');

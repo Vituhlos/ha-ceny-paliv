@@ -3,7 +3,8 @@
   Demo page for the Ceny paliv card: renders the real card file with a mock `hass`, no Home Assistant needed.
   Serve the repository root (python -m http.server 8765) and open /tools/card-demo.html?theme=dark&lang=cs&width=380
   Parameters: theme=light|dark, lang=en|cs, width=<px> (card width), compact=1, show=home,list, sort=price|distance|worth,
-  cards=main,fuels,savings,compare,regions,stations (the cards to show, in this order)
+  cards=main,fuels,savings,compare,regions,stations,badges,feature (the cards to show, in this order;
+  feature: a simplified tile with the price feature under it)
   The data is made up (no real stations of anyone's area).
 -->
 <html lang="en">
@@ -137,7 +138,8 @@ function fuelStates(fuel, label, base) {
   states[`sensor.ceny_paliv_${fuel}_region_average`] = { state: String(own.average), last_updated: '', attributes: {
     cp_fuel: fuel, cp_role: 'region_average', cp_config_id: id, unit_of_measurement: 'Kč/l', region: own.name, region_code: own.code, rank: own.rank } };
   states[`sensor.ceny_paliv_${fuel}_area_average`] = { state: String(base + 0.9), last_updated: '', attributes: {
-    cp_fuel: fuel, cp_role: 'area_average', cp_config_id: id, unit_of_measurement: 'Kč/l' } };
+    cp_fuel: fuel, cp_role: 'area_average', cp_config_id: id, unit_of_measurement: 'Kč/l', station_count: 14,
+    region: own.name, region_rank: own.rank, vs_national: Math.round((base + 0.9 - country) * 100) / 100, vs_region: Math.round((base + 0.9 - own.average) * 100) / 100 } };
   stations.forEach((s, i) => { states[`sensor.ceny_paliv_${fuel}_${i + 1}`] = { state: String(s.price), last_updated: '', attributes: {
     cp_fuel: fuel, cp_role: 'position', cp_index: i + 1, cp_config_id: id, station: s.title, price: s.price, latitude: s.lat, longitude: s.lng } }; });
   return states;
@@ -181,6 +183,34 @@ s.onload = () => {
     stations: { type: 'custom:ceny-paliv-stations-map-card', fuel: 'n95' } };
   window.demoCards = {};
   for (const name of (q.get('cards') || 'main').split(',')) {
+    if (name === 'badges') {
+      const row = document.createElement('div');
+      row.style.cssText = 'display: flex; flex-wrap: wrap; gap: 8px';
+      for (const price of ['cheapest', 'mine', 'area']) {
+        const badge = document.createElement('ceny-paliv-badge');
+        badge.setConfig({ type: 'custom:ceny-paliv-badge', fuel: 'n95', price });
+        row.appendChild(badge);
+        badge.hass = hass;
+      }
+      document.getElementById('host').appendChild(row);
+      continue;
+    }
+    if (name === 'feature') {
+      // a stand-in for Home Assistant's tile card: the entity's name and state, the feature under it
+      for (const role of ['top5', 'home', 'area_average']) {
+        const id = `sensor.ceny_paliv_n95_${role}`;
+        const tile = document.createElement('ha-card');
+        tile.style.cssText = 'padding: 12px; display: flex; flex-direction: column; gap: 12px; font: 14px Roboto, sans-serif';
+        tile.innerHTML = `<div><b>${role}</b> · ${hass.states[id].state} Kč/l</div>`;
+        const feature = document.createElement('ceny-paliv-price-feature');
+        feature.setConfig({ type: 'custom:ceny-paliv-price-feature' });
+        feature.hass = hass;
+        feature.context = { entity_id: id };
+        tile.appendChild(feature);
+        document.getElementById('host').appendChild(tile);
+      }
+      continue;
+    }
     const config = configs[name];
     if (!config) continue;
     const card = document.createElement(config.type.replace('custom:', ''));

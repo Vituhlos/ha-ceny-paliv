@@ -41,10 +41,10 @@ const context = {
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm };`,
+  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature };`,
   context,
 );
-const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm } = context.testExports;
+const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature } = context.testExports;
 
 const sensor = (fuel, role, configId, extra = {}) => ({
   state: "32.00",
@@ -1056,4 +1056,60 @@ test("the stations map: the area's circle, every up-to-date station as a dot, la
   same(card._rows.list.map((x) => [x.name, x.rank]), [["A", 1], ["B", 2], ["Near", null]]);
   assert.equal(card._rows.fresh, 26); // ranked among the area's 26 up-to-date stations
   assert.match(html, /color-mix\(in srgb, var\(--cp-bad-base\) 100%, var\(--cp-good-base\)\)/); // "Near" is the dearest
+});
+
+test("the badge: the cheapest price, your station's or the area average, and a dash without sensors", () => {
+  const states = {
+    "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.5),
+    "sensor.ceny_paliv_n95_home_a": role("n95", "a", "home", 39.1),
+    "sensor.ceny_paliv_n95_area_average_a": role("n95", "a", "area_average", 39.42),
+  };
+  same(CenyPalivBadge.getStubConfig({ states }), { fuel: "n95" });
+  const badge = new CenyPalivBadge();
+  assert.throws(() => badge.setConfig({}), /fuel/);
+  badge.setConfig({ fuel: "n95" });
+  badge.hass = miniHass(states);
+  assert.match(badge.shadowRoot.innerHTML, /class="badge cheapest" role="button" tabindex="0" data-more-info="sensor.ceny_paliv_n95_top5_a" aria-label="N95: 38\.50 Kč\/l"/);
+  badge.setConfig({ fuel: "n95", price: "mine" });
+  assert.match(badge.shadowRoot.innerHTML, /mdi:gas-station-in-use[^]*N95 · My station<\/span><span class="content">39\.10 Kč\/l/);
+  badge.setConfig({ fuel: "n95", price: "area" });
+  assert.match(badge.shadowRoot.innerHTML, /Area average<\/span><span class="content">39\.42 Kč\/l/);
+  badge.hass = miniHass({});
+  assert.match(badge.shadowRoot.innerHTML, /<div class="badge"><ha-icon icon="mdi:gas-station-off-outline">[^]*>—</);
+  assert.doesNotMatch(badge.shadowRoot.innerHTML, /<ha-card/);
+
+  const editor = new CenyPalivMiniEditor();
+  editor.card = CenyPalivBadge;
+  editor.setConfig({ type: "custom:ceny-paliv-badge", fuel: "n95" });
+  editor.hass = { language: "en", states };
+  const price = editor.children[0].schema.find((f) => f.name === "price");
+  same(price.selector.select.options.map((o) => o.label), ["The cheapest in the area", "My station", "The area average"]);
+});
+
+test("the tile feature: what each Ceny paliv sensor says in one line, with the trend", () => {
+  const labels = { ...LABELS_EN, rank_of: "#{rank} of {n}", more_than_cheapest: "+{d} vs the cheapest", cheapest_badge: "Cheapest", compare_country: "Czech Republic", vs_yesterday: "vs yesterday", not_ranked: "Not ranked" };
+  const states = {
+    "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.5, { labels }),
+    "sensor.ceny_paliv_n95_home_a": role("n95", "a", "home", 39.1, { rank: 3, fresh_count: 14, vs_cheapest: 0.6, trends: { 1: { dir: "up", delta: 0.2 } } }),
+    "sensor.ceny_paliv_n95_area_average_a": role("n95", "a", "area_average", 39.42, { region: "Jihomoravský kraj", vs_national: -0.23 }),
+    "sensor.ceny_paliv_n95_national_average_a": role("n95", "a", "national_average", 39.65),
+    "light.kitchen": { state: "on", attributes: {} },
+  };
+  const hass = miniHass(states);
+  assert.equal(supportsPriceFeature(hass, { entity_id: "sensor.ceny_paliv_n95_top5_a" }), true);
+  assert.equal(supportsPriceFeature(hass, { entity_id: "sensor.ceny_paliv_n95_national_average_a" }), false);
+  assert.equal(supportsPriceFeature(hass, { entity_id: "light.kitchen" }), false);
+  assert.equal(supportsPriceFeature(hass, {}), false);
+
+  const feature = new CenyPalivPriceFeature();
+  feature.setConfig({ type: "custom:ceny-paliv-price-feature" });
+  feature.hass = hass;
+  feature.context = { entity_id: "sensor.ceny_paliv_n95_top5_a" };
+  assert.match(feature.shadowRoot.innerHTML, /class="what">Levna · Hlavni<[^]*mdi:arrow-down/);
+  feature.context = { entity_id: "sensor.ceny_paliv_n95_home_a" };
+  assert.match(feature.shadowRoot.innerHTML, /class="what">#3 of 14 · \+0\.60 vs the cheapest<[^]*class="change bad"[^]*mdi:arrow-up/);
+  feature.context = { entity_id: "sensor.ceny_paliv_n95_area_average_a" };
+  assert.match(feature.shadowRoot.innerHTML, /class="what">Jihomoravský kraj · Czech Republic −0\.23</);
+  feature.context = { entity_id: "light.kitchen" };
+  assert.equal(feature.shadowRoot.innerHTML, "");
 });

@@ -239,6 +239,15 @@ tank_litres: 45
 consumption: 7.2
 ```
 
+**Odznak** do horní části dashboardu (Upravit dashboard → Přidat odznak → Ceny paliv): `custom:ceny-paliv-badge` s `fuel` a `price: cheapest` (výchozí), `mine` nebo `area` (průměr oblasti). **Prvek dlaždicové karty**: pod dlaždici se senzorem Ceny paliv přidejte prvek „Ceny paliv: price details“ (`type: custom:ceny-paliv-price-feature`); na jednom řádku ukáže, co senzor říká, s trendem od včerejška: u top5 nejlevnější stanici, u oblíbené její pořadí a o kolik je dražší, u průměru kraj a rozdíl proti republice.
+
+```yaml
+type: tile
+entity: sensor.ceny_paliv_n95_home
+features:
+  - type: custom:ceny-paliv-price-feature
+```
+
 Cesta se započítá jen tehdy, je-li nejlevnější stanice dál než ta vaše: dvojnásobek vzdálenosti navíc (tam a zpět, vzdušnou čarou) při vaší spotřebě a nejnižší ceně.
 
 Upozornění na změnu ceny na telefonu: viz `examples/price_alert.yaml`.

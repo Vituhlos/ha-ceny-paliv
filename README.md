@@ -233,6 +233,15 @@ tank_litres: 45
 consumption: 7.2
 ```
 
+**A badge** for the top of a dashboard (Edit dashboard → Add badge → Ceny paliv): `custom:ceny-paliv-badge` with `fuel` and `price: cheapest` (default), `mine` or `area` (the area average). **A tile card feature**: under a tile card of a Ceny paliv sensor, add the feature "Ceny paliv: price details" (`type: custom:ceny-paliv-price-feature`); it shows in one line what that sensor says, with the trend since yesterday: the cheapest station for the top5 sensor, your station's rank and how much more it costs for the favourite, the region and the difference from the country for an average.
+
+```yaml
+type: tile
+entity: sensor.ceny_paliv_n95_home
+features:
+  - type: custom:ceny-paliv-price-feature
+```
+
 The drive is counted only when the cheapest station is farther than yours: twice the extra distance (there and back, in a straight line) at your consumption and the cheapest price.
 
 For a notification when your station's price changes, see `examples/price_alert.yaml`.

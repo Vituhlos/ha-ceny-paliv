@@ -12,6 +12,10 @@
   and the Czech Republic side by side and ranks the 14 regions; `ceny-paliv-regions-card` colours a map of the
   regions by their average price, from the boundaries the integration already has (served to the card at
   `/ceny_paliv_static/regions.json`).
+- **A badge and a tile card feature**: `ceny-paliv-badge` puts a price (the cheapest, your station's or the area
+  average) at the top of a dashboard; the tile card feature `ceny-paliv-price-feature` shows under a tile of a Ceny
+  paliv sensor what it says in one line (the cheapest station, your station's rank, the difference from the country),
+  with the trend since yesterday. Both are in Home Assistant's pickers.
 - **A map of the stations**: `ceny-paliv-stations-map-card` draws the area's stations as dots coloured from the
   cheapest to the dearest around the area's centre and circle, the five cheapest and yours labelled with their price;
   a tap opens the station's details and navigation, as in the main card. It is drawn by the card (no map tiles).

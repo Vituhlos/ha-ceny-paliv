@@ -80,8 +80,8 @@ Stav: přepínač paliv a detail stanice s navigací (Mapy.com, Google Maps, Waz
   8. Co se změnilo: časová osa z událostí změny ceny.
   9. Trend týdne: průměr oblasti a vaše stanice za 7 a 14 dní.
   10. Velká cena pro nástěnný tablet.
-  11. Odznak s nejnižší cenou.
-  12. Prvek do dlaždicové (tile) karty.
+  11. Odznak s nejnižší cenou – hotovo.
+  12. Prvek do dlaždicové (tile) karty – hotovo.
   13. Žebříček řetězců (průměry počítá integrace z celého stažení).
   14. Výhodnost LPG a CNG (cena za kilometr podle spotřeby).
 - Strategie, která sama vygeneruje celý dashboard „Ceny paliv“ z těchto karet.
