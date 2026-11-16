@@ -7,6 +7,9 @@
  *
  * Optional (all of them are also in the visual editor: Add card > Ceny paliv):
  *   fuels: [n95, diesel] # a switch between these fuels at the top of the card (fuel: the one shown first)
+ *   sort: price          # price | distance | worth (the price with the fuel burnt driving there and back)
+ *   tank_litres: 40      # for "worth": how much you fill up (CNG: kg)
+ *   consumption: 6.5     # for "worth": your car's consumption in l/100 km (CNG: kg/100 km)
  *   show: [home, list, map, graph]   # which parts to draw; use several cards to place them freely
  *   layout: auto         # auto = 2 columns when the card is wide | columns | stack
  *   stations: 5          # 1-5 stations in the list
@@ -35,7 +38,10 @@ function shownParts(config) {
 
 // What the card uses for an option the config does not set (the editor shows these, but never saves them).
 function editorDefaults(config) {
-  return { fuels: [], show: shownParts(config), layout: 'auto', stations: 5, compact: false, show_footer: !config.compact, map_height: 0 };
+  return {
+    fuels: [], show: shownParts(config), layout: 'auto', stations: 5, compact: false, show_footer: !config.compact, map_height: 0,
+    sort: 'price', tank_litres: 40, consumption: 6.5,
+  };
 }
 
 // Fuels a config can switch between: `fuels`, with `fuel` first when it is not in the list. One fuel: no switch.
@@ -43,6 +49,18 @@ function switchFuels(config) {
   const list = (Array.isArray(config.fuels) ? config.fuels : []).map(String).filter(Boolean);
   if (config.fuel && !list.includes(config.fuel)) list.unshift(config.fuel);
   return list.filter((f, i) => list.indexOf(f) === i);
+}
+
+// Orders of the station list. "worth" is the price per litre with the fuel burnt driving there and back included:
+// price + 2 × km × consumption / 100 × price / tank. Plain arithmetic, no route: the distance is a straight line.
+const SORTS = ['price', 'distance', 'worth'];
+const withDrive = (price, km, tank, consumption) => price + (2 * km * consumption / 100) * price / tank;
+
+// Kilometres in a straight line (haversine), for stations the integration gives no distance for.
+function kmBetween(lat1, lng1, lat2, lng2) {
+  const rad = Math.PI / 180;
+  const a = Math.sin((lat2 - lat1) * rad / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin((lng2 - lng1) * rad / 2) ** 2;
+  return 2 * 6371.0088 * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
 // Navigation to a station. Mapy.com takes "lon,lat", Waze and Google Maps "lat,lng" (their URL documentation).
@@ -217,20 +235,25 @@ const STYLE = `
   .message { flex-direction: row; align-items: flex-start; font-size: var(--ha-font-size-m, 14px); line-height: 20px; color: var(--cp-muted); --mdc-icon-size: 20px; }
   .message ha-icon { flex: none; color: var(--cp-muted); }
 
-  /* fuel switch: the segmented control of core cards (ha-control-select), in the theme's primary colour */
-  .fuels { position: relative; display: flex; gap: 4px; padding: 4px; height: 40px; box-sizing: border-box;
+  /* fuel switch and sort order: the segmented control of core cards (ha-control-select), in the theme's primary colour */
+  .seg { position: relative; display: flex; gap: 4px; padding: 4px; height: 40px; box-sizing: border-box;
     border-radius: var(--ha-border-radius-lg, 12px); }
-  .fuels::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--cp-neutral); opacity: 0.2; }
-  .fuels .option { position: relative; flex: 1 1 0; min-width: 0; padding: 0 var(--ha-space-2, 8px); border: none; background: none;
+  .seg::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--cp-neutral); opacity: 0.2; }
+  .seg .option { position: relative; flex: 1 1 0; min-width: 0; padding: 0 var(--ha-space-2, 8px); border: none; background: none;
     border-radius: calc(var(--ha-border-radius-lg, 12px) - 4px); cursor: pointer; outline: none;
     font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); color: var(--cp-text); }
-  .fuels .option::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--cp-home); opacity: 0;
+  .seg .option::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--cp-home); opacity: 0;
     transition: opacity 80ms ease-in-out; }
-  .fuels .option:hover::before { opacity: 0.2; }
-  .fuels .option:focus-visible { box-shadow: 0 0 0 2px var(--cp-home); }
-  .fuels .option.selected { color: var(--text-primary-color, #fff); }
-  .fuels .option.selected::before { opacity: 1; }
-  .fuels .option span { position: relative; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .seg .option:hover::before { opacity: 0.2; }
+  .seg .option:focus-visible { box-shadow: 0 0 0 2px var(--cp-home); }
+  .seg .option.selected { color: var(--text-primary-color, #fff); }
+  .seg .option.selected::before { opacity: 1; }
+  .seg .option span { position: relative; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* the sort order is secondary to the fuel switch: smaller, its choice a tint instead of a fill */
+  .seg.small { height: 36px; }
+  .seg.small .option { font-size: var(--ha-font-size-s, 12px); }
+  .seg.small .option.selected { color: var(--cp-text); }
+  .seg.small .option.selected::before { opacity: 0.24; }
 
   /* station details: Home Assistant's dialog, a bottom sheet on phones (ha-adaptive-dialog) */
   dialog.sheet {
@@ -278,7 +301,7 @@ const STYLE = `
   .map, .graph { border-radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px)); overflow: hidden; }
   .map.fixed { position: relative; min-width: 200px; }
   .map.fixed > * { position: absolute; inset: 0; display: block; }
-  @media (prefers-reduced-motion: reduce) { .row::before, .fuels .option::before, .nav a::before, .close::before { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .row::before, .seg .option::before, .nav a::before, .close::before { transition: none; } }
 `;
 
 // A state Home Assistant restored for an entity no integration provides (yet): it carries no data or attributes.
@@ -384,6 +407,10 @@ class CenyPalivCard extends HTMLElement {
     this._compact = !!this._config.compact;
     this._footer = this._config.show_footer != null ? !!this._config.show_footer : !this._compact;
     this._mapHeight = Number(this._config.map_height) > 0 ? Number(this._config.map_height) : 0;
+    this._sort = SORTS.includes(this._config.sort) ? this._config.sort : 'price';
+    const positive = (v, d) => (Number(v) > 0 ? Number(v) : d);
+    this._tank = positive(this._config.tank_litres, 40);
+    this._consumption = positive(this._config.consumption, 6.5);
     this._ids = null;
     this._scanAt = 0;
     this._sig = '';
@@ -408,7 +435,8 @@ class CenyPalivCard extends HTMLElement {
     const top = hass.states[this._ids.top5];
     const home = hass.states[this._ids.home];
     // the date is part of the signature: "today"/"yesterday" labels and the freshness filter change at midnight
-    const sig = [JSON.stringify(this._ids), top && top.last_updated, home && home.last_updated, top && top.state, home && home.state, new Date().toDateString()].join('|');
+    const where = hass.config ? `${hass.config.latitude},${hass.config.longitude}` : '';  // distances in a town
+    const sig = [JSON.stringify(this._ids), top && top.last_updated, home && home.last_updated, top && top.state, home && home.state, new Date().toDateString(), where].join('|');
     if (sig !== this._sig) {
       this._sig = sig;
       this._renderTexts();
@@ -763,7 +791,8 @@ class CenyPalivCard extends HTMLElement {
   }
 
   _avatar(s, rank, best) {
-    return `<span class="avatar${best ? ' best' : ''}">${this._disc(s)}<span class="rank">${rank}</span></span>`;
+    const badge = rank != null && rank !== '' ? `<span class="rank">${esc(rank)}</span>` : '';
+    return `<span class="avatar${best ? ' best' : ''}">${this._disc(s)}${badge}</span>`;
   }
 
   // ---------------------------------------------------------------- rendering
@@ -802,7 +831,7 @@ class CenyPalivCard extends HTMLElement {
       const on = f === this._config.fuel;
       return `<button class="option${on ? ' selected' : ''}" role="tab" aria-selected="${on}" data-fuel="${esc(f)}"><span>${esc(labels[f] || f.toUpperCase())}</span></button>`;
     }).join('');
-    return `<div class="fuels" role="tablist">${options}</div>`;
+    return `<div class="seg" role="tablist">${options}</div>`;
   }
 
   // Another fuel of the switch: bind its sensors and rebuild the map and graph for them.
@@ -909,14 +938,19 @@ class CenyPalivCard extends HTMLElement {
     const maxAge = at.max_age_days != null ? Number(at.max_age_days) : 1;
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const fresh = all.filter((s) => this._age(s, today) <= maxAge);
-    const list = fresh.slice(0, this._n);
+    const center = this._center(at);
+    const sort = center ? this._sort : 'price';
+    const pool = sort === 'price' ? fresh : this._pool(at, fresh, center, today, maxAge);
+    const key = sort === 'distance' ? (x) => x._km : (x) => x._worth;
+    const list = sort === 'price' ? fresh.slice(0, this._n) : pool.slice().sort((x, y) => key(x) - key(y) || x.price - y.price).slice(0, this._n);
     // for the station details; the area's up-to-date stations: all stations of the town or circle minus the outdated ones
     const total = at.city_total != null ? at.city_total : (at.gps_area && at.gps_area.station_count);
     const upToDate = total != null && isFinite(Number(total)) ? Number(total) - Number(at.excluded || 0) : fresh.length;
-    this._rows = { list, fresh: Math.max(upToDate, fresh.length), unit: at.unit_of_measurement || 'Kč/l' };
     const cp = this._compact;
-    const prices = list.map((s) => Number(s.price)).filter((p) => !isNaN(p));
+    // the cheapest of the area, whatever the order (in price order the first row, as before)
+    const prices = (sort === 'price' ? list : fresh).map((s) => Number(s.price)).filter((p) => !isNaN(p));
     const min = prices.length ? Math.min(...prices) : null;
+    this._rows = { list, fresh: Math.max(upToDate, fresh.length), unit: at.unit_of_measurement || 'Kč/l', min };
     const unit = at.unit_of_measurement || 'Kč/l';
     const n = min === null ? 0 : fresh.filter((s) => Number(s.price) === min).length;
     const sub = min === null ? T('no_recent') : T('cheapest_price', { p: this._num(min), unit }) + (n > 1 ? ' · ' + T('stations_same', { n }) : '');
@@ -924,6 +958,10 @@ class CenyPalivCard extends HTMLElement {
       <div class="info"><span class="primary">${esc(at.fuel_label || this._config.fuel)} · ${esc(at.city_name || '')}</span>
         <span class="secondary">${esc(sub)}</span></div>
       <div class="value"><span class="number${min === null ? ' muted' : ''}">${min === null ? '—' : this._num(min)}</span><span class="unit">${esc(unit)}</span></div></div>`;
+    const sorter = center && !cp && fresh.length ? `<div class="seg small" role="tablist" aria-label="${esc(T('sort'))}">${SORTS.map((o) => {
+      const on = o === sort;
+      return `<button class="option${on ? ' selected' : ''}" role="tab" aria-selected="${on}" data-sort="${o}"><span>${esc(T('sort_' + o))}</span></button>`;
+    }).join('')}</div>` : '';
     const rows = list.map((s, i) => {
       const best = Number(s.price) === min;
       const name = s.name || '—';
@@ -938,11 +976,11 @@ class CenyPalivCard extends HTMLElement {
       // the price date first: a long address is what gets cut
       const where = [`<span class="${when.old ? 'warn' : ''}">${esc(when.text)}</span>`, esc(addr)].filter((w) => w !== '');
       return `<div class="row" role="button" tabindex="0" aria-haspopup="dialog" data-station="${i}" aria-label="${esc(name)} ${esc(addr)}: ${this._num(s.price)} ${esc(unit)}">
-        ${this._avatar(s, i + 1, best)}
+        ${this._avatar(s, sort === 'price' ? i + 1 : s.rank, best)}
         <div class="info"><span class="primary">${esc(name)}${cp && addr ? ` <span class="muted">${esc(addr)}</span>` : ''}${home}</span>
           ${cp ? '' : `<span class="secondary">${where.join(' · ')}</span>`}</div>
         <span class="change ${tr.cls}" title="${esc(T('vs_yesterday'))}">${s.trends && s.trends['1'] ? `<ha-icon icon="${tr.icon}"></ha-icon>` : ''}${esc(tr.txt)}</span>
-        <span class="price${best ? ' best' : ''}"><span class="number">${this._num(s.price)}</span>${cp ? '' : `<span class="diff">${esc(best ? T('cheapest_badge') : '+' + this._num(Number(s.price) - min))}</span>`}</span>
+        <span class="price${best ? ' best' : ''}"><span class="number">${this._num(s.price)}</span>${cp ? '' : `<span class="diff">${esc(this._diff(s, sort, best, min, unit))}</span>`}</span>
       </div>`;
     }).join('');
     // footer
@@ -962,25 +1000,68 @@ class CenyPalivCard extends HTMLElement {
     lines.push(`<span class="legend">${esc(T('arrows'))}: <span class="good"><ha-icon icon="mdi:arrow-down"></ha-icon> ${esc(T('down'))}</span> · <span class="warn"><ha-icon icon="mdi:equal"></ha-icon> ${esc(T('stable'))}</span> · <span class="bad"><ha-icon icon="mdi:arrow-up"></ha-icon> ${esc(T('up'))}</span> · ${esc(T('longpress'))}</span>`);
     lines.push(`<span>${this._source()} · ${esc(at.fuel_label || '')}${at.fuel === 'n95' ? ' ' + esc(T('e10_note')) : ''} · ${esc(T('tap_station'))}</span>`);
     const foot = this._footer ? `<div class="foot">${lines.join('')}</div>` : `<div class="foot"><span>${this._source()}</span></div>`;
-    return `<ha-card class="card list${cp ? ' compact' : ''}" data-more-info="${esc(this._ids.home || this._ids.top5)}">${head}${alert}<div class="rows">${rows}</div>${foot}</ha-card>`;
+    return `<ha-card class="card list${cp ? ' compact' : ''}" data-more-info="${esc(this._ids.home || this._ids.top5)}">${head}${alert}${sorter}<div class="rows">${rows}</div>${foot}</ha-card>`;
+  }
+
+  // The second line of a row's price: the cheapest, how much more, the distance or the price with the drive.
+  _diff(s, sort, best, min, unit) {
+    if (sort === 'distance') return `${this._num(s._km, 1)} km`;
+    if (sort === 'worth') return this._T('with_drive', { p: this._num(s._worth), unit });
+    return best ? this._T('cheapest_badge') : '+' + this._num(Number(s.price) - min);
+  }
+
+  // Where distances are measured from: the GPS area's centre, or in a town Home Assistant's home location.
+  _center(at) {
+    const config = (this._hass && this._hass.config) || {};
+    const pick = (lat, lng) => (isFinite(Number(lat)) && isFinite(Number(lng)) && lat !== null && lng !== null ? [Number(lat), Number(lng)] : null);
+    // a GPS area measures from its own centre only: without one (a location error) there are no distances
+    if (at.gps_area) return pick(at.gps_area.latitude, at.gps_area.longitude);
+    return pick(config.latitude, config.longitude);
+  }
+
+  // The stations to sort by distance or "worth": the cheapest ones and, in a GPS area, the nearest ones, once each.
+  _pool(at, fresh, center, today, maxAge) {
+    const near = (Array.isArray(at.gps_nearest_stations) ? at.gps_nearest_stations : []).filter((s) => this._age(s, today) <= maxAge);
+    const seen = new Set();
+    const out = [];
+    const cheapest = new Set(fresh);
+    for (const s of fresh.concat(near)) {
+      const id = `${s.name}|${s.lat}|${s.lng}|${s.price}`;
+      const price = Number(s.price);
+      if (seen.has(id) || !isFinite(price)) continue;
+      seen.add(id);
+      const km = s.distance_km != null && isFinite(Number(s.distance_km)) ? Number(s.distance_km)
+        : (isFinite(Number(s.lat)) && isFinite(Number(s.lng)) ? kmBetween(center[0], center[1], Number(s.lat), Number(s.lng)) : Infinity);
+      const rank = cheapest.has(s) ? s.rank : null;  // gps_nearest_stations ranks by distance, not by price
+      out.push(Object.assign({}, s, { rank, _km: km, _worth: withDrive(price, km, this._tank, this._consumption) }));
+    }
+    return out;
+  }
+
+  _setSort(sort) {
+    if (!SORTS.includes(sort) || sort === this._sort) return;
+    this._sort = sort;
+    this._sig = '';
+    if (this._hass) this.hass = this._hass;
   }
 
   // ---------------------------------------------------------------- station details
   _stationHtml(s, rank) {
     const T = (k, v) => this._T(k, v);
-    const rows = this._rows || { list: [], fresh: 0, unit: 'Kč/l' };
-    const prices = rows.list.map((x) => Number(x.price)).filter((p) => !isNaN(p));
-    const min = prices.length ? Math.min(...prices) : Number(s.price);
+    const rows = this._rows || { list: [], fresh: 0, unit: 'Kč/l', min: null };
+    const shown = rows.list.map((x) => Number(x.price)).filter((p) => !isNaN(p));
+    const min = rows.min != null ? rows.min : (shown.length ? Math.min(...shown) : Number(s.price));
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const when = this._when(s, this._age(s, today));
     const best = Number(s.price) === min;
     const addr = s.street !== undefined ? [s.street, s.city].filter(Boolean).join(', ') : (s.address || '');
     const facts = [
       `<span class="${when.old ? 'warn' : ''}">${esc(when.text)}</span>`,
-      esc(T('rank_of', { rank, n: rows.fresh })),
+      rank ? esc(T('rank_of', { rank, n: rows.fresh })) : '',
       best ? `<span class="good">${esc(T('cheapest_badge'))}</span>` : esc(T('more_than_cheapest', { d: this._num(Number(s.price) - min) })),
     ];
-    if (s.distance_km != null && isFinite(Number(s.distance_km))) facts.push(`${this._num(s.distance_km, 1)} km`);
+    const km = s.distance_km != null ? Number(s.distance_km) : s._km;
+    if (km != null && isFinite(km)) facts.push(`${this._num(km, 1)} km`);
     const tiles = this._trendTiles(s.trends || {});
     const nav = navigationLinks(s).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer"><ha-icon icon="${l.icon}"></ha-icon><span>${esc(l.label)}</span></a>`).join('');
     return `<div class="sheet-head">${this._avatar(s, rank, best)}
@@ -988,7 +1069,7 @@ class CenyPalivCard extends HTMLElement {
         <button class="close" data-close aria-label="${esc(T('close'))}"><ha-icon icon="mdi:close"></ha-icon></button>
       </div>
       <div class="sheet-body">
-        <div class="head"><div class="info"><div class="facts">${facts.join('<span aria-hidden="true">·</span>')}</div></div>
+        <div class="head"><div class="info"><div class="facts">${facts.filter(Boolean).join('<span aria-hidden="true">·</span>')}</div></div>
           <div class="value"><span class="number">${this._num(s.price)}</span><span class="unit">${esc(rows.unit)}</span></div></div>
         ${tiles.html}
         ${tiles.note ? `<span class="note">${esc(tiles.note)}</span>` : ''}
@@ -1010,13 +1091,13 @@ class CenyPalivCard extends HTMLElement {
       this.shadowRoot.appendChild(dialog);
       this._sheet = dialog;
     }
-    dialog.innerHTML = this._stationHtml(s, index + 1);
+    dialog.innerHTML = this._stationHtml(s, s.rank != null ? s.rank : (this._sort === 'price' ? index + 1 : null));
     if (!dialog.open) dialog.showModal();
   }
 
   // ---------------------------------------------------------------- interaction
   _entityId(e) {
-    const t = e.composedPath ? e.composedPath().find((n) => n.dataset && (n.dataset.station !== undefined || n.dataset.fuel || n.dataset.close !== undefined || n.dataset.moreInfo)) : null;
+    const t = e.composedPath ? e.composedPath().find((n) => n.dataset && (n.dataset.station !== undefined || n.dataset.fuel || n.dataset.sort || n.dataset.close !== undefined || n.dataset.moreInfo)) : null;
     return t || null;
   }
 
@@ -1053,6 +1134,7 @@ class CenyPalivCard extends HTMLElement {
     if (!t) return;
     if (this._long) { this._long = false; return; }
     if (t.dataset.fuel) this._switchFuel(t.dataset.fuel);
+    else if (t.dataset.sort) this._setSort(t.dataset.sort);
     else if (t.dataset.close !== undefined) { if (this._sheet) this._sheet.close(); }
     else if (t.dataset.station !== undefined) this._openStation(Number(t.dataset.station));
     else if (t.dataset.moreInfo) this._moreInfo(t.dataset.moreInfo);
@@ -1069,12 +1151,16 @@ const EDITOR_TEXT = {
   en: {
     fuel: 'Fuel', fuels: 'Switch between fuels', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
     map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
+    sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
+    consumption: 'Consumption per 100 km in litres, kg for CNG (for "worth it")', price: 'Price', distance: 'Distance', worth: 'Worth the drive',
     home: 'My station', list: 'Cheapest stations', map: 'Map', graph: '30-day graph',
     auto: 'Automatic: 2 columns when the card is wide', columns: 'Always 2 columns', stack: 'Always 1 column',
   },
   cs: {
     fuel: 'Palivo', fuels: 'Přepínat mezi palivy', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
     map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
+    sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
+    consumption: 'Spotřeba na 100 km v litrech, u CNG v kg (pro „vyplatí se“)', price: 'Cena', distance: 'Vzdálenost', worth: 'Vyplatí se dojet',
     home: 'Moje stanice', list: 'Nejlevnější stanice', map: 'Mapa', graph: 'Graf za 30 dní',
     auto: 'Automaticky: 2 sloupce, je-li karta široká', columns: 'Vždy 2 sloupce', stack: 'Vždy 1 sloupec',
   },
@@ -1138,6 +1224,10 @@ class CenyPalivCardEditor extends HTMLElement {
       { name: 'show', selector: { select: { multiple: true, mode: 'list', options: PARTS.map((p) => ({ value: p, label: L[p] })) } } },
       { name: 'layout', selector: { select: { mode: 'dropdown', options: ['auto', 'columns', 'stack'].map((p) => ({ value: p, label: L[p] })) } } },
       { name: 'stations', selector: { number: { min: 1, max: 5, step: 1, mode: 'slider' } } },
+      { name: 'sort', selector: { select: { mode: 'dropdown', options: SORTS.map((p) => ({ value: p, label: L[p] })) } } },
+      // litres, or kilograms for CNG: the formula only needs the fill-up and the consumption in the same unit
+      { name: 'tank_litres', selector: { number: { min: 5, max: 150, step: 1, mode: 'box' } } },
+      { name: 'consumption', selector: { number: { min: 1, max: 30, step: 0.1, mode: 'box' } } },
       { name: 'compact', selector: { boolean: {} } },
       { name: 'show_footer', selector: { boolean: {} } },
       { name: 'map_height', selector: { number: { min: 0, max: 800, step: 10, mode: 'box', unit_of_measurement: 'px' } } },

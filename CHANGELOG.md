@@ -7,6 +7,10 @@
 - **Station details and navigation in the card**: tapping a station of the top 5 opens a panel (a bottom sheet on
   phones) with its price, price date, rank among the area's up-to-date stations, distance and trends, and buttons to
   navigate there with Mapy.com, Google Maps or Waze. Before, a tap opened Google Maps directly.
+- **Sort the stations by price, distance or "worth it"** above the list (`sort:` sets the first order): "worth it"
+  is the price per litre with the fuel burnt driving there and back, from your fill-up (`tank_litres`, 40 l) and
+  consumption (`consumption`, 6.5 l/100 km). In a GPS area the ten nearest stations join the five cheapest for these
+  orders. Distances are straight lines from the area's centre or Home Assistant's home location.
 - **A fuel switch in the card**: `fuels: [n95, diesel]` (also in the visual editor) puts a switch at the top of the
   card, so one card shows several fuels.
 - `tools/card-demo.html`: the card with made-up data and no Home Assistant, in light or dark, Czech or English, to

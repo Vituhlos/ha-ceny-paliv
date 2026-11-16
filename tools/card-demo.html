@@ -2,7 +2,7 @@
 <!--
   Demo page for the Ceny paliv card: renders the real card file with a mock `hass`, no Home Assistant needed.
   Serve the repository root (python -m http.server 8765) and open /tools/card-demo.html?theme=dark&lang=cs&width=380
-  Parameters: theme=light|dark, lang=en|cs, width=<px> (card width), compact=1, show=home,list
+  Parameters: theme=light|dark, lang=en|cs, width=<px> (card width), compact=1, show=home,list, sort=price|distance|worth
   The data is made up (no real stations of anyone's area).
 -->
 <html lang="en">
@@ -72,7 +72,7 @@ const LABELS = {
     table_updated: 'Table updated {t} · next refresh {n}', arrows: 'Arrows: price vs yesterday', down: 'down', stable: 'stable', up: 'up',
     longpress: 'long-press a row for your station history', tap_station: 'tap a station for details and navigation',
     vs_yesterday: 'vs yesterday', source: 'Ceny: mbenzin.cz', e10_note: '(E10 not distinguished)', trends_start: 'Trends start tomorrow (first daily record: today)',
-    since_partial: '* since {d} — history still filling', navigate: 'Navigate', close: 'Close', rank_of: '#{rank} of {n}',
+    since_partial: '* since {d} — history still filling', sort: 'Order', sort_price: 'Price', sort_distance: 'Distance', sort_worth: 'Worth it', with_drive: '≈ {p} with the drive', navigate: 'Navigate', close: 'Close', rank_of: '#{rank} of {n}',
     more_than_cheapest: '+{d} vs the cheapest', no_recent: 'No recent prices' },
   cs: { locale: 'cs-CZ', my_station: 'Moje stanice', updated_today: 'Aktualizováno dnes', updated_yesterday: 'Aktualizováno včera', today: 'Dnes', yesterday: 'Včera',
     cheapest_area: 'Nejlevnější v okolí · {rank}. z {n} aktuálních stanic', vs_cheapest: '+{d} oproti nejlevnější ({name}) · {rank}. z {n}',
@@ -80,7 +80,7 @@ const LABELS = {
     table_updated: 'Tabulka aktualizována {t} · další aktualizace {n}', arrows: 'Šipky: cena oproti včerejšku', down: 'klesá', stable: 'beze změny', up: 'roste',
     longpress: 'dlouhým stisknutím řádku zobrazíte historii vaší stanice', tap_station: 'klepnutím na stanici zobrazíte podrobnosti a navigaci',
     vs_yesterday: 'oproti včerejšku', source: 'Ceny: mbenzin.cz', e10_note: '(E10 se nerozlišuje)', trends_start: 'Trendy se objeví zítra (první denní záznam: dnes)',
-    since_partial: '* od {d} — historie se teprve plní', navigate: 'Navigovat', close: 'Zavřít', rank_of: '{rank}. z {n}',
+    since_partial: '* od {d} — historie se teprve plní', sort: 'Řazení', sort_price: 'Cena', sort_distance: 'Vzdálenost', sort_worth: 'Vyplatí se', with_drive: '≈ {p} i s cestou', navigate: 'Navigovat', close: 'Zavřít', rank_of: '{rank}. z {n}',
     more_than_cheapest: '+{d} oproti nejlevnější', no_recent: 'Žádné aktuální ceny' },
 }[lang];
 
@@ -105,7 +105,12 @@ function fuelStates(fuel, label, base) {
     cp_fuel: fuel, cp_role: 'top5', cp_config_id: id, fuel, fuel_label: label, unit_of_measurement: 'Kč/l', city_name: lang === 'cs' ? 'GPS okolí' : 'GPS area',
     stations, home: stations[2], labels: LABELS, language: lang, max_age_days: 1, logos: [],
     fetched_at: new Date().toISOString(), next_update: new Date(Date.now() + 6 * 3600000).toISOString(),
-    gps_area: { method: 'home', radius_km: 20, station_count: 16 }, excluded: 2 } };
+    gps_area: { method: 'home', radius_km: 20, station_count: 16, latitude: 49.2, longitude: 16.62 }, excluded: 2,
+    gps_nearest_stations: [
+      { name: 'Robin Oil', city: 'Brno', address: 'Lesní 3, Brno', price: base + 1.1, lat: 49.205, lng: 16.625, updated: 'Dnes', updated_date: today, distance_km: 0.7 },
+      { name: 'Eurooil', city: 'Brno', address: 'Polní 9, Brno', price: base + 0.7, lat: 49.215, lng: 16.63, updated: 'Dnes', updated_date: today, distance_km: 1.9 },
+      { ...stations[0] },
+    ] } };
   states[`sensor.ceny_paliv_${fuel}_home`] = { state: String(base + 0.6), last_updated: new Date().toISOString(), attributes: {
     cp_fuel: fuel, cp_role: 'home', cp_config_id: id, station: stations[2].title, price: base + 0.6, unit_of_measurement: 'Kč/l',
     age_days: 1, updated_date: yesterday, rank: 3, fresh_count: 14, vs_cheapest: 0.6, cheapest_name: 'Benzina',
@@ -117,7 +122,7 @@ function fuelStates(fuel, label, base) {
 
 const states = { ...fuelStates('n95', 'Natural 95', 38.5), ...fuelStates('diesel', 'Diesel', 43.5) };
 const hass = { states, language: lang, locale: { language: lang, number_format: 'language', time_format: 'language', time_zone: 'local' },
-  themes: { darkMode: theme === 'dark' }, config: { time_zone: 'Europe/Prague' }, entities: {} };
+  themes: { darkMode: theme === 'dark' }, config: { time_zone: 'Europe/Prague', latitude: 49.2, longitude: 16.62 }, entities: {} };
 
 const s = document.createElement('script');
 s.src = '../custom_components/ceny_paliv/frontend/ceny-paliv-card.js';
@@ -125,6 +130,7 @@ s.onload = () => {
   const card = document.createElement('ceny-paliv-card');
   const config = { type: 'custom:ceny-paliv-card', fuel: 'n95', fuels: ['n95', 'diesel'], show: (q.get('show') || 'home,list').split(',') };
   if (q.get('compact')) config.compact = true;
+  if (q.get('sort')) config.sort = q.get('sort');
   card.setConfig(config);
   document.getElementById('host').appendChild(card);
   card.hass = hass;
