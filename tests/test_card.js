@@ -41,10 +41,10 @@ const context = {
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel };`,
+  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor };`,
   context,
 );
-const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel } = context.testExports;
+const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor } = context.testExports;
 
 const sensor = (fuel, role, configId, extra = {}) => ({
   state: "32.00",
@@ -857,4 +857,107 @@ test("the list sorts by price, distance or worth the drive, with the nearest sta
   html = card._listHtml();
   same(names(), ["Far", "Mid"]);
   assert.doesNotMatch(html, /data-sort/);
+});
+
+// ------------------------------------------------------------------ the small cards
+const LABELS_EN = {
+  fuels_title: "Fuel prices", mine_short: "mine {p}", savings_title: "A full tank", fill_up: "{n} {u} fill-up",
+  save_at: "At {name} you save {d} Kč", mine_cheapest: "Your station is the cheapest", save_vs_avg: "At {name} {d} Kč less than at the average price",
+  drive_extra: "{km} km more there and back ≈ {d} Kč", worth_yes: "worth it: you still save {d} Kč", worth_no: "not worth the drive",
+  my_station: "My station", cheapest_badge: "Cheapest", series_average: "Area average", no_recent: "No recent prices",
+};
+const top5 = (fuel, area, price, extra = {}) => ({ entity_id: `sensor.ceny_paliv_${fuel}_top5_${area}`, state: String(price), last_updated: "t",
+  attributes: { cp_role: "top5", cp_fuel: fuel, cp_config_id: area, fuel, fuel_label: fuel.toUpperCase(), unit_of_measurement: fuel === "cng" ? "Kč/kg" : "Kč/l",
+    city_name: "Brno", labels: LABELS_EN, stations: [{ name: "Levna", title: "Levna · Hlavni", price, lat: 49.2, lng: 16.6, distance_km: 6, trends: { 1: { dir: "down", delta: -0.2 } } }], ...extra } });
+const role = (fuel, area, r, state, extra = {}) => ({ state: String(state), last_updated: "t", attributes: { cp_role: r, cp_fuel: fuel, cp_config_id: area, ...extra } });
+const miniHass = (states) => ({ language: "en", locale: { number_format: "comma_decimal" }, config: {}, states });
+
+test("the small cards find an area's sensors by fuel, and need a choice when there are several areas", () => {
+  const states = {
+    "sensor.ceny_paliv_lpg_top5_a": top5("lpg", "a", 17.9),
+    "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.5),
+    "sensor.ceny_paliv_n95_home_a": role("n95", "a", "home", 38.9),
+    "sensor.ceny_paliv_n95_home_old": role("n95", "a", "home", "unavailable"), // an archived favourite
+    "sensor.ceny_paliv_n95_area_average_a": role("n95", "a", "area_average", 39.4),
+    "sensor.ceny_paliv_n95_top5_b": top5("n95", "b", 37.9),
+  };
+  same(areaIds({ states }), ["a", "b"]);
+  same(areaSensors({ states }, "a").n95, { top5: "sensor.ceny_paliv_n95_top5_a", home: "sensor.ceny_paliv_n95_home_a", area_average: "sensor.ceny_paliv_n95_area_average_a" });
+
+  const card = new CenyPalivFuelsCard();
+  card.setConfig({});
+  card.hass = miniHass(states);
+  assert.match(card.shadowRoot.innerHTML, /several areas/);
+  card.setConfig({ config_id: "a" });
+  const html = card.shadowRoot.innerHTML;
+  // the usual order of fuels (Natural 95 before LPG), the cheapest price, your station, the trend
+  assert.ok(html.indexOf(">N95<") < html.indexOf(">LPG<"));
+  assert.match(html, /data-more-info="sensor.ceny_paliv_n95_top5_a"/);
+  assert.match(html, /class="number">38\.50<\/span><span class="diff mine">mine 38\.90</);
+  assert.match(html, /Levna · Hlavni/);
+  assert.match(html, /mdi:arrow-down/);
+  card.setConfig({ config_id: "a", fuels: ["lpg"] });
+  assert.doesNotMatch(card.shadowRoot.innerHTML, />N95</);
+  card.setConfig({ config_id: "gone" });
+  assert.match(card.shadowRoot.innerHTML, /no longer exists/);
+});
+
+test("a full tank: the saving at the cheapest station, less the longer drive", () => {
+  // 40 l, 39.10 at your station 2 km away, 38.50 at the cheapest 6 km away, 6.5 l/100 km
+  const r = fillUpSaving({ mine: 39.1, cheapest: 38.5, tank: 40, consumption: 6.5, kmMine: 2, kmCheapest: 6 });
+  assert.equal(Math.round(r.save * 100) / 100, 24);
+  assert.equal(r.extraKm, 8); // 4 km further, there and back
+  assert.equal(Math.round(r.driveCost * 100) / 100, 20.02);
+  assert.equal(Math.round(r.net * 100) / 100, 3.98);
+  assert.equal(fillUpSaving({ mine: 38.5, cheapest: 38.5, tank: 40, consumption: 6.5 }), null); // yours is the cheapest
+  assert.equal(fillUpSaving({ mine: 39, cheapest: 38.5, tank: 40, consumption: 6.5 }).net, null); // no distances
+});
+
+test("the full-tank card says what you save, whether the drive pays off, and per kg for CNG", () => {
+  const states = {
+    "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.5),
+    "sensor.ceny_paliv_n95_home_a": role("n95", "a", "home", 39.1, { distance_km: 2 }),
+    "sensor.ceny_paliv_n95_area_average_a": role("n95", "a", "area_average", 39.4),
+    "sensor.ceny_paliv_cng_top5_a": top5("cng", "a", 35),
+    "sensor.ceny_paliv_cng_area_average_a": role("cng", "a", "area_average", 36),
+  };
+  const card = new CenyPalivSavingsCard();
+  assert.throws(() => card.setConfig({}), /fuel/);
+  card.setConfig({ fuel: "n95" });
+  card.hass = miniHass(states);
+  let html = card.shadowRoot.innerHTML;
+  assert.match(html, /40 l fill-up/);
+  assert.match(html, /<span class="label">My station<\/span>\s*<span class="delta">1,564 Kč</);
+  assert.match(html, /1,540 Kč/);
+  assert.match(html, /1,576 Kč/);
+  assert.match(html, /At Levna you save 24 Kč/);
+  assert.match(html, /8\.0 km more there and back ≈ 20 Kč · worth it: you still save 4 Kč/);
+
+  card.setConfig({ fuel: "n95", consumption: 12 }); // a thirsty car: the drive eats the saving
+  assert.match(card.shadowRoot.innerHTML, /class="status warn"[^]*not worth the drive/);
+
+  states["sensor.ceny_paliv_n95_home_a"] = role("n95", "a", "home", 38.5);
+  card.hass = miniHass({ ...states });
+  assert.match(card.shadowRoot.innerHTML, /Your station is the cheapest/);
+
+  card.setConfig({ fuel: "cng" }); // no favourite: against the average, per kilogram
+  html = card.shadowRoot.innerHTML;
+  assert.match(html, /40 kg fill-up/);
+  assert.match(html, /At Levna 40 Kč less than at the average price/);
+  assert.doesNotMatch(html, />My station</);
+});
+
+test("the small cards' editor offers the area only when there are several and saves no defaults", () => {
+  const editor = new CenyPalivMiniEditor();
+  editor.card = CenyPalivSavingsCard;
+  editor.setConfig({ type: "custom:ceny-paliv-savings-card", fuel: "n95" });
+  editor.hass = { language: "cs", states: { "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.5) } };
+  const form = editor.children[0];
+  same(form.schema.map((f) => f.name), ["fuel", "tank_litres", "consumption"]);
+  assert.equal(form.computeLabel({ name: "fuel" }), "Palivo");
+  form.listeners["value-changed"]({ detail: { value: { ...form.data, consumption: 7 } } });
+  same(editor.lastEvent.detail.config, { type: "custom:ceny-paliv-savings-card", fuel: "n95", consumption: 7 });
+
+  editor.hass = { language: "cs", states: { "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.5), "sensor.ceny_paliv_n95_top5_b": top5("n95", "b", 38) } };
+  assert.equal(editor.children[0].schema[0].name, "config_id");
 });

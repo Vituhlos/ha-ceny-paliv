@@ -2,7 +2,8 @@
 <!--
   Demo page for the Ceny paliv card: renders the real card file with a mock `hass`, no Home Assistant needed.
   Serve the repository root (python -m http.server 8765) and open /tools/card-demo.html?theme=dark&lang=cs&width=380
-  Parameters: theme=light|dark, lang=en|cs, width=<px> (card width), compact=1, show=home,list, sort=price|distance|worth
+  Parameters: theme=light|dark, lang=en|cs, width=<px> (card width), compact=1, show=home,list, sort=price|distance|worth,
+  cards=main,fuels,savings (the cards to show, in this order)
   The data is made up (no real stations of anyone's area).
 -->
 <html lang="en">
@@ -25,13 +26,15 @@
     --ha-card-background: #1c1c1c; --ha-card-border-color: rgba(225, 225, 225, 0.12);
   }
   body { margin: 0; padding: 16px; background: var(--primary-background-color); font-family: Roboto, sans-serif; }
-  #host { max-width: var(--w, 900px); }
+  #host { max-width: var(--w, 900px); display: flex; flex-direction: column; gap: 16px; }
 </style>
 </head>
 <body>
 <div id="host"></div>
 <script type="module">
-import * as mdi from "https://cdn.jsdelivr.net/npm/@mdi/js@7.4.47/+esm";
+// the icons come from a CDN: without it the cards still render, only without icons
+let mdi = {};
+try { mdi = await import("https://cdn.jsdelivr.net/npm/@mdi/js@7.4.47/+esm"); } catch (err) { console.warn("demo: no icons", err); }
 const q = new URLSearchParams(location.search);
 const theme = q.get('theme') || 'light';
 const lang = q.get('lang') || 'en';
@@ -72,7 +75,7 @@ const LABELS = {
     table_updated: 'Table updated {t} · next refresh {n}', arrows: 'Arrows: price vs yesterday', down: 'down', stable: 'stable', up: 'up',
     longpress: 'long-press a row for your station history', tap_station: 'tap a station for details and navigation',
     vs_yesterday: 'vs yesterday', source: 'Ceny: mbenzin.cz', e10_note: '(E10 not distinguished)', trends_start: 'Trends start tomorrow (first daily record: today)',
-    since_partial: '* since {d} — history still filling', graph_title: 'Prices over 30 days', series_cheapest: 'Cheapest in the area', series_average: 'Area average', graph_empty: 'No history yet: it fills up day by day.', sort: 'Order', sort_price: 'Price', sort_distance: 'Distance', sort_worth: 'Worth it', with_drive: '≈ {p} with the drive', navigate: 'Navigate', close: 'Close', rank_of: '#{rank} of {n}',
+    since_partial: '* since {d} — history still filling', graph_title: 'Prices over 30 days', series_cheapest: 'Cheapest in the area', series_average: 'Area average', graph_empty: 'No history yet: it fills up day by day.', fuels_title: 'Fuel prices', mine_short: 'mine {p}', savings_title: 'A full tank', fill_up: '{n} {u} fill-up', save_at: 'At {name} you save {d} Kč', mine_cheapest: 'Your station is the cheapest', save_vs_avg: 'At {name} {d} Kč less than at the average price', drive_extra: '{km} km more there and back ≈ {d} Kč', worth_yes: 'worth it: you still save {d} Kč', worth_no: 'not worth the drive', sort: 'Order', sort_price: 'Price', sort_distance: 'Distance', sort_worth: 'Worth it', with_drive: '≈ {p} with the drive', navigate: 'Navigate', close: 'Close', rank_of: '#{rank} of {n}',
     more_than_cheapest: '+{d} vs the cheapest', no_recent: 'No recent prices' },
   cs: { locale: 'cs-CZ', my_station: 'Moje stanice', updated_today: 'Aktualizováno dnes', updated_yesterday: 'Aktualizováno včera', today: 'Dnes', yesterday: 'Včera',
     cheapest_area: 'Nejlevnější v okolí · {rank}. z {n} aktuálních stanic', vs_cheapest: '+{d} oproti nejlevnější ({name}) · {rank}. z {n}',
@@ -80,7 +83,7 @@ const LABELS = {
     table_updated: 'Tabulka aktualizována {t} · další aktualizace {n}', arrows: 'Šipky: cena oproti včerejšku', down: 'klesá', stable: 'beze změny', up: 'roste',
     longpress: 'dlouhým stisknutím řádku zobrazíte historii vaší stanice', tap_station: 'klepnutím na stanici zobrazíte podrobnosti a navigaci',
     vs_yesterday: 'oproti včerejšku', source: 'Ceny: mbenzin.cz', e10_note: '(E10 se nerozlišuje)', trends_start: 'Trendy se objeví zítra (první denní záznam: dnes)',
-    since_partial: '* od {d} — historie se teprve plní', graph_title: 'Ceny za 30 dní', series_cheapest: 'Nejlevnější v oblasti', series_average: 'Průměr oblasti', graph_empty: 'Zatím bez historie: plní se den po dni.', sort: 'Řazení', sort_price: 'Cena', sort_distance: 'Vzdálenost', sort_worth: 'Vyplatí se', with_drive: '≈ {p} i s cestou', navigate: 'Navigovat', close: 'Zavřít', rank_of: '{rank}. z {n}',
+    since_partial: '* od {d} — historie se teprve plní', graph_title: 'Ceny za 30 dní', series_cheapest: 'Nejlevnější v oblasti', series_average: 'Průměr oblasti', graph_empty: 'Zatím bez historie: plní se den po dni.', fuels_title: 'Ceny paliv', mine_short: 'moje {p}', savings_title: 'Plná nádrž', fill_up: 'natankování {n} {u}', save_at: 'U {name} ušetříte {d} Kč', mine_cheapest: 'Vaše stanice je nejlevnější', save_vs_avg: 'U {name} o {d} Kč méně než za průměrnou cenu', drive_extra: 'o {km} km delší cesta tam a zpět ≈ {d} Kč', worth_yes: 'vyplatí se: i tak ušetříte {d} Kč', worth_no: 'nevyplatí se dojet', sort: 'Řazení', sort_price: 'Cena', sort_distance: 'Vzdálenost', sort_worth: 'Vyplatí se', with_drive: '≈ {p} i s cestou', navigate: 'Navigovat', close: 'Zavřít', rank_of: '{rank}. z {n}',
     more_than_cheapest: '+{d} oproti nejlevnější', no_recent: 'Žádné aktuální ceny' },
 }[lang];
 
@@ -113,6 +116,7 @@ function fuelStates(fuel, label, base) {
     ] } };
   states[`sensor.ceny_paliv_${fuel}_home`] = { state: String(base + 0.6), last_updated: new Date().toISOString(), attributes: {
     cp_fuel: fuel, cp_role: 'home', cp_config_id: id, station: stations[2].title, price: base + 0.6, unit_of_measurement: 'Kč/l',
+    latitude: stations[2].lat, longitude: stations[2].lng, distance_km: stations[2].distance_km,
     age_days: 1, updated_date: yesterday, rank: 3, fresh_count: 14, vs_cheapest: 0.6, cheapest_name: 'Benzina',
     trends: { 1: trend(0, 1), 2: trend(-0.2, 2), 7: trend(0.4, 7) } } };
   states[`sensor.ceny_paliv_${fuel}_area_average`] = { state: String(base + 0.9), last_updated: '', attributes: {
@@ -148,14 +152,21 @@ const hass = { states, language: lang, locale: { language: lang, number_format: 
 const s = document.createElement('script');
 s.src = '../custom_components/ceny_paliv/frontend/ceny-paliv-card.js';
 s.onload = () => {
-  const card = document.createElement('ceny-paliv-card');
-  const config = { type: 'custom:ceny-paliv-card', fuel: 'n95', fuels: ['n95', 'diesel'], show: (q.get('show') || 'home,list,graph').split(',') };
-  if (q.get('compact')) config.compact = true;
-  if (q.get('sort')) config.sort = q.get('sort');
-  card.setConfig(config);
-  document.getElementById('host').appendChild(card);
-  card.hass = hass;
-  window.demoCard = card;
+  const main = { type: 'custom:ceny-paliv-card', fuel: 'n95', fuels: ['n95', 'diesel'], show: (q.get('show') || 'home,list,graph').split(',') };
+  if (q.get('compact')) main.compact = true;
+  if (q.get('sort')) main.sort = q.get('sort');
+  const configs = { main, fuels: { type: 'custom:ceny-paliv-fuels-card' }, savings: { type: 'custom:ceny-paliv-savings-card', fuel: 'n95' } };
+  window.demoCards = {};
+  for (const name of (q.get('cards') || 'main').split(',')) {
+    const config = configs[name];
+    if (!config) continue;
+    const card = document.createElement(config.type.replace('custom:', ''));
+    card.setConfig(config);
+    document.getElementById('host').appendChild(card);
+    card.hass = hass;
+    window.demoCards[name] = card;
+  }
+  window.demoCard = window.demoCards.main;
 };
 document.body.appendChild(s);
 </script>

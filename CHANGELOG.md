@@ -4,6 +4,10 @@
 
 ### New
 
+- **Two more cards for a dashboard**: `ceny-paliv-fuels-card` shows every fuel of an area at a glance (the cheapest
+  price and station, your station, the trend since yesterday); `ceny-paliv-savings-card` shows what a full tank costs
+  at your station, at the cheapest one and at the average price, how much you save and whether the longer drive to
+  the cheapest pays off. Both are in the card picker, with a visual editor.
 - **Station details and navigation in the card**: tapping a station of the top 5 opens a panel (a bottom sheet on
   phones) with its price, price date, rank among the area's up-to-date stations, distance and trends, and buttons to
   navigate there with Mapy.com, Google Maps or Waze. Before, a tap opened Google Maps directly.

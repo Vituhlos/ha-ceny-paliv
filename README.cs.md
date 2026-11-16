@@ -220,6 +220,24 @@ map_height: 260
 
 (Jsou to tři samostatné karty; `---` je tu jen odděluje.) V dashboardu typu *sekce* si karta velikost přizpůsobí obsahu.
 
+### Další karty pro dashboard
+
+Kromě hlavní karty přináší integrace menší karty, také v nabídce karet (hledejte „Ceny paliv“). Každá ukazuje jednu oblast; máte-li jich víc, vyberte ji v editoru karty (`config_id`).
+
+| Karta | Co ukazuje | Volby |
+|---|---|---|
+| `custom:ceny-paliv-fuels-card` | všechna paliva oblasti najednou: nejnižší cena a stanice, cena u vaší stanice, trend od včerejška | `fuels` (která a v jakém pořadí; výchozí všechna) |
+| `custom:ceny-paliv-savings-card` | kolik stojí plná nádrž u vaší stanice, u nejlevnější a za průměrnou cenu oblasti, kolik ušetříte a zda se delší cesta k nejlevnější vyplatí | `fuel` (povinné), `tank_litres` (40; u CNG kg), `consumption` (6,5 na 100 km) |
+
+```yaml
+type: custom:ceny-paliv-savings-card
+fuel: n95
+tank_litres: 45
+consumption: 7.2
+```
+
+Cesta se započítá jen tehdy, je-li nejlevnější stanice dál než ta vaše: dvojnásobek vzdálenosti navíc (tam a zpět, vzdušnou čarou) při vaší spotřebě a nejnižší ceně.
+
 Upozornění na změnu ceny na telefonu: viz `examples/price_alert.yaml`.
 
 ## 4. Loga čerpacích stanic (volitelné)
