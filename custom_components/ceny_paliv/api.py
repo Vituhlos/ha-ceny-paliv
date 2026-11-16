@@ -119,6 +119,7 @@ async def _async_fetch_markers(
     clock: Callable[[], dt.datetime] = _now_prague,
 ) -> list[dict[str, Any]]:
     """Download the price-map markers of one fuel (all of the Czech Republic)."""
+    error_name: str | None
     try:
         async with session.get(
             URL,
@@ -164,7 +165,7 @@ class MarkerSnapshot:
 @dataclass
 class _MarkerCacheEntry:
     expires_at: float
-    snapshot: MarkerSnapshot | None = None
+    snapshot: MarkerSnapshot
     loaded_at: float = 0.0
 
 
@@ -567,7 +568,7 @@ def parse_fresh(value: str | None, today: dt.date) -> dt.date | None:
     return None
 
 
-def _trend(log: list[list], price: float, today: dt.date, days: int) -> dict[str, Any] | None:
+def _trend(log: list[list[Any]], price: float, today: dt.date, days: int) -> dict[str, Any] | None:
     """Compare with the price `days` ago (or the oldest earlier record). None when no earlier record."""
     earlier = [(d, p) for d, p in log if d < today.isoformat()]
     if not earlier:
@@ -590,7 +591,7 @@ def build_payload(
     fuel: str,
     city: str,
     home_slug: str | None,
-    history: dict[str, list[list]],
+    history: dict[str, list[list[Any]]],
     now: dt.datetime,
     language: str = DEFAULT_LANGUAGE,
     fetched_at: dt.datetime | None = None,
@@ -740,7 +741,7 @@ def build_payload(
             "updated_date": d.isoformat() if d else None,
             "maps": MAPS.format(lat=m["lat"], lng=m["lng"]),
             "home": (
-                bool(home_marker) and m.get("url") == home_marker.get("url")
+                home_marker is not None and m.get("url") == home_marker.get("url")
                 if gps_mode
                 else bool(home_slug)
                 and (_safe_station_slug(m) == home_slug or m.get("url") == home_slug)
@@ -755,8 +756,7 @@ def build_payload(
     excluded = 0
     for m in candidate_markers:
         d = parse_fresh(m.get("fresh"), sample_day)
-        age_days = max(0, (today - d).days) if d is not None else None
-        if age_days is None or age_days > max_age:
+        if d is None or max(0, (today - d).days) > max_age:
             excluded += 1
             continue
         kept.append((m, d))
@@ -767,7 +767,7 @@ def build_payload(
         )
     )
     if gps_mode:
-        retained = list(kept[:TOP])
+        retained: list[tuple[dict[str, Any], dt.date | None]] = list(kept[:TOP])
         if home_marker is not None and all(
             history_key(marker) != history_key(home_marker) for marker, _ in retained
         ):

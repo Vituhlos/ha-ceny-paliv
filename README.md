@@ -362,7 +362,7 @@ CI also tests Python 3.14 with `requirements_test_latest.txt`. These requirement
 the test framework, which in turn pins Home Assistant 2025.1.0 and 2026.10.4 respectively.
 The Home Assistant frontend and HTTP server are mocked in integration tests.
 The card has its own tests without dependencies: `node --test tests/test_card.js` (Node 22+).
-CI additionally runs hassfest, the HACS validation, ruff and a check that the manifest and card versions match.
+CI additionally runs hassfest, the HACS validation, ruff, `mypy --strict custom_components/ceny_paliv` (with the Home Assistant 2026.10 pin) and a check that the manifest and card versions match.
 
 ## 🇨🇿 Česky
 

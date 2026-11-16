@@ -3,14 +3,17 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-import voluptuous as vol
+try:  # Home Assistant 2026.x validates with probatio (and maps voluptuous onto it)
+    import probatio as vol
+except ImportError:  # pragma: no cover - Home Assistant 2025.1
+    import voluptuous as vol  # type: ignore[no-redef]
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import ConfigEntry, ConfigEntryBaseFlow, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
@@ -21,6 +24,7 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -90,7 +94,7 @@ def _clean_key(value: Any) -> str | None:
     return key if key and key.isprintable() else None
 
 
-async def _async_check_key(hass, key: str | None) -> tuple[list[dict[str, Any]] | None, dict[str, str]]:
+async def _async_check_key(hass: HomeAssistant, key: str | None) -> tuple[list[dict[str, Any]] | None, dict[str, str]]:
     """Validate a key with one n95 download (shared cache): (markers, errors)."""
     if key is None:
         return None, {"base": "invalid_auth"}
@@ -119,10 +123,21 @@ def _station_slug(marker: dict[str, Any]) -> str | None:
     parts = marker["url"].split("/")
     if len(parts) < 5 or parts[1] != "Ceny-benzinu-a-nafty" or not all(parts[2:5]):
         return None
-    return parts[3]
+    return str(parts[3])
 
 
-class _FuelStationSteps:
+def _choices(options: list[dict[str, str]]) -> list[SelectOptionDict]:
+    """The value/label lists built from mBenzin's data, as the select selector types them."""
+    return [SelectOptionDict(value=option["value"], label=option["label"]) for option in options]
+
+
+if TYPE_CHECKING:  # the steps run inside a config or options flow
+    _StepsBase = ConfigEntryBaseFlow
+else:
+    _StepsBase = object
+
+
+class _FuelStationSteps(_StepsBase):
     """Shared by the config flow and the options flow: choose fuels, then a favourite station per fuel."""
 
     _key: str
@@ -149,11 +164,20 @@ class _FuelStationSteps:
     _cities: list[dict[str, str]]
     _chains: set[str]
     _logos: list[str] | None = None
+    _index: list[dict[str, Any]]
+    _gps_config_unique_id: str
+    # read with getattr(): absent until a step or the options flow sets them
+    _defaults_city: str | None
+    _defaults_area_mode: str
+    _pending_fuels: list[str] | None
+    _pending_language: str | None
+    _pending_max_age_days: int | None
+    _pending_area_mode: str | None
 
     async def async_step_city(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             self._city = user_input[CONF_CITY]
-            if not getattr(self, "_options_flow", False):
+            if isinstance(self, ConfigFlow):
                 await self.async_set_unique_id(self._city)
                 self._abort_if_unique_id_configured()
             elif any(
@@ -177,7 +201,7 @@ class _FuelStationSteps:
         return vol.Schema(
             {
                 city_key: SelectSelector(
-                    SelectSelectorConfig(options=self._cities, mode=SelectSelectorMode.DROPDOWN)
+                    SelectSelectorConfig(options=_choices(self._cities), mode=SelectSelectorMode.DROPDOWN)
                 )
             }
         )
@@ -232,9 +256,7 @@ class _FuelStationSteps:
                                 getattr(self, "_gps_radius_km", DEFAULT_GPS_RADIUS_KM),
                             )
                         chains |= {
-                            m.get("chain")
-                            if isinstance(m.get("chain"), str)
-                            else m.get("name")
+                            str(m["chain"] if isinstance(m.get("chain"), str) else m["name"])
                             for m in area_markers
                             if isinstance(m, dict)
                             and isinstance(m.get("name"), str)
@@ -264,14 +286,14 @@ class _FuelStationSteps:
             {
                 vol.Required(CONF_FUELS, default=default_fuels): SelectSelector(
                     SelectSelectorConfig(
-                        options=[{"value": k, "label": v[0]} for k, v in FUELS.items()],
+                        options=[SelectOptionDict(value=k, label=v[0]) for k, v in FUELS.items()],
                         multiple=True,
                         mode=SelectSelectorMode.LIST,
                     )
                 ),
                 vol.Required(CONF_LANGUAGE, default=default_language): SelectSelector(
                     SelectSelectorConfig(
-                        options=[{"value": k, "label": v} for k, v in LANGUAGES.items()],
+                        options=[SelectOptionDict(value=k, label=v) for k, v in LANGUAGES.items()],
                         mode=SelectSelectorMode.DROPDOWN,
                     )
                 ),
@@ -295,6 +317,8 @@ class _FuelStationSteps:
 
     def _gps_center_for_flow(self) -> tuple[float, float] | None:
         method = getattr(self, "_location_method", LOCATION_HOME)
+        latitude: Any
+        longitude: Any
         if method == LOCATION_HOME:
             latitude, longitude = self.hass.config.latitude, self.hass.config.longitude
         elif method == LOCATION_ZONE:
@@ -662,7 +686,7 @@ class _FuelStationSteps:
         schema = vol.Schema(
             {
                 vol.Optional(CONF_STATION, default=default if default in valid else NONE_VALUE): SelectSelector(
-                    SelectSelectorConfig(options=options, mode=SelectSelectorMode.DROPDOWN)
+                    SelectSelectorConfig(options=_choices(options), mode=SelectSelectorMode.DROPDOWN)
                 )
             }
         )
@@ -715,7 +739,7 @@ class _FuelStationSteps:
                 {
                     vol.Optional(CONF_LOGOS, default=[d for d in default if d in known]): SelectSelector(
                         SelectSelectorConfig(
-                            options=[{"value": i["id"], "label": i["label"]} for i in options],
+                            options=[SelectOptionDict(value=i["id"], label=i["label"]) for i in options],
                             multiple=True,
                             mode=SelectSelectorMode.LIST,
                         )
@@ -737,7 +761,7 @@ class _FuelStationSteps:
     async def _async_finish(self) -> ConfigFlowResult:  # pragma: no cover - implemented by the flows
         raise NotImplementedError
 
-    def _options(self, previous: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _options(self, previous: Mapping[str, Any] | None = None) -> dict[str, Any]:
         options = {
             **(previous or {}),
             CONF_FUELS: self._fuels,
@@ -794,7 +818,7 @@ class CenyPalivConfigFlow(_FuelStationSteps, ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             key = _clean_key(user_input[CONF_KEY])
             markers, errors = await _async_check_key(self.hass, key)
-            if markers is not None:
+            if markers is not None and key is not None:
                 self._key = key
                 self._cities = city_options(markers)
                 return await self.async_step_area_mode()
@@ -811,7 +835,9 @@ class CenyPalivConfigFlow(_FuelStationSteps, ConfigFlow, domain=DOMAIN):
         """Replace the access key of an existing entry."""
         return await self._async_replace_key("reconfigure", self._get_reconfigure_entry(), user_input)
 
-    async def _async_replace_key(self, step_id: str, entry, user_input: dict[str, Any] | None) -> ConfigFlowResult:
+    async def _async_replace_key(
+        self, step_id: str, entry: ConfigEntry, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             key = _clean_key(user_input[CONF_KEY])
@@ -831,7 +857,7 @@ class CenyPalivConfigFlow(_FuelStationSteps, ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry) -> CenyPalivOptionsFlow:
+    def async_get_options_flow(config_entry: ConfigEntry) -> CenyPalivOptionsFlow:
         return CenyPalivOptionsFlow()
 
 
@@ -879,7 +905,8 @@ class CenyPalivOptionsFlow(_FuelStationSteps, OptionsFlow):
         if self._area_mode == AREA_MODE_CITY:
             unique_id = self._city
         else:
-            unique_id = entry.unique_id if (entry.unique_id or "").startswith("gps-") else f"gps-{uuid4()}"
+            existing = entry.unique_id or ""
+            unique_id = existing if existing.startswith("gps-") else f"gps-{uuid4()}"
         updates: dict[str, Any] = {"unique_id": unique_id}
         # only an automatic title (spaces compared loosely: before 0.6 each dash of a town such as
         # "Brandys-nad-Labem---Stara-Boleslav" became a space); a title the user typed is theirs
@@ -892,7 +919,7 @@ class CenyPalivOptionsFlow(_FuelStationSteps, OptionsFlow):
         return self.async_create_entry(data=self._options(entry.options))
 
     @callback
-    def _update_favourite_registry(self, entry) -> None:
+    def _update_favourite_registry(self, entry: ConfigEntry) -> None:
         """Disable favourite sensors archived by this change; re-enable a favourite that becomes active again."""
         from .entity import _sensor_unique_id  # noqa: PLC0415 - entity imports the coordinator stack
 

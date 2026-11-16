@@ -369,7 +369,7 @@ verzi testovacího frameworku, který následně fixuje Home Assistant na 2025.1
 respektive 2026.10.4. Frontend a HTTP server Home Assistantu jsou v integračních
 testech simulovány.
 Karta má vlastní testy bez závislostí: `node --test tests/test_card.js` (Node 22+).
-CI navíc spouští hassfest, validaci HACS, ruff a kontrolu, že verze manifestu a karty souhlasí.
+CI navíc spouští hassfest, validaci HACS, ruff, `mypy --strict custom_components/ceny_paliv` (s verzí Home Assistantu 2026.10) a kontrolu, že verze manifestu a karty souhlasí.
 
 ## Licence
 

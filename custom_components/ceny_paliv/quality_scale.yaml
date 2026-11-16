@@ -183,4 +183,7 @@ rules:
     status: todo
     comment: The integration passes Home Assistant's session; the library must accept it too.
   strict-typing:
-    status: todo
+    status: done
+    comment: >-
+      CI runs mypy --strict on the integration against Home Assistant 2026.10 (its schema library, probatio, is
+      imported where Home Assistant ships it). The aiombenzin library planned for 0.7 will ship py.typed.

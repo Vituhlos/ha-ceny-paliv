@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-import voluptuous as vol
+try:  # Home Assistant 2026.x validates with probatio (and maps voluptuous onto it)
+    import probatio as vol
+except ImportError:  # pragma: no cover - Home Assistant 2025.1
+    import voluptuous as vol  # type: ignore[no-redef]
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall, callback
