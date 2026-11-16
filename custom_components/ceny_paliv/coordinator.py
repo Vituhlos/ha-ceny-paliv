@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -93,8 +93,9 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
     def __init__(self, hass: HomeAssistant, entry: CenyPalivConfigEntry) -> None:
         super().__init__(hass, _LOGGER, name=DOMAIN, config_entry=entry, update_interval=UPDATE_INTERVAL)
-        self._store: Store[dict[str, dict]] = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}")
-        self._history: dict[str, dict[str, list[list]]] | None = None
+        # the daily price log: {fuel: {station URL: [[ISO date, price], ...]}}
+        self._store: Store[dict[str, dict[str, list[list[Any]]]]] = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}")
+        self._history: dict[str, dict[str, list[list[Any]]]] | None = None
         self._key_rejections = 0  # consecutive refreshes in which every fuel was refused for the key
         # fuels whose last refresh failed, with the error: their sensors are unavailable (entity.py)
         self.failed_fuels: dict[str, str] = {}
@@ -133,9 +134,9 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
 
     @property
     def language(self) -> str:
-        return self.config_entry.options.get(CONF_LANGUAGE, DEFAULT_LANGUAGE)
+        return str(self.config_entry.options.get(CONF_LANGUAGE, DEFAULT_LANGUAGE))
 
-    async def _async_zone_state_changed(self, event: Event) -> None:
+    async def _async_zone_state_changed(self, event: Event[EventStateChangedData]) -> None:
         """Refresh when the configured zone moves, is resized, appears or is removed.
 
         The state of a zone is the number of people in it: arrivals and departures alone are ignored.
@@ -150,6 +151,8 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     def _gps_location(self) -> tuple[tuple[float, float] | None, str | None]:
         options = self.config_entry.options
         method = options.get(CONF_LOCATION_METHOD, LOCATION_HOME)
+        latitude: Any
+        longitude: Any
         if method == LOCATION_HOME:
             latitude, longitude = self.hass.config.latitude, self.hass.config.longitude
         elif method == LOCATION_ZONE:

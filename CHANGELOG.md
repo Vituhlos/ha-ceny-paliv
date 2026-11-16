@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Fully typed** (quality scale: strict-typing): the integration passes `mypy --strict`, checked in CI. It imports
+  probatio, Home Assistant's schema library since 2026.x, where it exists, and voluptuous on older versions. No change
+  in behaviour.
+
 ## 0.6.2
 
 ### Fixed

@@ -13,7 +13,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientError, ClientSession, ClientTimeout
 
 from homeassistant.core import HomeAssistant
 
@@ -88,7 +88,7 @@ def installed_ids(folder: Path) -> list[str]:
 async def async_fetch_index(session: ClientSession) -> list[dict[str, Any]] | None:
     """The list of logos offered in the pack, or None when GitHub cannot be reached."""
     try:
-        async with session.get(LOGO_INDEX_URL, headers={"User-Agent": USER_AGENT}, timeout=20) as resp:
+        async with session.get(LOGO_INDEX_URL, headers={"User-Agent": USER_AGENT}, timeout=ClientTimeout(total=20)) as resp:
             if resp.status != 200:
                 return None
             data = json.loads(await resp.text())
@@ -132,7 +132,9 @@ async def async_sync(hass: HomeAssistant, session: ClientSession, index: list[di
         if logo_id in on_disk:
             continue
         try:
-            async with session.get(LOGO_RAW_URL.format(id=logo_id), headers={"User-Agent": USER_AGENT}, timeout=20) as resp:
+            async with session.get(
+                LOGO_RAW_URL.format(id=logo_id), headers={"User-Agent": USER_AGENT}, timeout=ClientTimeout(total=20)
+            ) as resp:
                 body = await resp.read() if resp.status == 200 else b""
         except (ClientError, TimeoutError) as err:
             _LOGGER.warning("Ceny paliv: cannot download the logo %s: %s", logo_id, err)

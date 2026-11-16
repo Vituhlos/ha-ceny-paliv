@@ -19,7 +19,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, FUELS, TOP
-from .coordinator import CenyPalivConfigEntry
+from .coordinator import CenyPalivConfigEntry, CenyPalivCoordinator
 from .entity import CenyPalivEntity
 
 # the coordinator does all the fetching; entities only read its data
@@ -98,19 +98,21 @@ def _async_remove_unconfigured_fuels(hass: HomeAssistant, entry: CenyPalivConfig
 
 
 @callback
-def _async_enable_active_favourite(hass: HomeAssistant, unique_id: str) -> None:
+def _async_enable_active_favourite(hass: HomeAssistant, unique_id: str | None) -> None:
     """A favourite chosen again reuses its archived sensor, which the integration had switched off."""
     registry = er.async_get(hass)
-    entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id) if unique_id else None
     registered = registry.async_get(entity_id) if entity_id else None
     if registered and registered.disabled_by is er.RegistryEntryDisabler.INTEGRATION:
-        registry.async_update_entity(entity_id, disabled_by=None)
+        registry.async_update_entity(registered.entity_id, disabled_by=None)
 
 
 class CenyPalivSensor(CenyPalivEntity, SensorEntity):
     """A price sensor: the unit follows the fuel (Kč/l, CNG in Kč/kg)."""
 
-    def __init__(self, coordinator, entry, fuel, suffix, *, identity=None) -> None:
+    def __init__(
+        self, coordinator: CenyPalivCoordinator, entry: CenyPalivConfigEntry, fuel: str, suffix: str, *, identity: str | None = None
+    ) -> None:
         super().__init__(coordinator, entry, fuel, suffix, identity=identity)
         self._attr_native_unit_of_measurement = FUELS.get(fuel, (fuel, "Kč/l"))[1]
 
@@ -122,7 +124,7 @@ class CenyPalivTop5Sensor(CenyPalivSensor):
         {"stations", "home", "gps_area", "gps_nearest_stations", "labels", "logos"}
     )
 
-    def __init__(self, coordinator, entry, fuel) -> None:
+    def __init__(self, coordinator: CenyPalivCoordinator, entry: CenyPalivConfigEntry, fuel: str) -> None:
         super().__init__(coordinator, entry, fuel, "top5")
 
     @property
@@ -144,7 +146,7 @@ class CenyPalivHomeSensor(CenyPalivSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _unrecorded_attributes = frozenset({"trends", "maps"})
 
-    def __init__(self, coordinator, entry, fuel) -> None:
+    def __init__(self, coordinator: CenyPalivCoordinator, entry: CenyPalivConfigEntry, fuel: str) -> None:
         super().__init__(
             coordinator,
             entry,
@@ -184,7 +186,7 @@ class CenyPalivArchivedHomeSensor(CenyPalivSensor):
     _attr_entity_registry_enabled_default = False
     _attr_state_class = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator, entry, fuel: str, identity: str, legacy: bool) -> None:
+    def __init__(self, coordinator: CenyPalivCoordinator, entry: CenyPalivConfigEntry, fuel: str, identity: str, legacy: bool) -> None:
         super().__init__(
             coordinator,
             entry,
@@ -217,7 +219,7 @@ class CenyPalivPositionSensor(CenyPalivSensor):
 
     _attr_translation_key = "position"
 
-    def __init__(self, coordinator, entry, fuel, index: int) -> None:
+    def __init__(self, coordinator: CenyPalivCoordinator, entry: CenyPalivConfigEntry, fuel: str, index: int) -> None:
         super().__init__(coordinator, entry, fuel, str(index + 1))
         self._index = index
         self._attr_translation_placeholders = {**self._attr_translation_placeholders, "position": str(index + 1)}
