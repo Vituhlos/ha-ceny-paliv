@@ -14,7 +14,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
 from .api import release_shared_marker_cache
-from .const import AREA_MODE_CITY, CARD_URL, CARD_VERSION, CONF_AREA_MODE, CONF_CITY, DOMAIN, LOGO_URL
+from .const import AREA_MODE_CITY, CARD_URL, CARD_VERSION, CONF_AREA_MODE, CONF_CITY, DOMAIN, LOGO_URL, REGIONS_URL
 from .coordinator import CenyPalivConfigEntry, CenyPalivCoordinator, location_issue_id, no_data_issue_id
 from .logos import ID_RE, logo_dir
 from .services import async_setup_services
@@ -38,6 +38,13 @@ class CenyPalivCardView(HomeAssistantView):
         return web.FileResponse(self._path, headers={"Cache-Control": "no-cache"})
 
 
+class CenyPalivRegionsView(CenyPalivCardView):
+    """Serves the region boundaries (regions.json) to the card's map of the regions."""
+
+    url = REGIONS_URL
+    name = "ceny_paliv:regions"
+
+
 class CenyPalivLogoView(HomeAssistantView):
     """Serves the downloaded chain logos (<config>/ceny_paliv_logos/<id>.png). No auth: the browser loads them in <img>."""
 
@@ -59,6 +66,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Serve the dashboard card (custom:ceny-paliv-card) and load it in the frontend."""
     card = Path(__file__).parent / "frontend" / "ceny-paliv-card.js"
     hass.http.register_view(CenyPalivCardView(card))
+    hass.http.register_view(CenyPalivRegionsView(Path(__file__).parent / "regions.json"))
     hass.http.register_view(CenyPalivLogoView(hass))
     add_extra_js_url(hass, f"{CARD_URL}?v={CARD_VERSION}")
     async_setup_services(hass)

@@ -41,10 +41,10 @@ const context = {
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor };`,
+  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths };`,
   context,
 );
-const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor } = context.testExports;
+const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths } = context.testExports;
 
 const sensor = (fuel, role, configId, extra = {}) => ({
   state: "32.00",
@@ -960,4 +960,71 @@ test("the small cards' editor offers the area only when there are several and sa
 
   editor.hass = { language: "cs", states: { "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.5), "sensor.ceny_paliv_n95_top5_b": top5("n95", "b", 38) } };
   assert.equal(editor.children[0].schema[0].name, "config_id");
+});
+
+test("the comparison: your station, the area, the region and the country, and the regions ranked", () => {
+  const regions = [
+    { code: "CZ042", name: "Ústecký kraj", average: 39.33, rank: 1 },
+    { code: "CZ020", name: "Středočeský kraj", average: 39.65, rank: 2 },
+    { code: "CZ010", name: "Hlavní město Praha", average: 40.08, rank: 3 },
+  ];
+  const states = {
+    "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.5, { labels: { ...LABELS_EN, compare_title: "Price comparison", compare_sub: "average prices in {unit}", compare_area: "Area", compare_region: "Region", compare_country: "Czech Republic", compare_ranks: "The {n} regions" } }),
+    "sensor.ceny_paliv_n95_home_a": role("n95", "a", "home", 39.1),
+    "sensor.ceny_paliv_n95_area_average_a": role("n95", "a", "area_average", 39.42),
+    "sensor.ceny_paliv_n95_region_average_a": role("n95", "a", "region_average", 39.65, { region: "Středočeský kraj", region_code: "CZ020" }),
+    "sensor.ceny_paliv_n95_national_average_a": role("n95", "a", "national_average", 39.65, { regions }),
+  };
+  const card = new CenyPalivCompareCard();
+  card.setConfig({ fuel: "n95" });
+  card.hass = miniHass(states);
+  const html = card.shadowRoot.innerHTML;
+  // four bars, the lowest (your station here) a quarter long and marked, each against the country
+  assert.match(html, /bar-row mine best[^]*?My station[^]*?39\.10<span class="vs">−0\.55<[^]*?width:25\.0%/);
+  assert.match(html, /Area · Brno[^]*?39\.42<span class="vs">−0\.23</);
+  assert.match(html, /Region · Středočeský[^]*?39\.65<span class="vs">±0\.00</);
+  assert.match(html, /Czech Republic<\/span><span class="value">39\.65<\/span>[^]*?width:100\.0%/);
+  // the regions in two columns (1, 3 | 2), yours bold, with short names
+  assert.match(html, /The 3 regions/);
+  assert.match(html, /<span class="own"><span class="n">2\.<\/span><span class="r">Středočeský<\/span><b>39\.65<\/b>/);
+  assert.match(html, /<span class="r">Praha<\/span>/);
+  assert.ok(html.indexOf(">Ústecký<") < html.indexOf(">Praha<") && html.indexOf(">Praha<") < html.indexOf(">Středočeský<"));
+  card.setConfig({ fuel: "n95", show_regions: false });
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /class="ranks"/);
+});
+
+test("the regions map: the boundaries projected, each region coloured by its price, a tap names it", async () => {
+  // two made-up square regions side by side
+  const geometry = { regions: [
+    { code: "CZ010", name: "Praha", polygons: [[[[50, 14], [50, 15], [49, 15], [49, 14]]]] },
+    { code: "CZ020", name: "Středočeský kraj", polygons: [[[[50, 15], [50, 16], [49, 16], [49, 15]]]] },
+  ] };
+  const shape = regionPaths(geometry, 400);
+  assert.equal(shape.width, 400);
+  assert.equal(shape.height, Math.ceil(400 / (2 * Math.cos(49.5 * Math.PI / 180)))); // a degree of longitude is shorter
+  assert.match(shape.paths[0].d, /^M0\.0,0\.0L200\.0,0\.0L200\.0,[\d.]+L0\.0,[\d.]+Z$/);
+
+  context.fetch = async (url) => { assert.match(url, /^\/ceny_paliv_static\/regions\.json\?v=/); return { ok: true, json: async () => geometry }; };
+  const states = {
+    "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.5, { labels: { ...LABELS_EN, regions_title: "Regions", regions_loading: "Loading the map…", rank_of: "#{rank} of {n}" } }),
+    "sensor.ceny_paliv_n95_region_average_a": role("n95", "a", "region_average", 39.65, { region_code: "CZ020" }),
+    "sensor.ceny_paliv_n95_national_average_a": role("n95", "a", "national_average", 39.7, { regions: [
+      { code: "CZ020", name: "Středočeský kraj", average: 39.65, rank: 1 }, { code: "CZ010", name: "Praha", average: 40.08, rank: 2 },
+    ] }),
+  };
+  const card = new CenyPalivRegionsCard();
+  card.setConfig({ fuel: "n95" });
+  card.hass = miniHass(states);
+  assert.match(card.shadowRoot.innerHTML, /Loading the map/);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  const html = card.shadowRoot.innerHTML;
+  assert.match(html, /class="own" [^>]*style="fill: color-mix\(in srgb, var\(--cp-bad-base\) 0%, var\(--cp-good-base\)\)/); // the cheapest, yours
+  assert.match(html, /data-region="CZ010" aria-label="Praha: 40\.08 \(2\.\)"/);
+  assert.match(html, /style="fill: color-mix\(in srgb, var\(--cp-bad-base\) 100%/); // the dearest
+  assert.match(html, /Středočeský kraj: <b>39\.65 Kč\/l<\/b> · #1 of 2/); // your region until another is tapped
+  card._pick({ composedPath: () => [{ dataset: { region: "CZ010" } }] });
+  assert.match(card.shadowRoot.innerHTML, /Praha: <b>40\.08 Kč\/l<\/b> · #2 of 2/);
+  assert.match(card.shadowRoot.innerHTML, /class="picked"/);
+  delete context.fetch;
 });

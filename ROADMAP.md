@@ -72,8 +72,8 @@ Stav: přepínač paliv a detail stanice s navigací (Mapy.com, Google Maps, Waz
 - Karty pro dashboard (pořadí schválené 16. 11. 2026):
   1. Všechna paliva najednou – hotovo.
   2. Kolik ušetříte na plné nádrži (i s cestou) – hotovo.
-  3. Srovnání cen: oblast proti kraji a republice, pořadí krajů.
-  4. Mapa krajů ČR obarvená podle průměrné ceny.
+  3. Srovnání cen: oblast proti kraji a republice, pořadí krajů – hotovo.
+  4. Mapa krajů ČR obarvená podle průměrné ceny – hotovo.
   5. Mapa stanic s barevnými cenami a kruhem oblasti.
   6. Porovnání oblastí (domov, práce, chata).
   7. Na cestě: nejbližší stanice s navigací (oblast, která jede s vámi).
