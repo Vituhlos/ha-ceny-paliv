@@ -177,12 +177,15 @@ type: custom:ceny-paliv-card
 fuel: n95            # n95 | benzinplus | diesel | dieselplus | lpg | cng | adblue
 ```
 
-Pro každé palivo jedna karta, nebo více paliv v jedné kartě s přepínačem nahoře (`fuels: [n95, lpg]`, třeba pro vůz na dvě paliva). Karta má čtyři části: vaši oblíbenou stanici (cena, trendy, pořadí), 5 nejlevnějších stanic, mapu a graf za 30 dní. Klepnutím na stanici z pětice zobrazíte její podrobnosti (cena, datum, pořadí, vzdálenost, trendy) a navigaci do Mapy.com, Google Maps nebo Waze; dlouhým stisknutím historii vaší oblíbené stanice. Pokud máte pro stejné palivo více konfigurací, vyberte správnou konfiguraci ve vizuálním editoru (nebo v YAML přidejte `config_id` z atributu `cp_config_id` senzoru top5); karta bez volby konfigurace nikdy nebude míchat entity z různých oblastí. Všechny volby níže jsou i ve vizuálním editoru karty.
+Pro každé palivo jedna karta, nebo více paliv v jedné kartě s přepínačem nahoře (`fuels: [n95, lpg]`, třeba pro vůz na dvě paliva). Karta má čtyři části: vaši oblíbenou stanici (cena, trendy, pořadí), 5 nejlevnějších stanic, mapu a graf za 30 dní. Klepnutím na stanici z pětice zobrazíte její podrobnosti (cena, datum, pořadí, vzdálenost, trendy) a navigaci do Mapy.com, Google Maps nebo Waze; dlouhým stisknutím historii vaší oblíbené stanice. Nad seznamem stanice seřadíte podle ceny, vzdálenosti nebo podle toho, zda se **vyplatí** dojet: cena i s palivem spotřebovaným na cestu tam a zpět (2 × vzdálenost × spotřeba, rozpočítané na natankované litry), takže levná, ale vzdálená stanice prohraje s o kousek dražší za rohem. Vzdálenosti jsou vzdušnou čarou od středu GPS oblasti (ve městě od polohy domácnosti Home Assistantu); v GPS oblasti se pro tato řazení k pěti nejlevnějším přidá deset nejbližších stanic. Pokud máte pro stejné palivo více konfigurací, vyberte správnou konfiguraci ve vizuálním editoru (nebo v YAML přidejte `config_id` z atributu `cp_config_id` senzoru top5); karta bez volby konfigurace nikdy nebude míchat entity z různých oblastí. Všechny volby níže jsou i ve vizuálním editoru karty.
 
 | Volba | Výchozí | |
 |---|---|---|
 | `fuel` | – | povinné (nebo `fuels`); s `fuels` palivo zobrazené jako první |
 | `fuels` | – | paliva přepínače nahoře v kartě, např. `[n95, diesel]` (přepínač si nic nepamatuje: karta se otevře na `fuel`) |
+| `sort` | `price` | řazení seznamu, přepínatelné i v kartě: `price` (cena), `distance` (vzdálenost) nebo `worth` (vyplatí se: cena za litr i s palivem spotřebovaným na cestu tam a zpět) |
+| `tank_litres` | `40` | pro `worth`: kolik litrů natankujete |
+| `consumption` | `6.5` | pro `worth`: spotřeba vašeho auta v l/100 km (CNG: kg/100 km) |
 | `config_id` | automaticky, je-li jednoznačné | při více konfiguracích stejného paliva vybere jednu oblast |
 | `show` | `[home, list, map, graph]` | které části zobrazit: `home` (oblíbená stanice), `list` (nejlevnější stanice), `map`, `graph` (30 dní) |
 | `layout` | `auto` | `auto`: dva sloupce (stanice a seznam vlevo, mapa a graf vpravo), je-li karta široká, a jeden sloupec, je-li úzká, třeba v telefonu; `columns`: vždy dva; `stack`: vždy jeden |

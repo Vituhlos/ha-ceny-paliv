@@ -171,12 +171,15 @@ type: custom:ceny-paliv-card
 fuel: n95            # n95 | benzinplus | diesel | dieselplus | lpg | cng | adblue
 ```
 
-One card per fuel, or several fuels in one card with a switch at the top (`fuels: [n95, lpg]`, for example for a dual-fuel car). The card has four parts: your favourite station (price, trends, rank), the top 5, a map and the 30-day graph. Tap a station of the top 5 for its details (price, date, rank, distance, trends) and to navigate there with Mapy.com, Google Maps or Waze; long-press it for your favourite station's history. Everything below is also in the card's visual editor. If the same fuel has multiple Ceny paliv configurations, select the intended configuration in the visual editor (or set `config_id` from the top5 sensor's `cp_config_id` in YAML); a card without an explicit configuration will not mix entities from different areas.
+One card per fuel, or several fuels in one card with a switch at the top (`fuels: [n95, lpg]`, for example for a dual-fuel car). The card has four parts: your favourite station (price, trends, rank), the top 5, a map and the 30-day graph. Tap a station of the top 5 for its details (price, date, rank, distance, trends) and to navigate there with Mapy.com, Google Maps or Waze; long-press it for your favourite station's history. Above the list, sort the stations by price, by distance or by **worth it**: the price with the fuel burnt driving there and back (2 × distance × consumption, spread over your fill-up), so a cheap station far away loses to a slightly dearer one around the corner. Distances are straight lines from the GPS area's centre (or Home Assistant's home location in a town); in a GPS area the ten nearest stations join the five cheapest for these orders. Everything below is also in the card's visual editor. If the same fuel has multiple Ceny paliv configurations, select the intended configuration in the visual editor (or set `config_id` from the top5 sensor's `cp_config_id` in YAML); a card without an explicit configuration will not mix entities from different areas.
 
 | Option | Default | |
 |---|---|---|
 | `fuel` | – | required (or `fuels`); with `fuels`, the one shown first |
 | `fuels` | – | the fuels of a switch at the top of the card, for example `[n95, diesel]` (the switch remembers nothing: the card opens on `fuel`) |
+| `sort` | `price` | the order of the list, also switchable in the card: `price`, `distance`, or `worth` (worth it: the price per litre with the fuel burnt driving there and back) |
+| `tank_litres` | `40` | for `worth`: how much you fill up |
+| `consumption` | `6.5` | for `worth`: your car's consumption in l/100 km (CNG: kg/100 km) |
 | `config_id` | automatic when unambiguous | choose one configuration when the same fuel is configured more than once |
 | `show` | `[home, list, map, graph]` | the parts to draw: `home` (favourite station), `list` (cheapest stations), `map`, `graph` (30 days) |
 | `layout` | `auto` | `auto`: two columns (station and list on the left, map and graph on the right) when the card is wide, one column when it is narrow, as on a phone; `columns`: always two; `stack`: always one |
