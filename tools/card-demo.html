@@ -1,0 +1,136 @@
+<!doctype html>
+<!--
+  Demo page for the Ceny paliv card: renders the real card file with a mock `hass`, no Home Assistant needed.
+  Serve the repository root (python -m http.server 8765) and open /tools/card-demo.html?theme=dark&lang=cs&width=380
+  Parameters: theme=light|dark, lang=en|cs, width=<px> (card width), compact=1, show=home,list
+  The data is made up (no real stations of anyone's area).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ceny paliv card demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=block" rel="stylesheet">
+<style>
+  :root {
+    --primary-color: #03a9f4; --text-primary-color: #fff; --primary-text-color: #212121; --secondary-text-color: #727272;
+    --disabled-text-color: #bdbdbd; --disabled-color: #bdbdbd; --divider-color: rgba(0, 0, 0, 0.12);
+    --primary-background-color: #fafafa; --card-background-color: #fff; --ha-card-background: #fff;
+    --success-color: #43a047; --warning-color: #ffa600; --error-color: #db4437; --info-color: #039be5; --orange-color: #ff9800;
+    --ha-card-border-radius: 12px; --ha-card-border-color: #e0e0e0; --ha-card-box-shadow: none;
+  }
+  :root[data-theme="dark"] {
+    --primary-text-color: #e1e1e1; --secondary-text-color: #9b9b9b; --disabled-text-color: #6f6f6f; --disabled-color: #464646;
+    --divider-color: rgba(225, 225, 225, 0.12); --primary-background-color: #111111; --card-background-color: #1c1c1c;
+    --ha-card-background: #1c1c1c; --ha-card-border-color: rgba(225, 225, 225, 0.12);
+  }
+  body { margin: 0; padding: 16px; background: var(--primary-background-color); font-family: Roboto, sans-serif; }
+  #host { max-width: var(--w, 900px); }
+</style>
+</head>
+<body>
+<div id="host"></div>
+<script type="module">
+import * as mdi from "https://cdn.jsdelivr.net/npm/@mdi/js@7.4.47/+esm";
+const q = new URLSearchParams(location.search);
+const theme = q.get('theme') || 'light';
+const lang = q.get('lang') || 'en';
+document.documentElement.dataset.theme = theme;
+if (q.get('width')) document.documentElement.style.setProperty('--w', `${q.get('width')}px`);
+
+// ha-icon: the Material Design Icons path by name (an unknown name stays empty, as in Home Assistant)
+customElements.define('ha-icon', class extends HTMLElement {
+  static get observedAttributes() { return ['icon']; }
+  attributeChangedCallback() { this.render(); }
+  connectedCallback() { this.render(); }
+  render() {
+    const name = (this.getAttribute('icon') || '').replace('mdi:', '');
+    const key = 'mdi' + name.split('-').map((p) => p[0].toUpperCase() + p.slice(1)).join('');
+    const path = mdi[key];
+    // its own shadow root and style, like Home Assistant's (page styles do not reach into the card)
+    if (!this.shadowRoot) this.attachShadow({ mode: 'open' });
+    this.shadowRoot.innerHTML = `<style>:host { display: inline-flex; width: var(--mdc-icon-size, 24px); height: var(--mdc-icon-size, 24px); }
+      svg { width: 100%; height: 100%; fill: currentColor; }</style>${path ? `<svg viewBox="0 0 24 24"><path d="${path}"/></svg>` : ''}`;
+  }
+});
+// ha-card: the theme's card surface, drawn in its own shadow root like Home Assistant's
+customElements.define('ha-card', class extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' }).innerHTML = `<style>:host { display: block; background: var(--ha-card-background);
+      border: 1px solid var(--ha-card-border-color); border-radius: var(--ha-card-border-radius); box-shadow: var(--ha-card-box-shadow);
+      color: var(--primary-text-color); }</style><slot></slot>`;
+  }
+});
+
+const today = new Date().toISOString().slice(0, 10);
+const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+const LABELS = {
+  en: { locale: 'en-GB', my_station: 'My station', updated_today: 'Updated today', updated_yesterday: 'Updated yesterday', today: 'Today', yesterday: 'Yesterday',
+    cheapest_area: 'Cheapest in the area · #{rank} of {n} up-to-date stations', vs_cheapest: '+{d} vs cheapest ({name}) · #{rank} of {n}',
+    cheapest_price: 'Cheapest {p} {unit}', stations_same: '{n} stations at this price', cheapest_badge: 'Cheapest',
+    table_updated: 'Table updated {t} · next refresh {n}', arrows: 'Arrows: price vs yesterday', down: 'down', stable: 'stable', up: 'up',
+    longpress: 'long-press a row for your station history', tap_station: 'tap a station for details and navigation',
+    vs_yesterday: 'vs yesterday', source: 'Ceny: mbenzin.cz', e10_note: '(E10 not distinguished)', trends_start: 'Trends start tomorrow (first daily record: today)',
+    since_partial: '* since {d} — history still filling', navigate: 'Navigate', close: 'Close', rank_of: '#{rank} of {n}',
+    more_than_cheapest: '+{d} vs the cheapest', no_recent: 'No recent prices' },
+  cs: { locale: 'cs-CZ', my_station: 'Moje stanice', updated_today: 'Aktualizováno dnes', updated_yesterday: 'Aktualizováno včera', today: 'Dnes', yesterday: 'Včera',
+    cheapest_area: 'Nejlevnější v okolí · {rank}. z {n} aktuálních stanic', vs_cheapest: '+{d} oproti nejlevnější ({name}) · {rank}. z {n}',
+    cheapest_price: 'Nejlevnější {p} {unit}', stations_same: '{n} stanic má tuto cenu', cheapest_badge: 'Nejlevnější',
+    table_updated: 'Tabulka aktualizována {t} · další aktualizace {n}', arrows: 'Šipky: cena oproti včerejšku', down: 'klesá', stable: 'beze změny', up: 'roste',
+    longpress: 'dlouhým stisknutím řádku zobrazíte historii vaší stanice', tap_station: 'klepnutím na stanici zobrazíte podrobnosti a navigaci',
+    vs_yesterday: 'oproti včerejšku', source: 'Ceny: mbenzin.cz', e10_note: '(E10 se nerozlišuje)', trends_start: 'Trendy se objeví zítra (první denní záznam: dnes)',
+    since_partial: '* od {d} — historie se teprve plní', navigate: 'Navigovat', close: 'Zavřít', rank_of: '{rank}. z {n}',
+    more_than_cheapest: '+{d} oproti nejlevnější', no_recent: 'Žádné aktuální ceny' },
+}[lang];
+
+const trend = (delta, days) => ({ dir: delta < 0 ? 'down' : delta > 0 ? 'up' : 'flat', delta, ref_date: new Date(Date.now() - days * 86400000).toISOString().slice(0, 10), ref_price: 0 });
+function station(rank, name, street, city, price, km, date, trends, home = false) {
+  const lat = 49.19 + rank * 0.01; const lng = 16.61 + rank * 0.01;
+  return { rank, name, title: `${name} · ${street || city}`, chain: name, street, city, address: `${street}, ${city}`, price, lat, lng,
+    updated: date === today ? 'Dnes' : 'Včera', updated_date: date, maps: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+    home, distance_km: km, trends };
+}
+function fuelStates(fuel, label, base) {
+  const stations = [
+    station(1, 'Benzina', 'Karlovarská 12', 'Brno', base, 3.2, today, { 1: trend(-0.3, 1), 2: trend(-0.5, 2), 7: trend(-0.9, 7), 14: trend(-1.1, 14), 30: trend(-1.6, 30) }),
+    station(2, 'Shell', 'Vídeňská 88', 'Brno', base + 0.4, 5.9, today, { 1: trend(0, 1), 7: trend(0.2, 7) }),
+    station(3, 'Lhota Oil', '', 'Lhota', base + 0.6, 11.4, yesterday, {}, true),
+    station(4, 'MOL', 'Hlavní 1', 'Bochov', base + 0.8, 14.0, today, { 1: trend(0.3, 1) }),
+    station(5, 'Orlen', 'Nádražní 5', 'Kunštát', base + 0.9, 18.7, today, { 1: trend(-0.1, 1) }),
+  ];
+  const id = 'demo-area';
+  const states = {};
+  states[`sensor.ceny_paliv_${fuel}_top5`] = { state: String(base), last_updated: new Date().toISOString(), attributes: {
+    cp_fuel: fuel, cp_role: 'top5', cp_config_id: id, fuel, fuel_label: label, unit_of_measurement: 'Kč/l', city_name: lang === 'cs' ? 'GPS okolí' : 'GPS area',
+    stations, home: stations[2], labels: LABELS, language: lang, max_age_days: 1, logos: [],
+    fetched_at: new Date().toISOString(), next_update: new Date(Date.now() + 6 * 3600000).toISOString(),
+    gps_area: { method: 'home', radius_km: 20, station_count: 16 }, excluded: 2 } };
+  states[`sensor.ceny_paliv_${fuel}_home`] = { state: String(base + 0.6), last_updated: new Date().toISOString(), attributes: {
+    cp_fuel: fuel, cp_role: 'home', cp_config_id: id, station: stations[2].title, price: base + 0.6, unit_of_measurement: 'Kč/l',
+    age_days: 1, updated_date: yesterday, rank: 3, fresh_count: 14, vs_cheapest: 0.6, cheapest_name: 'Benzina',
+    trends: { 1: trend(0, 1), 2: trend(-0.2, 2), 7: trend(0.4, 7) } } };
+  stations.forEach((s, i) => { states[`sensor.ceny_paliv_${fuel}_${i + 1}`] = { state: String(s.price), last_updated: '', attributes: {
+    cp_fuel: fuel, cp_role: 'position', cp_index: i + 1, cp_config_id: id, station: s.title, price: s.price, latitude: s.lat, longitude: s.lng } }; });
+  return states;
+}
+
+const states = { ...fuelStates('n95', 'Natural 95', 38.5), ...fuelStates('diesel', 'Diesel', 43.5) };
+const hass = { states, language: lang, locale: { language: lang, number_format: 'language', time_format: 'language', time_zone: 'local' },
+  themes: { darkMode: theme === 'dark' }, config: { time_zone: 'Europe/Prague' }, entities: {} };
+
+const s = document.createElement('script');
+s.src = '../custom_components/ceny_paliv/frontend/ceny-paliv-card.js';
+s.onload = () => {
+  const card = document.createElement('ceny-paliv-card');
+  const config = { type: 'custom:ceny-paliv-card', fuel: 'n95', fuels: ['n95', 'diesel'], show: (q.get('show') || 'home,list').split(',') };
+  if (q.get('compact')) config.compact = true;
+  card.setConfig(config);
+  document.getElementById('host').appendChild(card);
+  card.hass = hass;
+  window.demoCard = card;
+};
+document.body.appendChild(s);
+</script>
+</body>
+</html>
