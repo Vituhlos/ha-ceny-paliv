@@ -224,6 +224,7 @@ Besides the main card, the integration brings smaller cards, also in the card pi
 | `custom:ceny-paliv-savings-card` | what a full tank costs at your station, at the cheapest one and at the area's average price, how much you save, and whether the longer drive to the cheapest pays off | `fuel` (required), `tank_litres` (40; kg for CNG), `consumption` (6.5 per 100 km) |
 | `custom:ceny-paliv-compare-card` | your station, the area, your region and the Czech Republic side by side as bars, each against the country, and the 14 regions from the cheapest | `fuel` (required), `show_regions` (true) |
 | `custom:ceny-paliv-regions-card` | a map of the 14 regions coloured from the cheapest (green) to the dearest (red), your region outlined; tap a region for its price and rank | `fuel` (required) |
+| `custom:ceny-paliv-stations-map-card` | the area's up-to-date stations as dots coloured from the cheapest to the dearest, around the area's centre and circle (or the town's stations), with the regions' borders behind; the five cheapest and yours carry their price, and a tap opens the station's details and navigation. A drawn map, not map tiles: for streets use the main card's map | `fuel` (required) |
 
 ```yaml
 type: custom:ceny-paliv-savings-card

@@ -74,7 +74,7 @@ Stav: přepínač paliv a detail stanice s navigací (Mapy.com, Google Maps, Waz
   2. Kolik ušetříte na plné nádrži (i s cestou) – hotovo.
   3. Srovnání cen: oblast proti kraji a republice, pořadí krajů – hotovo.
   4. Mapa krajů ČR obarvená podle průměrné ceny – hotovo.
-  5. Mapa stanic s barevnými cenami a kruhem oblasti.
+  5. Mapa stanic s barevnými cenami a kruhem oblasti – hotovo (kreslená, bez mapových dlaždic).
   6. Porovnání oblastí (domov, práce, chata).
   7. Na cestě: nejbližší stanice s navigací (oblast, která jede s vámi).
   8. Co se změnilo: časová osa z událostí změny ceny.
