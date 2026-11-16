@@ -184,7 +184,7 @@ Pro každé palivo jedna karta, nebo více paliv v jedné kartě s přepínačem
 | `fuel` | – | povinné (nebo `fuels`); s `fuels` palivo zobrazené jako první |
 | `fuels` | – | paliva přepínače nahoře v kartě, např. `[n95, diesel]` (přepínač si nic nepamatuje: karta se otevře na `fuel`) |
 | `sort` | `price` | řazení seznamu, přepínatelné i v kartě: `price` (cena), `distance` (vzdálenost) nebo `worth` (vyplatí se: cena za litr i s palivem spotřebovaným na cestu tam a zpět) |
-| `tank_litres` | `40` | pro `worth`: kolik litrů natankujete |
+| `tank_litres` | `40` | pro `worth`: kolik natankujete v litrech (CNG: v kg) |
 | `consumption` | `6.5` | pro `worth`: spotřeba vašeho auta v l/100 km (CNG: kg/100 km) |
 | `config_id` | automaticky, je-li jednoznačné | při více konfiguracích stejného paliva vybere jednu oblast |
 | `show` | `[home, list, map, graph]` | které části zobrazit: `home` (oblíbená stanice), `list` (nejlevnější stanice), `map`, `graph` (30 dní) |

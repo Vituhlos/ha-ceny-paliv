@@ -178,7 +178,7 @@ One card per fuel, or several fuels in one card with a switch at the top (`fuels
 | `fuel` | – | required (or `fuels`); with `fuels`, the one shown first |
 | `fuels` | – | the fuels of a switch at the top of the card, for example `[n95, diesel]` (the switch remembers nothing: the card opens on `fuel`) |
 | `sort` | `price` | the order of the list, also switchable in the card: `price`, `distance`, or `worth` (worth it: the price per litre with the fuel burnt driving there and back) |
-| `tank_litres` | `40` | for `worth`: how much you fill up |
+| `tank_litres` | `40` | for `worth`: how much you fill up (CNG: kg) |
 | `consumption` | `6.5` | for `worth`: your car's consumption in l/100 km (CNG: kg/100 km) |
 | `config_id` | automatic when unambiguous | choose one configuration when the same fuel is configured more than once |
 | `show` | `[home, list, map, graph]` | the parts to draw: `home` (favourite station), `list` (cheapest stations), `map`, `graph` (30 days) |

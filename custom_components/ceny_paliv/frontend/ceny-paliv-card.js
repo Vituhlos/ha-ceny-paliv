@@ -8,7 +8,7 @@
  * Optional (all of them are also in the visual editor: Add card > Ceny paliv):
  *   fuels: [n95, diesel] # a switch between these fuels at the top of the card (fuel: the one shown first)
  *   sort: price          # price | distance | worth (the price with the fuel burnt driving there and back)
- *   tank_litres: 40      # for "worth": how much you fill up
+ *   tank_litres: 40      # for "worth": how much you fill up (CNG: kg)
  *   consumption: 6.5     # for "worth": your car's consumption in l/100 km (CNG: kg/100 km)
  *   show: [home, list, map, graph]   # which parts to draw; use several cards to place them freely
  *   layout: auto         # auto = 2 columns when the card is wide | columns | stack
@@ -435,7 +435,8 @@ class CenyPalivCard extends HTMLElement {
     const top = hass.states[this._ids.top5];
     const home = hass.states[this._ids.home];
     // the date is part of the signature: "today"/"yesterday" labels and the freshness filter change at midnight
-    const sig = [JSON.stringify(this._ids), top && top.last_updated, home && home.last_updated, top && top.state, home && home.state, new Date().toDateString()].join('|');
+    const where = hass.config ? `${hass.config.latitude},${hass.config.longitude}` : '';  // distances in a town
+    const sig = [JSON.stringify(this._ids), top && top.last_updated, home && home.last_updated, top && top.state, home && home.state, new Date().toDateString(), where].join('|');
     if (sig !== this._sig) {
       this._sig = sig;
       this._renderTexts();
@@ -790,7 +791,7 @@ class CenyPalivCard extends HTMLElement {
   }
 
   _avatar(s, rank, best) {
-    const badge = rank != null && rank !== '' ? `<span class="rank">${rank}</span>` : '';
+    const badge = rank != null && rank !== '' ? `<span class="rank">${esc(rank)}</span>` : '';
     return `<span class="avatar${best ? ' best' : ''}">${this._disc(s)}${badge}</span>`;
   }
 
@@ -945,11 +946,11 @@ class CenyPalivCard extends HTMLElement {
     // for the station details; the area's up-to-date stations: all stations of the town or circle minus the outdated ones
     const total = at.city_total != null ? at.city_total : (at.gps_area && at.gps_area.station_count);
     const upToDate = total != null && isFinite(Number(total)) ? Number(total) - Number(at.excluded || 0) : fresh.length;
-    this._rows = { list, fresh: Math.max(upToDate, fresh.length), unit: at.unit_of_measurement || 'Kč/l' };
     const cp = this._compact;
     // the cheapest of the area, whatever the order (in price order the first row, as before)
     const prices = (sort === 'price' ? list : fresh).map((s) => Number(s.price)).filter((p) => !isNaN(p));
     const min = prices.length ? Math.min(...prices) : null;
+    this._rows = { list, fresh: Math.max(upToDate, fresh.length), unit: at.unit_of_measurement || 'Kč/l', min };
     const unit = at.unit_of_measurement || 'Kč/l';
     const n = min === null ? 0 : fresh.filter((s) => Number(s.price) === min).length;
     const sub = min === null ? T('no_recent') : T('cheapest_price', { p: this._num(min), unit }) + (n > 1 ? ' · ' + T('stations_same', { n }) : '');
@@ -1009,12 +1010,13 @@ class CenyPalivCard extends HTMLElement {
     return best ? this._T('cheapest_badge') : '+' + this._num(Number(s.price) - min);
   }
 
-  // Where distances are measured from: the GPS area's centre, else Home Assistant's home location.
+  // Where distances are measured from: the GPS area's centre, or in a town Home Assistant's home location.
   _center(at) {
-    const area = at.gps_area || {};
     const config = (this._hass && this._hass.config) || {};
     const pick = (lat, lng) => (isFinite(Number(lat)) && isFinite(Number(lng)) && lat !== null && lng !== null ? [Number(lat), Number(lng)] : null);
-    return pick(area.latitude, area.longitude) || pick(config.latitude, config.longitude);
+    // a GPS area measures from its own centre only: without one (a location error) there are no distances
+    if (at.gps_area) return pick(at.gps_area.latitude, at.gps_area.longitude);
+    return pick(config.latitude, config.longitude);
   }
 
   // The stations to sort by distance or "worth": the cheapest ones and, in a GPS area, the nearest ones, once each.
@@ -1022,14 +1024,16 @@ class CenyPalivCard extends HTMLElement {
     const near = (Array.isArray(at.gps_nearest_stations) ? at.gps_nearest_stations : []).filter((s) => this._age(s, today) <= maxAge);
     const seen = new Set();
     const out = [];
+    const cheapest = new Set(fresh);
     for (const s of fresh.concat(near)) {
-      const id = `${s.name}|${s.lat}|${s.lng}`;
+      const id = `${s.name}|${s.lat}|${s.lng}|${s.price}`;
       const price = Number(s.price);
       if (seen.has(id) || !isFinite(price)) continue;
       seen.add(id);
       const km = s.distance_km != null && isFinite(Number(s.distance_km)) ? Number(s.distance_km)
         : (isFinite(Number(s.lat)) && isFinite(Number(s.lng)) ? kmBetween(center[0], center[1], Number(s.lat), Number(s.lng)) : Infinity);
-      out.push(Object.assign({}, s, { _km: km, _worth: withDrive(price, km, this._tank, this._consumption) }));
+      const rank = cheapest.has(s) ? s.rank : null;  // gps_nearest_stations ranks by distance, not by price
+      out.push(Object.assign({}, s, { rank, _km: km, _worth: withDrive(price, km, this._tank, this._consumption) }));
     }
     return out;
   }
@@ -1044,9 +1048,9 @@ class CenyPalivCard extends HTMLElement {
   // ---------------------------------------------------------------- station details
   _stationHtml(s, rank) {
     const T = (k, v) => this._T(k, v);
-    const rows = this._rows || { list: [], fresh: 0, unit: 'Kč/l' };
-    const prices = rows.list.map((x) => Number(x.price)).filter((p) => !isNaN(p));
-    const min = prices.length ? Math.min(...prices) : Number(s.price);
+    const rows = this._rows || { list: [], fresh: 0, unit: 'Kč/l', min: null };
+    const shown = rows.list.map((x) => Number(x.price)).filter((p) => !isNaN(p));
+    const min = rows.min != null ? rows.min : (shown.length ? Math.min(...shown) : Number(s.price));
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const when = this._when(s, this._age(s, today));
     const best = Number(s.price) === min;
@@ -1147,16 +1151,16 @@ const EDITOR_TEXT = {
   en: {
     fuel: 'Fuel', fuels: 'Switch between fuels', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
     map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
-    sort: 'Order of the stations', tank_litres: 'Tank: litres you fill (for "worth the drive")',
-    consumption: 'Consumption in l/100 km (for "worth the drive")', price: 'Price', distance: 'Distance', worth: 'Worth the drive',
+    sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
+    consumption: 'Consumption per 100 km in litres, kg for CNG (for "worth it")', price: 'Price', distance: 'Distance', worth: 'Worth the drive',
     home: 'My station', list: 'Cheapest stations', map: 'Map', graph: '30-day graph',
     auto: 'Automatic: 2 columns when the card is wide', columns: 'Always 2 columns', stack: 'Always 1 column',
   },
   cs: {
     fuel: 'Palivo', fuels: 'Přepínat mezi palivy', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
     map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
-    sort: 'Řazení stanic', tank_litres: 'Nádrž: kolik litrů natankujete (pro „vyplatí se“)',
-    consumption: 'Spotřeba v l/100 km (pro „vyplatí se“)', price: 'Cena', distance: 'Vzdálenost', worth: 'Vyplatí se dojet',
+    sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
+    consumption: 'Spotřeba na 100 km v litrech, u CNG v kg (pro „vyplatí se“)', price: 'Cena', distance: 'Vzdálenost', worth: 'Vyplatí se dojet',
     home: 'Moje stanice', list: 'Nejlevnější stanice', map: 'Mapa', graph: 'Graf za 30 dní',
     auto: 'Automaticky: 2 sloupce, je-li karta široká', columns: 'Vždy 2 sloupce', stack: 'Vždy 1 sloupec',
   },
@@ -1221,8 +1225,9 @@ class CenyPalivCardEditor extends HTMLElement {
       { name: 'layout', selector: { select: { mode: 'dropdown', options: ['auto', 'columns', 'stack'].map((p) => ({ value: p, label: L[p] })) } } },
       { name: 'stations', selector: { number: { min: 1, max: 5, step: 1, mode: 'slider' } } },
       { name: 'sort', selector: { select: { mode: 'dropdown', options: SORTS.map((p) => ({ value: p, label: L[p] })) } } },
-      { name: 'tank_litres', selector: { number: { min: 5, max: 150, step: 1, mode: 'box', unit_of_measurement: 'l' } } },
-      { name: 'consumption', selector: { number: { min: 1, max: 30, step: 0.1, mode: 'box', unit_of_measurement: 'l/100 km' } } },
+      // litres, or kilograms for CNG: the formula only needs the fill-up and the consumption in the same unit
+      { name: 'tank_litres', selector: { number: { min: 5, max: 150, step: 1, mode: 'box' } } },
+      { name: 'consumption', selector: { number: { min: 1, max: 30, step: 0.1, mode: 'box' } } },
       { name: 'compact', selector: { boolean: {} } },
       { name: 'show_footer', selector: { boolean: {} } },
       { name: 'map_height', selector: { number: { min: 0, max: 800, step: 10, mode: 'box', unit_of_measurement: 'px' } } },

@@ -745,10 +745,10 @@ test("the list sorts by price, distance or worth the drive, with the nearest sta
     state: "38", attributes: {
       unit_of_measurement: "Kč/l", fuel: "n95", fuel_label: "Natural 95", city_name: "GPS", max_age_days: 1,
       gps_area: { latitude: 49.2, longitude: 16.6, station_count: 20 }, excluded: 0,
-      labels: { sort: "Order", sort_price: "Price", sort_distance: "Distance", sort_worth: "Worth", with_drive: "≈ {p} with the drive", cheapest_badge: "Cheapest" },
+      labels: { sort: "Order", sort_price: "Price", sort_distance: "Distance", sort_worth: "Worth", with_drive: "≈ {p} with the drive", cheapest_badge: "Cheapest", more_than_cheapest: "+{d} vs the cheapest", rank_of: "#{rank} of {n}" },
       stations: [st("Far", 38, 30, 1), st("Mid", 38.5, 8, 2)],
-      // the nearest list repeats a cheap station and adds a close, dearer one
-      gps_nearest_stations: [st("Near", 39, 1), st("Mid", 38.5, 8), { ...st("Old", 30, 0.5), updated_date: "2000-01-01" }],
+      // the nearest list (ranked by distance) repeats a cheap station and adds a close, dear one
+      gps_nearest_stations: [st("Near", 39.6, 1, 1), st("Mid", 38.5, 8, 2), { ...st("Old", 30, 0.5, 3), updated_date: "2000-01-01" }],
     },
   };
   const card = new CenyPalivCard();
@@ -767,13 +767,19 @@ test("the list sorts by price, distance or worth the drive, with the nearest sta
   html = card._listHtml();
   same(names(), ["Near", "Mid", "Far"]); // the outdated one is left out, "Mid" only once
   assert.match(html, /1\.0 km/);
-  assert.match(html, /class="disc"[^]*?<\/span><\/span>/); // a nearest-only station has no price rank badge
+  // a nearest-only station has no price rank (its rank in that list is by distance): no badge, none in its details
+  const nearRow = html.split('class="row"').find((row) => row.includes(">Near<"));
+  assert.doesNotMatch(nearRow, /class="rank"/);
+  assert.equal(card._rows.list[0].rank, null);
+  assert.doesNotMatch(card._stationHtml(card._rows.list[0], null), /of 20/);
+  // its details compare with the area's cheapest price (38), which is not among the first rows here
+  assert.match(card._stationHtml(card._rows.list[0], null), /\+1\.60/);
 
   card._sort = "worth";
   card._listHtml();
-  // Far: 38 + 2*30*0.065*38/40 = 41.705; Mid: 38.5 + 2*8*0.065*38.5/40 = 39.501; Near: 39 + 0.12675 = 39.127
-  same(names(), ["Near", "Mid", "Far"]);
-  assert.match(card._listHtml(), /≈ 39\.13 with the drive/);
+  // Far: 38 + 2*30*0.065*38/40 = 41.705; Mid: 38.5 + 2*8*0.065*38.5/40 = 39.501; Near: 39.6 + 0.1287 = 39.729
+  same(names(), ["Mid", "Near", "Far"]); // not the distance order: the cheaper Mid is worth the extra 7 km
+  assert.match(card._listHtml(), /≈ 39\.50 with the drive/);
   assert.match(card._listHtml(), />Far</); // the header still names the area's cheapest price
   assert.match(card._listHtml(), /class="number">38\.00</);
 
@@ -783,9 +789,15 @@ test("the list sorts by price, distance or worth the drive, with the nearest sta
   assert.equal(card._sort, "price");
   card._ids = { top5: "t", home: null, pos: [] }; // the mock's "t" is not a Ceny paliv entity id the resolver would keep
 
+  // a GPS area without a centre (a location error) never measures from home
+  top.attributes.gps_area = { station_count: 3 };
+  card._sort = "distance";
+  assert.doesNotMatch(card._listHtml(), /data-sort/);
+  same(names(), ["Far", "Mid"]);
+
   // no location known: no sort control, price order
   card._hass = { ...card._hass, config: {} };
-  top.attributes.gps_area = { station_count: 3 };
+  delete top.attributes.gps_area;
   card._sort = "distance";
   html = card._listHtml();
   same(names(), ["Far", "Mid"]);
