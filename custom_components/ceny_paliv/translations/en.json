@@ -334,6 +334,15 @@
       },
       "position": {
         "name": "{fuel} · cheapest #{position}"
+      },
+      "national_average": {
+        "name": "{fuel} · Czech average"
+      },
+      "region_average": {
+        "name": "{fuel} · region average"
+      },
+      "area_average": {
+        "name": "{fuel} · area average"
       }
     }
   },

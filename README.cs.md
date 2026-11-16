@@ -16,6 +16,7 @@ Integrace pro HACS, která v Home Assistantu ukazuje ceny paliv z [mBenzin.cz](h
 - Nebo nastavíte GPS oblast kolem polohy domácnosti Home Assistantu, **osoby nebo zařízení, které sledujete** (oblast jede s vámi), uložené zóny `zone.*`, bodu vybraného na mapě nebo (pokročile) ručně zadaných souřadnic. Poloměr je **5–50 km**, výchozí **40 km**. Poloha osoby nebo telefonu se použije, jen pokud ji zvolíte; nepoužívá se geokódovací služba ani další požadavek na mBenzin.
 - Pro každé palivo **5 nejlevnějších stanic ve městě** (jen z vašeho města, nikoli z celého kraje), odkaz na Google Maps a **mapu s cenami**.
 - U oblíbené stanice: aktuální cena, **trendy oproti 1, 2, 7, 14 a 30 dnům**, pořadí ve městě a dlouhodobá statistika (graf za 30 dní).
+- **Průměrné ceny** v celé republice, ve vašem kraji a ve vaší oblasti a to, jak si vaše oblast proti nim stojí, s dlouhodobými statistikami a ze stejného stažení.
 - Hotová **karta pro dashboard** (`ceny-paliv-card`) přímo v integraci – přidáte ji z nabídky karet, bez kopírování YAML – s volbou jazyka **čeština / angličtina**. Je **přizpůsobitelná**: na širokém dashboardu dva sloupce, v telefonu jeden, kompaktní verze a každou část (oblíbená stanice, seznam, mapa, graf) lze umístit jako samostatnou kartu.
 - Volitelná **loga čerpacích stanic** (Orlen, MOL, Shell, Tesco…): zaškrtnete řetězce při nastavení a stáhnou se za vás. Řetězce bez loga dostanou barevný odznak s iniciálami.
 - Zastaralé ceny se skrývají: u benzínu a nafty cena starší než včerejšek, u CNG starší než 3 dny, u LPG a AdBlue starší než 7 dní. Menší stanice aktualizují ceny méně často: volba **Zobrazit i starší ceny** (až 3 nebo 7 dní) je v přehledu ponechá a zobrazí u nich datum ceny.
@@ -92,10 +93,13 @@ Pro každé palivo `<palivo>` (`n95`, `benzinplus`, `diesel`, `dieselplus`, `lpg
 | `sensor.ceny_paliv_<palivo>_top5` | cena nejlevnější stanice; atributy obsahují 5 nejlevnějších stanic. GPS režim přidává metadata `gps_area` a samostatný kompaktní seznam nejvýše 10 stanic `gps_nearest_stations` seřazených podle vzdálenosti |
 | `sensor.ceny_paliv_<palivo>_home` | cena u vaší oblíbené stanice (jen pokud jste nějakou vybrali), trendy, pořadí, statistika |
 | `sensor.ceny_paliv_<palivo>_1` … `_5` | 5 nejlevnějších stanic se zeměpisnou šířkou a délkou pro kartu mapy |
+| `sensor.ceny_paliv_<palivo>_national_average` | průměrná cena stanic s aktuální cenou v České republice; 14 krajů v atributech |
+| `sensor.ceny_paliv_<palivo>_region_average` | průměrná cena v kraji vaší oblasti |
+| `sensor.ceny_paliv_<palivo>_area_average` | průměrná cena ve vaší oblasti (město nebo GPS okolí) a srovnání |
 
 Každá nastavená oblast je zařízení typu služba (pojmenované podle záznamu, např. `Ceny paliv Praha`) a její senzory mají pod ním přeložené názvy, např. `Ceny paliv Praha Natural 95 · 1. nejlevnější`; stanici, kterou senzor pozice nebo oblíbené stanice právě ukazuje, najdete v atributu `station`. Identifikátory stávajících senzorů se při aktualizaci ani při přepnutí oblasti nemění. Bývalá oblíbená stanice si kvůli statistikám ponechá archivovaný senzor (diagnostický, zakázaný; viz [oddíl 5](#5-bez-karty-standardní-karty)).
 
-Všechny senzory ukazují cenu v Kč/l (CNG v Kč/kg) a nesou uvedení zdroje `Ceny: mbenzin.cz`. Karta své senzory pozná podle atributů `cp_fuel`, `cp_role` (`top5`, `home`, `position`, `home_archive`), `cp_index` a `cp_config_id`.
+Všechny senzory ukazují cenu v Kč/l (CNG v Kč/kg) a nesou uvedení zdroje `Ceny: mbenzin.cz`. Karta své senzory pozná podle atributů `cp_fuel`, `cp_role` (`top5`, `home`, `position`, `home_archive`, `national_average`, `region_average`, `area_average`), `cp_index` a `cp_config_id`.
 
 ### Atributy
 
@@ -127,6 +131,16 @@ Každá stanice v `stations` (i v `home`) má `rank`, `name`, `title` (čitelný
 | `statistic_id` | vlastní dlouhodobé statistiky stanice, např. `ceny_paliv:n95_3fa2b1c4d5e6` (viz níže) |
 
 **`sensor.ceny_paliv_<palivo>_1` … `_5`** — stav: cena n-té nejlevnější stanice; atributy `station` (čitelný popis), `price`, `latitude` a `longitude` pro mapu (bez souřadnic, když je to vaše oblíbená stanice, kterou kreslí senzor oblíbené stanice). Pozice bez stanice má stav `unknown`.
+
+**Průměrné ceny** – tři senzory níže počítají jen stanice s aktuální cenou (stejný limit stáří jako přehled, včetně volby **Zobrazit i starší ceny**) a mají dlouhodobé statistiky (`state_class: measurement`). Kraj každé stanice se určí z jejích souřadnic a hranic krajů přibalených k integraci (ČÚZK, zjednodušené: stanice do zhruba 200 m od krajské hranice se může započítat do sousedního kraje).
+
+| Senzor | Stav | Atributy |
+|---|---|---|
+| `_national_average` | průměr v České republice | `station_count`, `median`, `regions`: u každého kraje `code` (NUTS 3, např. `CZ010`), `name`, `average`, `station_count`, `vs_national` a `rank` (1 = nejlevnější kraj) |
+| `_region_average` | průměr v kraji vaší oblasti (kraj města, nebo středu GPS okolí); nedostupný, když je střed mimo Českou republiku | `region`, `region_code`, `station_count`, `rank`, `vs_national` |
+| `_area_average` | průměr stanic ve vaší oblasti | `station_count`, `region`, `region_rank`, `vs_national` a `vs_region` (Kč; pod nulou: vaše oblast je levnější) |
+
+Když sledovaná osoba nebo posunutá GPS oblast přejede do jiného kraje, krajský senzor pokračuje průměrem toho kraje.
 
 ## Jak se data aktualizují
 
@@ -376,3 +390,5 @@ CI navíc spouští hassfest, validaci HACS, ruff, `mypy --strict custom_compone
 ## Licence
 
 MIT – viz [LICENSE](LICENSE).
+
+Hranice krajů (`regions.json`) jsou odvozené z dat RÚIAN Českého úřadu zeměměřického a katastrálního (ČÚZK) pod licencí [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); zjednodušené.

@@ -756,6 +756,8 @@ def test_geographic_helpers_do_not_change_city_payload_or_history(marker, now):
     result = payload([city_station, other_city_station], now, history=with_other_city)
     stations_within_radius([city_station, other_city_station], 50.1, 14.4)
 
+    # only the country's averages see the other town's station
+    assert result.pop("overview") != original.pop("overview")
     assert result == original
     assert with_other_city == original_history
     assert [station["price"] for station in result["stations"]] == [30]

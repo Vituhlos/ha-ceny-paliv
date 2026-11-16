@@ -10,6 +10,12 @@
   downloaded: following someone sends no extra request to mBenzin.cz. Without a location the area stays around home;
   a deleted person or device raises a Repairs issue. Their entity id is redacted in the diagnostics and forgotten
   when another source is chosen. A person's location is used only if you choose this source.
+- **Average prices and the standing of your area**: per fuel, three new sensors with long-term statistics: the
+  average price in the Czech Republic (with all 14 regions in its attributes, ranked), in the region (kraj) of your
+  area, and in your area, with how much cheaper or dearer the area is than the region and the country. They count
+  the up-to-date stations of the same download: no extra request to mBenzin.cz. Each station's region comes from its
+  coordinates and region boundaries bundled with the integration (ČÚZK, RÚIAN, CC BY 4.0, simplified; rebuilt with
+  `script/build_regions.py`).
 
 ## 0.7.0
 

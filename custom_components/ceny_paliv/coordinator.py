@@ -23,6 +23,7 @@ from .api import (
     build_payload,
     next_update_at,
     shared_marker_cache,
+    warm_regions,
 )
 from .const import (
     AREA_MODE_GPS,
@@ -323,6 +324,8 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 }
                 continue
             self.marker_fields[fuel] = _marker_fields(snapshot.markers)
+            # the first lookup of a few thousand stations takes a moment: not in the event loop
+            await self.hass.async_add_executor_job(warm_regions, snapshot.markers)
             now = dt_util.now()
             result[fuel] = build_payload(
                 snapshot.markers,
