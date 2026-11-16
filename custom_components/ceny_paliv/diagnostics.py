@@ -7,11 +7,12 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_HOME_HISTORY, CONF_HOME_IDENTITIES, CONF_HOMES, CONF_KEY, CONF_LOCATION
+from .const import CONF_HOME_HISTORY, CONF_HOME_IDENTITIES, CONF_HOMES, CONF_KEY, CONF_LOCATION, CONF_PERSON_ENTITY
 from .coordinator import CenyPalivConfigEntry
 
-# the personal key, the GPS centre and the favourite stations (which point to where the user lives)
+# the personal key, the GPS centre, the favourite stations (which point to where the user lives) and who is followed
 TO_REDACT = {
+    CONF_PERSON_ENTITY,
     CONF_KEY,
     CONF_LOCATION,
     CONF_LATITUDE,

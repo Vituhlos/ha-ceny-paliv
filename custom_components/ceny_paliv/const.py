@@ -21,6 +21,7 @@ CONF_AREA_MODE = "area_mode"
 CONF_LOCATION_METHOD = "location_method"
 CONF_LOCATION = "location"
 CONF_ZONE_ENTITY = "zone_entity"
+CONF_PERSON_ENTITY = "person_entity"  # person.* or device_tracker.* the GPS area follows
 CONF_GPS_RADIUS_KM = "gps_radius_km"
 AREA_MODE_CITY = "city"
 AREA_MODE_GPS = "gps"
@@ -28,6 +29,9 @@ LOCATION_HOME = "home"
 LOCATION_ZONE = "zone"
 LOCATION_MAP = "map"
 LOCATION_MANUAL = "manual"
+LOCATION_PERSON = "person"
+# a followed person must move this far before the area is computed again (from the shared download, no request)
+PERSON_MOVE_KM = 1.0
 DEFAULT_GPS_RADIUS_KM = 40
 CONF_FUELS = "fuels"
 CONF_HOMES = "homes"  # {fuel: station slug}

@@ -53,6 +53,7 @@ from .const import (
     CONF_KEY,
     CONF_LOCATION,
     CONF_LOCATION_METHOD,
+    CONF_PERSON_ENTITY,
     CONF_LANGUAGE,
     CONF_LOGOS,
     CONF_MAX_AGE_DAYS,
@@ -69,6 +70,7 @@ from .const import (
     LOCATION_HOME,
     LOCATION_MANUAL,
     LOCATION_MAP,
+    LOCATION_PERSON,
     LOCATION_ZONE,
     MAX_AGE_CHOICES,
     MAX_AGE_DAYS_DEFAULT,
@@ -158,6 +160,7 @@ class _FuelStationSteps(_StepsBase):
     _location_method: str
     _gps_location: dict[str, float] | None
     _gps_zone_entity: str | None
+    _gps_person_entity: str | None
     _gps_radius_km: float
     _cities: list[dict[str, str]]
     _chains: set[str]
@@ -167,6 +170,7 @@ class _FuelStationSteps(_StepsBase):
     # read with getattr(): absent until a step or the options flow sets them
     _defaults_city: str | None
     _defaults_area_mode: str
+    _defaults_person_entity: str | None
     _pending_fuels: list[str] | None
     _pending_language: str | None
     _pending_max_age_days: int | None
@@ -317,7 +321,13 @@ class _FuelStationSteps(_StepsBase):
         method = getattr(self, "_location_method", LOCATION_HOME)
         latitude: Any
         longitude: Any
-        if method == LOCATION_HOME:
+        if method == LOCATION_PERSON:
+            person = self.hass.states.get(getattr(self, "_gps_person_entity", None) or "")
+            latitude = person.attributes.get(CONF_LATITUDE) if person else None
+            longitude = person.attributes.get(CONF_LONGITUDE) if person else None
+            if not _valid_coordinates(latitude, longitude):  # no location now: around home, as the area will be
+                latitude, longitude = self.hass.config.latitude, self.hass.config.longitude
+        elif method == LOCATION_HOME:
             latitude, longitude = self.hass.config.latitude, self.hass.config.longitude
         elif method == LOCATION_ZONE:
             entity_id = getattr(self, "_gps_zone_entity", None)
@@ -398,10 +408,14 @@ class _FuelStationSteps(_StepsBase):
     async def async_step_location_method(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             self._location_method = user_input[CONF_LOCATION_METHOD]
+            if self._location_method != LOCATION_PERSON:
+                self._gps_person_entity = None
             if self._location_method == LOCATION_HOME:
                 self._gps_location = None
                 self._gps_zone_entity = None
                 return await self.async_step_gps_radius()
+            if self._location_method == LOCATION_PERSON:
+                return await self.async_step_location_person()
             if self._location_method == LOCATION_ZONE:
                 return await self.async_step_location_zone()
             if self._location_method == LOCATION_MAP:
@@ -413,7 +427,7 @@ class _FuelStationSteps(_StepsBase):
             {
                 vol.Required(CONF_LOCATION_METHOD, default=default): SelectSelector(
                     SelectSelectorConfig(
-                        options=[LOCATION_HOME, LOCATION_ZONE, LOCATION_MAP, LOCATION_MANUAL],
+                        options=[LOCATION_HOME, LOCATION_PERSON, LOCATION_ZONE, LOCATION_MAP, LOCATION_MANUAL],
                         translation_key="location_method",
                         mode=SelectSelectorMode.DROPDOWN,
                     )
@@ -421,6 +435,28 @@ class _FuelStationSteps(_StepsBase):
             }
         )
         return self.async_show_form(step_id="location_method", data_schema=schema)
+
+    async def async_step_location_person(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """The GPS area follows a person or a device tracker (only when chosen here)."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            entity_id = user_input[CONF_PERSON_ENTITY]
+            if self.hass.states.get(entity_id) is None:  # the selector already allows only these two domains
+                errors[CONF_PERSON_ENTITY] = "invalid_person"
+            else:
+                self._gps_person_entity = entity_id
+                self._gps_location = None
+                self._gps_zone_entity = None
+                return await self.async_step_gps_radius()
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_PERSON_ENTITY,
+                    default=getattr(self, "_defaults_person_entity", None),
+                ): EntitySelector(EntitySelectorConfig(domain=["person", "device_tracker"]))
+            }
+        )
+        return self.async_show_form(step_id="location_person", data_schema=schema, errors=errors)
 
     async def async_step_location_zone(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
@@ -571,6 +607,8 @@ class _FuelStationSteps(_StepsBase):
                         != getattr(self, "_defaults_gps_location", None)
                         or self._gps_zone_entity
                         != getattr(self, "_defaults_zone_entity", None)
+                        or getattr(self, "_gps_person_entity", None)
+                        != getattr(self, "_defaults_person_entity", None)
                         or self._gps_radius_km
                         != getattr(
                             self, "_defaults_gps_radius_km", DEFAULT_GPS_RADIUS_KM
@@ -778,6 +816,8 @@ class _FuelStationSteps(_StepsBase):
             options[CONF_HOME_HISTORY] = {
                 fuel: list(records) for fuel, records in home_history.items()
             }
+        # who is followed is personal: kept only while the area follows them
+        options.pop(CONF_PERSON_ENTITY, None)
         if self._area_mode == AREA_MODE_CITY:
             options[CONF_CITY] = self._city
         else:
@@ -787,6 +827,8 @@ class _FuelStationSteps(_StepsBase):
                 options[CONF_LOCATION] = self._gps_location
             if self._gps_zone_entity is not None:
                 options[CONF_ZONE_ENTITY] = self._gps_zone_entity
+            if getattr(self, "_gps_person_entity", None) is not None:
+                options[CONF_PERSON_ENTITY] = self._gps_person_entity
         logos = self._logos if self._logos is not None else (previous or {}).get(CONF_LOGOS)
         if logos is not None:
             options[CONF_LOGOS] = logos
@@ -884,6 +926,7 @@ class CenyPalivOptionsFlow(_FuelStationSteps, OptionsFlow):
         self._defaults_location_method = entry.options.get(CONF_LOCATION_METHOD, LOCATION_HOME)
         self._defaults_gps_location = entry.options.get(CONF_LOCATION)
         self._defaults_zone_entity = entry.options.get(CONF_ZONE_ENTITY)
+        self._defaults_person_entity = entry.options.get(CONF_PERSON_ENTITY)
         self._defaults_gps_radius_km = entry.options.get(
             CONF_GPS_RADIUS_KM, DEFAULT_GPS_RADIUS_KM
         )

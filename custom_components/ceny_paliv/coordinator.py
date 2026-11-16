@@ -37,6 +37,7 @@ from .const import (
     CONF_KEY,
     CONF_LOCATION,
     CONF_LOCATION_METHOD,
+    CONF_PERSON_ENTITY,
     CONF_LANGUAGE,
     CONF_ZONE_ENTITY,
     DEFAULT_GPS_RADIUS_KM,
@@ -46,7 +47,9 @@ from .const import (
     FORCED_REFRESH_MIN_AGE,
     FUELS,
     LOCATION_HOME,
+    LOCATION_PERSON,
     LOCATION_ZONE,
+    PERSON_MOVE_KM,
     SOURCE_URL,
     STALE_DATA_AFTER,
     UPDATE_INTERVAL,
@@ -102,6 +105,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
         self._snapshot_max_age: timedelta | None = None  # set while the refresh action runs
         # for diagnostics: which fields mBenzin sends per fuel, and the first station of the nationwide list
         self.marker_fields: dict[str, dict[str, Any]] = {}
+        self._last_center: tuple[float, float] | None = None  # the GPS centre of the last refresh
         if (
             entry.options.get(CONF_AREA_MODE) == AREA_MODE_GPS
             and entry.options.get(CONF_LOCATION_METHOD) == LOCATION_ZONE
@@ -111,6 +115,14 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
                 async_track_state_change_event(
                     hass, [zone_entity], self._async_zone_state_changed
                 )
+            )
+        if (
+            entry.options.get(CONF_AREA_MODE) == AREA_MODE_GPS
+            and entry.options.get(CONF_LOCATION_METHOD) == LOCATION_PERSON
+            and (person_entity := entry.options.get(CONF_PERSON_ENTITY))
+        ):
+            entry.async_on_unload(
+                async_track_state_change_event(hass, [person_entity], self._async_person_moved)
             )
 
     @property
@@ -148,12 +160,33 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             return
         await self.async_refresh()
 
+    async def _async_person_moved(self, event: Event[EventStateChangedData]) -> None:
+        """Move the area with the person, once they are PERSON_MOVE_KM away from the last centre.
+
+        The refresh reuses the shared nationwide download, so following someone sends no request to mBenzin.cz.
+        """
+        center, _ = self._gps_location()
+        last = self._last_center
+        if center is None or last is None or distance_km(*center, *last) >= PERSON_MOVE_KM:
+            await self.async_request_refresh()
+
     def _gps_location(self) -> tuple[tuple[float, float] | None, str | None]:
         options = self.config_entry.options
         method = options.get(CONF_LOCATION_METHOD, LOCATION_HOME)
         latitude: Any
         longitude: Any
-        if method == LOCATION_HOME:
+        if method == LOCATION_PERSON:
+            person = self.hass.states.get(options.get(CONF_PERSON_ENTITY) or "")
+            if person is None:
+                return None, "person_unavailable"
+            latitude = person.attributes.get("latitude")
+            longitude = person.attributes.get("longitude")
+            try:
+                distance_km(latitude, longitude, latitude, longitude)
+            except (TypeError, ValueError, OverflowError):
+                # no location now (phone off, not shared): the area waits at home
+                latitude, longitude = self.hass.config.latitude, self.hass.config.longitude
+        elif method == LOCATION_HOME:
             latitude, longitude = self.hass.config.latitude, self.hass.config.longitude
         elif method == LOCATION_ZONE:
             entity_id = options.get(CONF_ZONE_ENTITY)
@@ -201,6 +234,16 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             ir.async_delete_issue(self.hass, DOMAIN, no_data_issue_id(entry.entry_id))
         if gps_error is None:
             ir.async_delete_issue(self.hass, DOMAIN, location_issue_id(entry.entry_id))
+        elif gps_error == "person_unavailable":
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                location_issue_id(entry.entry_id),
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key="person_missing",
+                translation_placeholders={"title": entry.title, "person": entry.options.get(CONF_PERSON_ENTITY, "")},
+            )
         elif gps_error == "zone_unavailable":
             ir.async_create_issue(
                 self.hass,
@@ -243,6 +286,7 @@ class CenyPalivCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
             CONF_LOCATION_METHOD, LOCATION_HOME
         )
         gps_center, gps_error = self._gps_location() if gps_mode else (None, None)
+        self._last_center = gps_center
         gps_radius_km = self.config_entry.options.get(
             CONF_GPS_RADIUS_KM, DEFAULT_GPS_RADIUS_KM
         )
