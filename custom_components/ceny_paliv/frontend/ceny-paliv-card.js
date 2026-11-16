@@ -7,6 +7,9 @@
  *   custom:ceny-paliv-compare-card  your station, the area, the region and the country, and the 14 regions (fuel, config_id)
  *   custom:ceny-paliv-regions-card  a map of the 14 regions coloured by their average price (fuel, config_id)
  *   custom:ceny-paliv-stations-map-card  the area's stations as coloured prices around its centre (fuel, config_id)
+ *   custom:ceny-paliv-areas-card    one fuel in every area: where it is cheapest (fuel)
+ *   custom:ceny-paliv-road-card     the nearest stations, large, with a navigate button (fuel, config_id, stations, navigator)
+ *   custom:ceny-paliv-big-card      one price, large, for a wall tablet (fuel, config_id, price: cheapest | mine | area)
  *   custom:ceny-paliv-badge         a dashboard badge with a price (fuel, price: cheapest | mine | area, config_id)
  *   custom:ceny-paliv-price-feature a tile card feature for a Ceny paliv sensor: the station, rank or comparison, the trend
  *
@@ -1368,7 +1371,7 @@ const EDITOR_TEXT = {
   en: {
     fuel: 'Fuel', fuels: 'Fuels (switch, or the fuels shown)', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
     map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
-    show_regions: 'Show the 14 regions', badge_cheapest: 'The cheapest in the area', badge_mine: 'My station', badge_area: 'The area average', sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
+    show_regions: 'Show the 14 regions', navigator: 'Navigation app', badge_cheapest: 'The cheapest in the area', badge_mine: 'My station', badge_area: 'The area average', sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
     consumption: 'Consumption per 100 km in litres, kg for CNG (for "worth it")', price: 'Price', distance: 'Distance', worth: 'Worth the drive',
     home: 'My station', list: 'Cheapest stations', map: 'Map', graph: '30-day graph: my station, the cheapest, the average',
     auto: 'Automatic: 2 columns when the card is wide', columns: 'Always 2 columns', stack: 'Always 1 column',
@@ -1376,7 +1379,7 @@ const EDITOR_TEXT = {
   cs: {
     fuel: 'Palivo', fuels: 'Paliva (přepínač, nebo zobrazená paliva)', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
     map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
-    show_regions: 'Zobrazit 14 krajů', badge_cheapest: 'Nejlevnější v oblasti', badge_mine: 'Moje stanice', badge_area: 'Průměr oblasti', sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
+    show_regions: 'Zobrazit 14 krajů', navigator: 'Navigační aplikace', badge_cheapest: 'Nejlevnější v oblasti', badge_mine: 'Moje stanice', badge_area: 'Průměr oblasti', sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
     consumption: 'Spotřeba na 100 km v litrech, u CNG v kg (pro „vyplatí se“)', price: 'Cena', distance: 'Vzdálenost', worth: 'Vyplatí se dojet',
     home: 'Moje stanice', list: 'Nejlevnější stanice', map: 'Mapa', graph: 'Graf za 30 dní: moje stanice, nejlevnější, průměr',
     auto: 'Automaticky: 2 sloupce, je-li karta široká', columns: 'Vždy 2 sloupce', stack: 'Vždy 1 sloupec',
@@ -2135,6 +2138,201 @@ for (const m of ['_stationHtml', '_openStation', '_trendTiles', '_when', '_age',
   CenyPalivStationsMapCard.prototype[m] = CenyPalivCard.prototype[m];
 }
 
+// ------------------------------------------------------------------ 6. one fuel in every area
+// An area is named as its device in Home Assistant (the entry's title, or the name the user gave the device).
+function areaName(hass, entityId, fallback) {
+  const entity = hass.entities && hass.entities[entityId];
+  const device = entity && entity.device_id && hass.devices && hass.devices[entity.device_id];
+  return (device && (device.name_by_user || device.name)) || fallback || '';
+}
+
+class CenyPalivAreasCard extends CenyPalivMiniCard {
+  static getStubConfig(hass) {
+    const found = CenyPalivCard.fuels(hass)[0];
+    return { type: 'custom:ceny-paliv-areas-card', fuel: found ? found.value : 'n95' };
+  }
+
+  static editorSchema(hass) {
+    return [{ name: 'fuel', required: true, selector: { select: { mode: 'dropdown', options: CenyPalivCard.fuels(hass) } } }];
+  }
+
+  setConfig(config) {
+    if (!config || !config.fuel) throw new Error('ceny-paliv-areas-card: set "fuel", for example "n95"');
+    super.setConfig(config);
+  }
+
+  // every area, not one: the base's choice of an area does not apply
+  set hass(hass) {
+    hass = withLastKnown(hass);
+    this._hass = hass;
+    if (!this._config) return;
+    const fuel = this._config.fuel;
+    this._areas = areaIds(hass).map((id) => ({ id, sensors: areaSensors(hass, id)[fuel] || {} })).filter((a) => a.sensors.top5);
+    this._sensors = this._areas.length ? { [fuel]: this._areas[0].sensors } : {};  // the texts of the first area
+    const ids = this._areas.flatMap((a) => Object.values(a.sensors)).sort();
+    const sig = [JSON.stringify(this._config), new Date().toDateString(), hass.language,
+      ...ids.map((id) => `${id}:${hass.states[id].state}:${hass.states[id].last_updated}`)].join('|');
+    if (sig === this._sig) return;
+    this._sig = sig;
+    this._why = 'missing';
+    this.shadowRoot.innerHTML = `<style>${STYLE}${MINI_STYLE}</style>${this._areas.length ? this._render() : this._message()}`;
+  }
+
+  getCardSize() { return 2 + (this._areas ? this._areas.length : 1); }
+
+  _render() {
+    const T = (k, v) => this._T(k, v);
+    const value = (id) => { const st = id && this._hass.states[id]; return st && isFinite(Number(st.state)) && !['unavailable', 'unknown'].includes(st.state) ? Number(st.state) : null; };
+    const rows = this._areas.map((a) => {
+      const top = this._hass.states[a.sensors.top5];
+      return { a, top, cheapest: value(a.sensors.top5), average: value(a.sensors.area_average), mine: value(a.sensors.home),
+        name: areaName(this._hass, a.sensors.top5, top.attributes.city_name) };
+    }).sort((x, y) => (x.cheapest == null) - (y.cheapest == null) || x.cheapest - y.cheapest);
+    const best = rows.length && rows[0].cheapest != null ? rows[0].cheapest : null;
+    const first = rows[0] && rows[0].top.attributes;
+    const html = rows.map((r) => {
+      const station = ((r.top.attributes.stations || [])[0] || {});
+      const extra = [station.title || station.name || '', r.average != null ? `${T('series_average')} ${this._num(r.average)}` : ''].filter(Boolean).join(' · ');
+      const diff = r.cheapest == null ? '' : (r.cheapest === best ? T('cheapest_badge') : `+${this._num(r.cheapest - best)}`);
+      return `<div class="row" role="button" tabindex="0" data-more-info="${esc(r.a.sensors.top5)}">
+        <span class="icon fuel"><ha-icon icon="mdi:map-marker-radius-outline"></ha-icon></span>
+        <div class="info"><span class="primary">${esc(r.name)}</span><span class="secondary">${esc(extra)}</span></div>
+        <span class="price${r.cheapest === best ? ' best' : ''}"><span class="number">${r.cheapest == null ? '—' : this._num(r.cheapest)}</span>${diff ? `<span class="diff">${esc(diff)}</span>` : ''}</span>
+      </div>`;
+    }).join('');
+    return `<ha-card class="card">
+      <div class="head"><span class="icon fuel"><ha-icon icon="mdi:map-search-outline"></ha-icon></span>
+        <div class="info"><span class="primary">${esc(T('areas_title'))} · ${esc(first.fuel_label || this._config.fuel)}</span>
+          <span class="secondary">${esc(T('areas_sub', { n: rows.length }))}</span></div></div>
+      <div class="rows">${html}</div>
+      <span class="source">${this._source()}</span>
+    </ha-card>`;
+  }
+}
+
+// ------------------------------------------------------------------ 7. on the road: the nearest stations, large
+const ROAD_STYLE = `
+  .road { display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); }
+  .stop { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--ha-space-1, 4px) var(--ha-space-3, 12px); align-items: center; }
+  .stop .name { font-size: var(--ha-font-size-l, 16px); font-weight: var(--ha-font-weight-medium, 500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stop .where { grid-column: 1; font-size: var(--ha-font-size-m, 14px); color: var(--cp-muted); }
+  .stop .big { grid-row: 1 / span 2; grid-column: 2; font-size: var(--ha-font-size-2xl, 24px); font-variant-numeric: tabular-nums; text-align: end; }
+  .stop .big.best { color: var(--cp-good); }
+  .stop .nav { grid-column: 1 / -1; }
+  .stop .nav a { height: 48px; font-size: var(--ha-font-size-l, 16px); --mdc-icon-size: 22px; }
+  .stop + .stop { padding-top: var(--ha-space-3, 12px); border-top: 1px solid var(--cp-line); }
+`;
+const NAVIGATORS = { mapy: 0, google: 1, waze: 2 };
+
+class CenyPalivRoadCard extends CenyPalivMiniCard {
+  static get defaults() { return { stations: 3, navigator: 'google' }; }
+
+  static getStubConfig(hass) {
+    const found = CenyPalivCard.fuels(hass)[0];
+    return { type: 'custom:ceny-paliv-road-card', fuel: found ? found.value : 'n95' };
+  }
+
+  static editorSchema(hass, L) {
+    return [
+      { name: 'fuel', required: true, selector: { select: { mode: 'dropdown', options: CenyPalivCard.fuels(hass) } } },
+      { name: 'stations', selector: { number: { min: 1, max: 5, step: 1, mode: 'slider' } } },
+      { name: 'navigator', selector: { select: { mode: 'dropdown', options: [['mapy', 'Mapy.com'], ['google', 'Google Maps'], ['waze', 'Waze']].map(([value, label]) => ({ value, label })) } } },
+    ];
+  }
+
+  setConfig(config) {
+    if (!config || !config.fuel) throw new Error('ceny-paliv-road-card: set "fuel", for example "n95"');
+    super.setConfig(config);
+  }
+
+  getCardSize() { return 2 + 3 * (Number(this._config && this._config.stations) || 3); }
+
+  _render() {
+    const T = (k, v) => this._T(k, v);
+    const fuel = this._config.fuel;
+    const top = this._state(fuel, 'top5');
+    if (!top) { this._why = 'missing'; return this._message(); }
+    const at = top.attributes || {};
+    const head = (sub) => `<div class="head"><span class="icon home"><ha-icon icon="mdi:car-arrow-right"></ha-icon></span>
+      <div class="info"><span class="primary">${esc(T('road_title'))} · ${esc(at.fuel_label || fuel)}</span><span class="secondary">${esc(sub)}</span></div></div>`;
+    if (!at.gps_area) return `<ha-card class="card">${head(at.city_name || '')}<div class="status muted"><ha-icon icon="mdi:information-outline"></ha-icon><span>${esc(T('road_gps_only'))}</span></div></ha-card>`;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const maxAge = at.max_age_days != null ? Number(at.max_age_days) : 1;
+    const n = Math.min(5, Math.max(1, Math.round(Number(this._config.stations) || 3)));
+    const near = (Array.isArray(at.gps_nearest_stations) ? at.gps_nearest_stations : [])
+      .filter((x) => this._age(x, today) <= maxAge && isFinite(Number(x.distance_km)))
+      .sort((x, y) => x.distance_km - y.distance_km).slice(0, n);
+    const cheapest = near.length ? Math.min(...near.map((x) => Number(x.price))) : null;
+    const pick = NAVIGATORS[this._config.navigator] != null ? NAVIGATORS[this._config.navigator] : 1;
+    const stops = near.map((x) => {
+      const link = navigationLinks(x)[pick];
+      const best = Number(x.price) === cheapest;
+      return `<div class="stop">
+        <span class="name">${esc(x.name)}</span>
+        <span class="big${best ? ' best' : ''}">${esc(this._num(x.price))}</span>
+        <span class="where">${esc(this._num(x.distance_km, 1))} km · ${esc(x.city || '')}</span>
+        ${link ? `<div class="nav"><a href="${esc(link.url)}" target="_blank" rel="noopener noreferrer"><ha-icon icon="${link.icon}"></ha-icon><span>${esc(T('navigate'))} · ${esc(link.label)}</span></a></div>` : ''}
+      </div>`;
+    }).join('');
+    return `<ha-card class="card"><style>${ROAD_STYLE}</style>
+      ${head(`${at.city_name || ''} · ${at.unit_of_measurement || 'Kč/l'}`)}
+      <div class="road">${stops || `<span class="note">${esc(T('no_recent'))}</span>`}</div>
+      <span class="source">${this._source()}</span>
+    </ha-card>`;
+  }
+}
+for (const m of ['_age']) CenyPalivRoadCard.prototype[m] = CenyPalivCard.prototype[m];
+
+// ------------------------------------------------------------------ 10. one price, large, for a wall tablet
+const BIG_STYLE = `
+  .big-card { container-type: inline-size; align-items: center; text-align: center; gap: var(--ha-space-2, 8px); }
+  .big-card .what { font-size: clamp(14px, 6cqi, 28px); color: var(--cp-muted); }
+  .big-card .price { font-size: clamp(40px, 24cqi, 160px); line-height: 1; font-weight: var(--ha-font-weight-normal, 400); font-variant-numeric: tabular-nums; }
+  .big-card .price small { font-size: 0.25em; color: var(--cp-muted); margin-inline-start: 0.2em; }
+  .big-card .where { font-size: clamp(12px, 4.5cqi, 22px); }
+  .big-card .change { display: inline-flex; align-items: center; gap: 4px; font-size: clamp(12px, 4cqi, 20px); --mdc-icon-size: 1.2em; }
+`;
+
+class CenyPalivBigCard extends CenyPalivMiniCard {
+  static get defaults() { return { price: 'cheapest' }; }
+
+  static getStubConfig(hass) {
+    const found = CenyPalivCard.fuels(hass)[0];
+    return { type: 'custom:ceny-paliv-big-card', fuel: found ? found.value : 'n95' };
+  }
+
+  static editorSchema(hass, L) { return CenyPalivBadge.editorSchema(hass, L); }
+
+  setConfig(config) {
+    if (!config || !config.fuel) throw new Error('ceny-paliv-big-card: set "fuel", for example "n95"');
+    super.setConfig(config);
+  }
+
+  getCardSize() { return 4; }
+
+  _render() {
+    const T = (k, v) => this._T(k, v);
+    const fuel = this._config.fuel;
+    const show = BADGE_SHOWS[this._config.price] ? this._config.price : 'cheapest';
+    const top = this._state(fuel, 'top5');
+    if (!top) { this._why = 'missing'; return this._message(); }
+    const st = this._state(fuel, BADGE_SHOWS[show]);
+    const at = top.attributes || {};
+    const ok = st && !['unavailable', 'unknown'].includes(st.state) && isFinite(Number(st.state));
+    const first = (at.stations || [])[0] || {};
+    const where = { cheapest: first.title || first.name || '', mine: st ? st.attributes.station || '' : '', area: at.city_name || '' }[show];
+    const trend = show === 'cheapest' ? first.trends && first.trends['1'] : (show === 'mine' && st ? st.attributes.trends && st.attributes.trends['1'] : null);
+    const r = this._arrow(trend);
+    const what = { cheapest: T('cheapest_badge'), mine: T('my_station'), area: T('series_average') }[show];
+    return `<ha-card class="card big-card" role="button" tabindex="0" data-more-info="${esc((this._sensors[fuel] || {})[BADGE_SHOWS[show]] || this._sensors[fuel].top5)}"><style>${BIG_STYLE}</style>
+      <span class="what">${esc(at.fuel_label || fuel)} · ${esc(what)}</span>
+      <span class="price">${ok ? esc(this._num(st.state)) : '—'}<small>${esc(at.unit_of_measurement || 'Kč/l')}</small></span>
+      ${where ? `<span class="where">${esc(where)}</span>` : ''}
+      ${trend ? `<span class="change ${r.cls}"><ha-icon icon="${r.icon}"></ha-icon>${esc(r.txt)} · ${esc(T('vs_yesterday'))}</span>` : ''}
+    </ha-card>`;
+  }
+}
+
 // ------------------------------------------------------------------ 11. a badge with a price
 const BADGE_STYLE = `
   :host { display: inline-block; }
@@ -2339,6 +2537,9 @@ const MINI_CARDS = [
   ['ceny-paliv-savings-card', CenyPalivSavingsCard, 'Ceny paliv: full tank', 'What a full tank costs at your station, the cheapest one and the average, and whether the drive pays off.'],
   ['ceny-paliv-compare-card', CenyPalivCompareCard, 'Ceny paliv: comparison', 'Your station and area against the region and the country, and the 14 regions ranked.'],
   ['ceny-paliv-regions-card', CenyPalivRegionsCard, 'Ceny paliv: regions map', 'A map of the 14 Czech regions coloured by their average price.'],
+  ['ceny-paliv-areas-card', CenyPalivAreasCard, 'Ceny paliv: areas', 'One fuel in every area: where it is cheapest now and by how much.'],
+  ['ceny-paliv-road-card', CenyPalivRoadCard, 'Ceny paliv: on the road', 'The nearest stations, large, with a navigate button: for a phone in the car.'],
+  ['ceny-paliv-big-card', CenyPalivBigCard, 'Ceny paliv: big price', 'One price, large, readable from across the room.'],
   ['ceny-paliv-stations-map-card', CenyPalivStationsMapCard, 'Ceny paliv: stations map', 'The area\'s stations as coloured prices around its centre; tap one for details and navigation.'],
 ];
 if (!customElements.get('ceny-paliv-mini-editor')) customElements.define('ceny-paliv-mini-editor', CenyPalivMiniEditor);

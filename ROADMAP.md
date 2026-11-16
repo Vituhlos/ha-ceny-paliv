@@ -75,11 +75,11 @@ Stav: přepínač paliv a detail stanice s navigací (Mapy.com, Google Maps, Waz
   3. Srovnání cen: oblast proti kraji a republice, pořadí krajů – hotovo.
   4. Mapa krajů ČR obarvená podle průměrné ceny – hotovo.
   5. Mapa stanic s barevnými cenami a kruhem oblasti – hotovo (kreslená, bez mapových dlaždic).
-  6. Porovnání oblastí (domov, práce, chata).
-  7. Na cestě: nejbližší stanice s navigací (oblast, která jede s vámi).
+  6. Porovnání oblastí (domov, práce, chata) – hotovo.
+  7. Na cestě: nejbližší stanice s navigací (oblast, která jede s vámi) – hotovo.
   8. Co se změnilo: časová osa z událostí změny ceny.
   9. Trend týdne: průměr oblasti a vaše stanice za 7 a 14 dní.
-  10. Velká cena pro nástěnný tablet.
+  10. Velká cena pro nástěnný tablet – hotovo.
   11. Odznak s nejnižší cenou – hotovo.
   12. Prvek do dlaždicové (tile) karty – hotovo.
   13. Žebříček řetězců (průměry počítá integrace z celého stažení).

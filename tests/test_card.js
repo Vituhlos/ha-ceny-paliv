@@ -41,10 +41,10 @@ const context = {
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature };`,
+  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard };`,
   context,
 );
-const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature } = context.testExports;
+const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard } = context.testExports;
 
 const sensor = (fuel, role, configId, extra = {}) => ({
   state: "32.00",
@@ -1112,4 +1112,67 @@ test("the tile feature: what each Ceny paliv sensor says in one line, with the t
   assert.match(feature.shadowRoot.innerHTML, /class="what">Jihomoravský kraj · Czech Republic −0\.23</);
   feature.context = { entity_id: "light.kitchen" };
   assert.equal(feature.shadowRoot.innerHTML, "");
+});
+
+test("areas: one fuel in every area, the cheapest first, named after its device", () => {
+  const labels = { ...LABELS_EN, areas_title: "Areas", areas_sub: "the cheapest first" };
+  const states = {
+    "sensor.ceny_paliv_n95_top5_home": top5("n95", "home", 38.9, { labels }),
+    "sensor.ceny_paliv_n95_area_average_home": role("n95", "home", "area_average", 39.6),
+    "sensor.ceny_paliv_n95_top5_work": top5("n95", "work", 38.2, { labels, city_name: "Ostrava" }),
+    "sensor.ceny_paliv_lpg_top5_cottage": top5("lpg", "cottage", 17.5, { labels }), // no Natural 95 there
+  };
+  const hass = { ...miniHass(states),
+    entities: { "sensor.ceny_paliv_n95_top5_home": { device_id: "d1" }, "sensor.ceny_paliv_n95_top5_work": { device_id: "d2" } },
+    devices: { d1: { name: "Ceny paliv GPS area", name_by_user: "Home" }, d2: { name: "Ceny paliv Ostrava", name_by_user: null } } };
+  const card = new CenyPalivAreasCard();
+  card.setConfig({ fuel: "n95" });
+  card.hass = hass;
+  const html = card.shadowRoot.innerHTML;
+  assert.match(html, /the cheapest first/);
+  assert.ok(html.indexOf(">Ceny paliv Ostrava<") < html.indexOf(">Home<")); // 38.20 before 38.90
+  assert.match(html, /class="price best"><span class="number">38\.20<\/span><span class="diff">Cheapest</);
+  assert.match(html, /<span class="number">38\.90<\/span><span class="diff">\+0\.70</);
+  assert.match(html, /Levna · Hlavni · Area average 39\.60/);
+  card.setConfig({ fuel: "cng" });
+  assert.match(card.shadowRoot.innerHTML, /no Ceny paliv sensors found/);
+});
+
+test("on the road: the nearest up-to-date stations, large, with one navigation app", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const near = (name, price, km, extra = {}) => ({ name, price, distance_km: km, lat: 49.2, lng: 16.6, city: "Brno", updated_date: today, ...extra });
+  const labels = { ...LABELS_EN, road_title: "On the road", road_gps_only: "Only a GPS area knows", navigate: "Navigate" };
+  const states = { "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.5, { labels, max_age_days: 1, gps_area: { radius_km: 10 },
+    gps_nearest_stations: [near("Far", 38.4, 9), near("Near", 39.1, 0.6), near("Old", 30, 0.2, { updated_date: "2000-01-01" }), near("Mid", 38.9, 2.5)] }) };
+  const card = new CenyPalivRoadCard();
+  card.setConfig({ fuel: "n95", stations: 2, navigator: "waze" });
+  card.hass = miniHass(states);
+  const html = card.shadowRoot.innerHTML;
+  assert.ok(html.indexOf(">Near<") < html.indexOf(">Mid<"));
+  assert.doesNotMatch(html, />Far<|>Old</); // two stations, the outdated one left out
+  assert.match(html, /0\.6 km · Brno/);
+  assert.match(html, /href="https:\/\/waze\.com\/ul\?ll=49\.2%2C16\.6&amp;navigate=yes"[^]*Navigate · Waze/);
+  assert.match(html, /class="big best">38\.90</); // the cheaper of the two shown
+  delete states["sensor.ceny_paliv_n95_top5_a"].attributes.gps_area;
+  states["sensor.ceny_paliv_n95_top5_a"].last_updated = "t2"; // new attributes come with a new last_updated
+  card.hass = miniHass({ ...states });
+  assert.match(card.shadowRoot.innerHTML, /Only a GPS area knows/);
+});
+
+test("the big price: one number for a wall tablet, with what it is and the trend", () => {
+  const states = {
+    "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.5),
+    "sensor.ceny_paliv_n95_home_a": role("n95", "a", "home", 39.1, { station: "Shell · Videnska", trends: { 1: { dir: "flat", delta: 0 } } }),
+  };
+  const card = new CenyPalivBigCard();
+  card.setConfig({ fuel: "n95" });
+  card.hass = miniHass(states);
+  let html = card.shadowRoot.innerHTML;
+  assert.match(html, /container-type: inline-size/);
+  assert.match(html, /N95 · Cheapest<\/span>\s*<span class="price">38\.50<small>Kč\/l<\/small>/);
+  assert.match(html, /Levna · Hlavni[^]*mdi:arrow-down/);
+  card.setConfig({ fuel: "n95", price: "mine" });
+  html = card.shadowRoot.innerHTML;
+  assert.match(html, /N95 · My station[^]*39\.10[^]*Shell · Videnska[^]*mdi:equal/);
+  assert.match(html, /data-more-info="sensor.ceny_paliv_n95_home_a"/);
 });
