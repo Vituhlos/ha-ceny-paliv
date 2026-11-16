@@ -41,10 +41,10 @@ const context = {
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths };`,
+  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm };`,
   context,
 );
-const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths } = context.testExports;
+const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm } = context.testExports;
 
 const sensor = (fuel, role, configId, extra = {}) => ({
   state: "32.00",
@@ -1027,4 +1027,33 @@ test("the regions map: the boundaries projected, each region coloured by its pri
   assert.match(card.shadowRoot.innerHTML, /Praha: <b>40\.08 Kč\/l<\/b> · #2 of 2/);
   assert.match(card.shadowRoot.innerHTML, /class="picked"/);
   delete context.fetch;
+});
+
+test("the stations map: the area's circle, every up-to-date station as a dot, labels for the cheapest and yours", () => {
+  const [east, south] = toKm(49.1, 16.7, 49.2, 16.6);
+  assert.equal(Math.round(east * 10) / 10, 7.3); // 0.1° of longitude at 49° north
+  assert.equal(Math.round(south * 10) / 10, 11.1);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const st = (name, price, lat, lng, rank, extra = {}) => ({ name, price, lat, lng, rank, updated_date: today, trends: {}, ...extra });
+  const top = top5("n95", "a", 38.5, {
+    labels: { ...LABELS_EN, map_title: "Stations", map_sub: "{n} up-to-date prices", map_center: "Centre", regions_source: "Boundaries: ČÚZK" },
+    gps_area: { latitude: 49.2, longitude: 16.6, radius_km: 10, station_count: 30 }, excluded: 4, max_age_days: 1,
+    stations: [st("A", 38.5, 49.21, 16.61, 1), st("B", 38.6, 49.25, 16.65, 2, { home: true })],
+    gps_nearest_stations: [st("A", 38.5, 49.21, 16.61, 1), st("Near", 39.9, 49.201, 16.601, 2), { ...st("Old", 30, 49.2, 16.6, 3), updated_date: "2000-01-01" }],
+  });
+  const card = new CenyPalivStationsMapCard();
+  assert.throws(() => card.setConfig({}), /fuel/);
+  card.setConfig({ fuel: "n95" });
+  card.hass = miniHass({ "sensor.ceny_paliv_n95_top5_a": top });
+  const html = card.shadowRoot.innerHTML;
+  assert.match(html, /3 up-to-date prices/); // A once, the outdated one left out
+  assert.match(html, /<circle class="area" cx="200" cy="150" r="138\.9"><\/circle>/); // 10 km fits the 300 px height
+  assert.equal((html.match(/<g class="st[ "]/g) || []).length, 3);
+  assert.match(html, /<g class="st home"/); // your station ringed
+  assert.match(html, /<g class="chip st" data-station="0"[^]*?>38\.50</); // the cheapest labelled
+  assert.doesNotMatch(html, /<g class="chip st" data-station="2"/); // the nearest-only, dearest one is a dot only
+  same(card._rows.list.map((x) => [x.name, x.rank]), [["A", 1], ["B", 2], ["Near", null]]);
+  assert.equal(card._rows.fresh, 26); // ranked among the area's 26 up-to-date stations
+  assert.match(html, /color-mix\(in srgb, var\(--cp-bad-base\) 100%, var\(--cp-good-base\)\)/); // "Near" is the dearest
 });

@@ -6,6 +6,7 @@
  *   custom:ceny-paliv-savings-card  what a full tank costs and how much you save (fuel, config_id, tank_litres, consumption)
  *   custom:ceny-paliv-compare-card  your station, the area, the region and the country, and the 14 regions (fuel, config_id)
  *   custom:ceny-paliv-regions-card  a map of the 14 regions coloured by their average price (fuel, config_id)
+ *   custom:ceny-paliv-stations-map-card  the area's stations as coloured prices around its centre (fuel, config_id)
  *
  * Prices come from mBenzin.cz; this project is independent and not affiliated with mBenzin.
  *
@@ -1542,7 +1543,7 @@ class CenyPalivMiniCard extends HTMLElement {
     for (const f of Object.values(this._sensors)) ids.push(...Object.values(f));
     const sig = [JSON.stringify(this._config), area, new Date().toDateString(), hass.language,
       ...ids.sort().map((id) => `${id}:${hass.states[id].state}:${hass.states[id].last_updated}`)].join('|');
-    if (sig === this._sig) return;
+    if (sig === this._sig || (this._sheet && this._sheet.open)) return;
     this._sig = sig;
     this.shadowRoot.innerHTML = `<style>${STYLE}${MINI_STYLE}</style>${this._area ? this._render() : this._message()}`;
   }
@@ -1964,6 +1965,174 @@ class CenyPalivRegionsCard extends CenyPalivMiniCard {
   }
 }
 
+// ------------------------------------------------------------------ 5. the stations on a map
+// A schematic map drawn by the card: the region borders, the area's circle and centre, and the stations as dots
+// coloured from the cheapest to the dearest, the cheapest ones and yours labelled with their price. No map tiles:
+// it works offline and in any theme. A tap opens the station's details and navigation, as in the main card.
+const MAP_W = 400;
+const MAP_H = 300;
+
+// Kilometres east and south of a point, for a small area (a plane is exact enough within 50 km).
+function toKm(lat, lng, lat0, lng0) {
+  return [(lng - lng0) * Math.cos(lat0 * Math.PI / 180) * 111.32, (lat0 - lat) * 110.574];
+}
+
+const STATIONS_MAP_STYLE = `
+  .smap svg { display: block; width: 100%; height: auto; border-radius: var(--cp-radius); overflow: hidden; }
+  .smap .land { fill: var(--cp-neutral); fill-opacity: 0.12; }
+  .smap .border { fill: none; stroke: var(--cp-line); stroke-width: 1; }
+  .smap .area { fill: var(--cp-home); fill-opacity: 0.06; stroke: var(--cp-home); stroke-opacity: 0.5; stroke-width: 1.5; stroke-dasharray: 5 4; }
+  .smap .center { fill: var(--cp-home); stroke: var(--cp-surface); stroke-width: 2; }
+  .smap .st { cursor: pointer; outline: none; }
+  .smap .st circle { stroke: var(--cp-surface); stroke-width: 1.5; }
+  .smap .st.home circle { stroke: var(--cp-home); stroke-width: 3; }
+  .smap .st:focus-visible circle { stroke: var(--cp-text); stroke-width: 3; }
+  .smap .chip rect { fill: var(--cp-surface); stroke: currentColor; stroke-width: 1.5; }
+  .smap .chip text { fill: var(--cp-text); font-size: 11px; font-weight: 500; font-family: inherit; font-variant-numeric: tabular-nums; }
+`;
+
+class CenyPalivStationsMapCard extends CenyPalivMiniCard {
+  constructor() {
+    super();
+    this._sort = 'map';  // a station from the nearest list has no price rank in its details
+    this.shadowRoot.addEventListener('click', (e) => this._tap(e));
+    this.shadowRoot.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') this._tap(e); });
+  }
+
+  static getStubConfig(hass) {
+    const found = CenyPalivCard.fuels(hass)[0];
+    return { type: 'custom:ceny-paliv-stations-map-card', fuel: found ? found.value : 'n95' };
+  }
+
+  static editorSchema(hass) {
+    return [{ name: 'fuel', required: true, selector: { select: { mode: 'dropdown', options: CenyPalivCard.fuels(hass) } } }];
+  }
+
+  setConfig(config) {
+    if (!config || !config.fuel) throw new Error('ceny-paliv-stations-map-card: set "fuel", for example "n95"');
+    super.setConfig(config);
+  }
+
+  getCardSize() { return 6; }
+
+  // the up-to-date stations: the cheapest ones and, in a GPS area, the nearest ones, each once
+  _stations(at) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const maxAge = at.max_age_days != null ? Number(at.max_age_days) : 1;
+    const fresh = (list) => (Array.isArray(list) ? list : []).filter((x) => this._age(x, today) <= maxAge);
+    const seen = new Set();
+    const out = [];
+    const cheapest = new Set(fresh(at.stations));
+    for (const x of fresh(at.stations).concat(fresh(at.gps_nearest_stations))) {
+      const id = `${x.name}|${x.lat}|${x.lng}|${x.price}`;
+      if (seen.has(id) || !isFinite(Number(x.lat)) || !isFinite(Number(x.lng)) || !isFinite(Number(x.price))) continue;
+      seen.add(id);
+      out.push(Object.assign({}, x, { rank: cheapest.has(x) ? x.rank : null }));
+    }
+    return out;
+  }
+
+  _render() {
+    const T = (k, v) => this._T(k, v);
+    const fuel = this._config.fuel;
+    const top = this._state(fuel, 'top5');
+    if (!top) { this._why = 'missing'; return this._message(); }
+    if (!regionGeometry) {
+      const loading = loadRegionGeometry();
+      if (loading) loading.then(() => { this._sig = ''; if (this._hass) this.hass = this._hass; });
+    }
+    const at = top.attributes || {};
+    this._ids = { top5: this._sensors[fuel].top5 };  // the borrowed details use the area's logos
+    const stations = this._stations(at);
+    const prices = stations.map((x) => Number(x.price));
+    const min = prices.length ? Math.min(...prices) : null;
+    const max = prices.length ? Math.max(...prices) : null;
+    const unit = at.unit_of_measurement || 'Kč/l';
+    // the details rank a station among all the area's up-to-date stations, as the main card does
+    const total = at.city_total != null ? at.city_total : (at.gps_area && at.gps_area.station_count);
+    const upToDate = total != null && isFinite(Number(total)) ? Number(total) - Number(at.excluded || 0) : stations.length;
+    this._rows = { list: stations, fresh: Math.max(upToDate, stations.length), unit, min };
+    const area = at.gps_area || null;
+    const center = CenyPalivCard.prototype._center.call(this, at);
+    // the frame: the circle of a GPS area, else the stations with a kilometre around them
+    let lat0; let lng0; let half;
+    if (area && center && Number(area.radius_km) > 0) {
+      [lat0, lng0] = center;
+      half = Number(area.radius_km) * 1.08;
+    } else if (stations.length) {
+      const lats = stations.map((x) => Number(x.lat));
+      const lngs = stations.map((x) => Number(x.lng));
+      lat0 = (Math.min(...lats) + Math.max(...lats)) / 2;
+      lng0 = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+      const [w, h] = toKm(Math.min(...lats), Math.max(...lngs), lat0, lng0).map(Math.abs);
+      half = Math.max(2, w * MAP_H / MAP_W, h) + 1;
+    } else {
+      return `<ha-card class="card"><span class="note">${esc(T('no_recent'))}</span></ha-card>`;
+    }
+    const scale = (Math.min(MAP_W, MAP_H) / 2) / half;  // view units per kilometre: the frame fits the shorter side
+    const view = (lat, lng) => { const [x, y] = toKm(lat, lng, lat0, lng0); return [MAP_W / 2 + x * scale, MAP_H / 2 + y * scale]; };
+    const pts = (ring) => ring.map(([lat, lng]) => view(lat, lng).map((v) => v.toFixed(1)).join(',')).join('L');
+    let land = '';
+    if (regionGeometry && regionGeometry.regions) {
+      const d = regionGeometry.regions.map((r) => r.polygons.map((p) => `M${pts(p[0])}Z`).join('')).join('');
+      land = `<path class="land" d="${d}"></path><path class="border" d="${d}"></path>`;
+    }
+    const circle = area && center && Number(area.radius_km) > 0
+      ? `<circle class="area" cx="${MAP_W / 2}" cy="${MAP_H / 2}" r="${(Number(area.radius_km) * scale).toFixed(1)}"></circle>` : '';
+    const mark = center ? (() => { const [cx, cy] = view(center[0], center[1]); return `<circle class="center" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5"><title>${esc(T('map_center'))}</title></circle>`; })() : '';
+    const colour = (price) => {
+      const t = max > min ? Math.round(100 * (price - min) / (max - min)) : 0;
+      return `color-mix(in srgb, var(--cp-bad-base) ${t}%, var(--cp-good-base))`;
+    };
+    // labels for the five cheapest and your station, the cheapest first; one that would cover another is left out
+    const placed = [];
+    const order = stations.map((x, i) => i).sort((a, b) => stations[a].price - stations[b].price);
+    const labelled = new Set(order.filter((i) => stations[i].rank != null || stations[i].home).slice(0, 6));
+    const dots = [];  // the dearest first, so the cheapest dots lie on top
+    const chips = [];
+    for (const i of order) {
+      const x = stations[i];
+      const [px, py] = view(Number(x.lat), Number(x.lng));
+      const label = `${x.name}: ${this._num(x.price)} ${unit}`;
+      dots.unshift(`<g class="st${x.home ? ' home' : ''}" role="button" tabindex="0" data-station="${i}" aria-label="${esc(label)}" style="color: ${colour(Number(x.price))}">
+        <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="6" fill="currentColor"></circle><title>${esc(label)}</title></g>`);
+      if (!labelled.has(i)) continue;
+      const text = this._num(x.price);
+      const w = 8 + text.length * 6.2;
+      const box = [px - w / 2, py - 27, w, 18];
+      if (placed.some((b) => box[0] < b[0] + b[2] && b[0] < box[0] + box[2] && box[1] < b[1] + b[3] && b[1] < box[1] + box[3])) continue;
+      placed.push(box);
+      chips.push(`<g class="chip st" data-station="${i}" style="color: ${colour(Number(x.price))}"><rect x="${box[0].toFixed(1)}" y="${box[1].toFixed(1)}" width="${w.toFixed(1)}" height="18" rx="9"></rect>
+        <text x="${px.toFixed(1)}" y="${(py - 14.5).toFixed(1)}" text-anchor="middle">${esc(text)}</text></g>`);
+    }
+    const where = area ? `${at.city_name || ''} · ${this._num(area.radius_km, 0)} km` : (at.city_name || '');
+    return `<ha-card class="card"><style>${STATIONS_MAP_STYLE}${REGIONS_STYLE}</style>
+      <div class="head"><span class="icon fuel"><ha-icon icon="mdi:map-marker-multiple-outline"></ha-icon></span>
+        <div class="info"><span class="primary">${esc(T('map_title'))} · ${esc(at.fuel_label || fuel)}</span>
+          <span class="secondary">${esc(where)} · ${esc(T('map_sub', { n: stations.length }))}</span></div></div>
+      <div class="smap"><svg viewBox="0 0 ${MAP_W} ${MAP_H}" role="group" aria-label="${esc(T('map_title'))}">${land}${circle}${mark}${dots.join('')}${chips.join('')}</svg></div>
+      ${min != null ? `<div class="scale"><span>${esc(this._num(min))}</span><span class="ramp" aria-hidden="true"></span><span>${esc(this._num(max))}</span></div>` : ''}
+      <span class="source">${this._source()} · ${esc(T('regions_source'))}</span>
+    </ha-card>`;
+  }
+
+  _tap(e) {
+    const path = e.composedPath ? e.composedPath() : [];
+    if (path.some((n) => n.dataset && n.dataset.close !== undefined)) { if (this._sheet) this._sheet.close(); return; }
+    const t = path.find((n) => n.dataset && n.dataset.station !== undefined);
+    if (!t) return;
+    if (e.preventDefault) e.preventDefault();
+    const fresh = !this._sheet;
+    this._openStation(Number(t.dataset.station));
+    // the map is drawn again once the details close (it waits while they are open)
+    if (fresh && this._sheet) this._sheet.addEventListener('close', () => { this._sig = ''; if (this._hass) this.hass = this._hass; });
+  }
+}
+// the station details of the main card: the same panel, the same navigation
+for (const m of ['_stationHtml', '_openStation', '_trendTiles', '_when', '_age', '_avatar', '_disc', '_logoUrl', '_initials']) {
+  CenyPalivStationsMapCard.prototype[m] = CenyPalivCard.prototype[m];
+}
+
 // ------------------------------------------------------------------ the editor of the small cards
 class CenyPalivMiniEditor extends HTMLElement {
   setConfig(config) { this._config = config; this._render(); }
@@ -2012,6 +2181,7 @@ const MINI_CARDS = [
   ['ceny-paliv-savings-card', CenyPalivSavingsCard, 'Ceny paliv: full tank', 'What a full tank costs at your station, the cheapest one and the average, and whether the drive pays off.'],
   ['ceny-paliv-compare-card', CenyPalivCompareCard, 'Ceny paliv: comparison', 'Your station and area against the region and the country, and the 14 regions ranked.'],
   ['ceny-paliv-regions-card', CenyPalivRegionsCard, 'Ceny paliv: regions map', 'A map of the 14 Czech regions coloured by their average price.'],
+  ['ceny-paliv-stations-map-card', CenyPalivStationsMapCard, 'Ceny paliv: stations map', 'The area\'s stations as coloured prices around its centre; tap one for details and navigation.'],
 ];
 if (!customElements.get('ceny-paliv-mini-editor')) customElements.define('ceny-paliv-mini-editor', CenyPalivMiniEditor);
 for (const [type, cls, name, description] of MINI_CARDS) {
