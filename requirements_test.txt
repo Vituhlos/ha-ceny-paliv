@@ -1,1 +1,3 @@
 pytest-homeassistant-custom-component==0.13.201
+# the integration's own dependency (manifest.json); Home Assistant installs it from PyPI
+aiombenzin==0.1.0

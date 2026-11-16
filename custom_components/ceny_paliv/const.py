@@ -39,7 +39,7 @@ CONF_LOGOS = "logos"  # logo ids ticked in the setup
 
 NONE_VALUE = "__none__"
 
-URL = "https://www.mbenzin.cz/Mapa-cen/data"
+# sent with every request to mBenzin.cz (through aiombenzin) and to the logo pack
 USER_AGENT = "HomeAssistant-ceny-paliv"
 
 # fuel code -> (label, unit)
@@ -76,8 +76,6 @@ MARKER_CACHE_TTL = UPDATE_INTERVAL - timedelta(minutes=10)
 STALE_DATA_AFTER = timedelta(hours=24)
 # The refresh action downloads again only data older than this, so repeated calls cannot flood mBenzin.cz.
 FORCED_REFRESH_MIN_AGE = timedelta(minutes=30)
-# Upper bound for a provider Retry-After value, so a broken header cannot block a key until restart.
-MAX_RETRY_AFTER = timedelta(hours=24)
 
 MAPS = "https://www.google.com/maps/search/?api=1&query={lat},{lng}"
 

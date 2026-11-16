@@ -4,6 +4,10 @@
 
 ### Changed
 
+- **The download moves to the aiombenzin library** (quality scale: dependency-transparency, async-dependency,
+  inject-websession): `aiombenzin==0.1.0` from PyPI (github.com/Vituhlos/aiombenzin), installed by Home Assistant with
+  the integration. It takes Home Assistant's HTTP session and sends the same requests as before; the cache, the
+  processing and the card stay in the integration. No change in behaviour.
 - **Fully typed** (quality scale: strict-typing): the integration passes `mypy --strict`, checked in CI. It imports
   probatio, Home Assistant's schema library since 2026.x, where it exists, and voluptuous on older versions. No change
   in behaviour.
