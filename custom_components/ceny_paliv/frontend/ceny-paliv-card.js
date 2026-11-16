@@ -1,5 +1,10 @@
 /*
- * Ceny paliv card — shipped with the Ceny paliv integration, nothing to install separately.
+ * Ceny paliv cards — shipped with the Ceny paliv integration, nothing to install separately.
+ *
+ *   custom:ceny-paliv-card          one fuel: your station, the cheapest stations, map and graph (below)
+ *   custom:ceny-paliv-fuels-card    every fuel of an area at a glance (config_id, fuels)
+ *   custom:ceny-paliv-savings-card  what a full tank costs and how much you save (fuel, config_id, tank_litres, consumption)
+ *
  * Prices come from mBenzin.cz; this project is independent and not affiliated with mBenzin.
  *
  *   type: custom:ceny-paliv-card
@@ -1356,7 +1361,7 @@ class CenyPalivCard extends HTMLElement {
 // ------------------------------------------------------------------ visual editor
 const EDITOR_TEXT = {
   en: {
-    fuel: 'Fuel', fuels: 'Switch between fuels', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
+    fuel: 'Fuel', fuels: 'Fuels (switch, or the fuels shown)', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
     map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
     sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
     consumption: 'Consumption per 100 km in litres, kg for CNG (for "worth it")', price: 'Price', distance: 'Distance', worth: 'Worth the drive',
@@ -1364,7 +1369,7 @@ const EDITOR_TEXT = {
     auto: 'Automatic: 2 columns when the card is wide', columns: 'Always 2 columns', stack: 'Always 1 column',
   },
   cs: {
-    fuel: 'Palivo', fuels: 'Přepínat mezi palivy', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
+    fuel: 'Palivo', fuels: 'Paliva (přepínač, nebo zobrazená paliva)', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
     map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
     sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
     consumption: 'Spotřeba na 100 km v litrech, u CNG v kg (pro „vyplatí se“)', price: 'Cena', distance: 'Vzdálenost', worth: 'Vyplatí se dojet',
@@ -1455,4 +1460,324 @@ if (!window.customCards.some((c) => c.type === 'ceny-paliv-card')) {
     description: 'Czech fuel prices: cheapest stations of your city, your favourite station, map and a 30-day graph against the cheapest and the average, with navigation to a station (data from mBenzin.cz).',
   });
 }
+// ================================================================== the other cards
+// Small cards for a dashboard: each shows one thing of one area (config entry), from the same sensors.
+
+const FUEL_ORDER = ['n95', 'benzinplus', 'diesel', 'dieselplus', 'lpg', 'cng', 'adblue'];
+const AREA_ROLES = ['top5', 'home', 'national_average', 'region_average', 'area_average'];
+
+// The areas (config entries) with sensors, by their top5 sensors.
+function areaIds(hass) {
+  const out = [];
+  for (const [id, st] of Object.entries((hass && hass.states) || {})) {
+    const a = st.attributes || {};
+    if (id.startsWith('sensor.ceny_paliv_') && a.cp_role === 'top5' && a.cp_config_id && !restored(st) && !out.includes(a.cp_config_id)) out.push(a.cp_config_id);
+  }
+  return out.sort();
+}
+
+// The sensors of one area by fuel and role (the active favourite only).
+function areaSensors(hass, configId) {
+  const out = {};
+  for (const [id, st] of Object.entries((hass && hass.states) || {})) {
+    const a = st.attributes || {};
+    if (!id.startsWith('sensor.ceny_paliv_') || a.cp_config_id !== configId || !AREA_ROLES.includes(a.cp_role) || !a.cp_fuel || restored(st)) continue;
+    if (a.cp_role === 'home' && ['unavailable', 'unknown'].includes(st.state)) continue;
+    (out[a.cp_fuel] = out[a.cp_fuel] || {})[a.cp_role] = id;
+  }
+  return out;
+}
+
+// The areas for an editor's dropdown: their name and the start of their id.
+function areaOptions(hass) {
+  const seen = {};
+  for (const [id, st] of Object.entries((hass && hass.states) || {})) {
+    const a = st.attributes || {};
+    if (id.startsWith('sensor.ceny_paliv_') && a.cp_role === 'top5' && a.cp_config_id && !(a.cp_config_id in seen)) {
+      seen[a.cp_config_id] = `${a.city_name || 'GPS area'} (${a.cp_config_id.slice(0, 8)})`;
+    }
+  }
+  return Object.entries(seen).map(([value, label]) => ({ value, label })).sort((x, y) => x.label.localeCompare(y.label));
+}
+
+const MINI_STYLE = `
+  .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ha-space-2, 8px); }
+  .tiles .trend { min-height: 56px; }
+  .tiles .delta { font-size: var(--ha-font-size-m, 14px); }
+  .tiles .trend.best .delta { color: var(--cp-good); }
+  .row .icon { width: 36px; height: 36px; --mdc-icon-size: 20px; }
+  .row .price .diff.mine { color: var(--cp-home); }
+`;
+
+class CenyPalivMiniCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+    this._sig = '';
+    this.shadowRoot.addEventListener('click', (e) => this._open(e));
+    this.shadowRoot.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._open(e); } });
+  }
+
+  static get defaults() { return {}; }
+
+  setConfig(config) {
+    if (!config) throw new Error('ceny-paliv: missing configuration');
+    this._config = Object.assign({}, this.constructor.defaults, config);
+    this._sig = '';
+    if (this._hass) this.hass = this._hass;
+  }
+
+  set hass(hass) {
+    hass = withLastKnown(hass);
+    this._hass = hass;
+    if (!this._config) return;
+    const areas = areaIds(hass);
+    const area = this._config.config_id && areas.includes(this._config.config_id) ? this._config.config_id : (areas.length === 1 ? areas[0] : null);
+    this._area = area;
+    this._why = area ? null : (this._config.config_id ? 'gone' : (areas.length ? 'ambiguous' : 'missing'));
+    this._sensors = area ? areaSensors(hass, area) : {};
+    const ids = [];
+    for (const f of Object.values(this._sensors)) ids.push(...Object.values(f));
+    const sig = [JSON.stringify(this._config), area, new Date().toDateString(), hass.language,
+      ...ids.sort().map((id) => `${id}:${hass.states[id].state}:${hass.states[id].last_updated}`)].join('|');
+    if (sig === this._sig) return;
+    this._sig = sig;
+    this.shadowRoot.innerHTML = `<style>${STYLE}${MINI_STYLE}</style>${this._area ? this._render() : this._message()}`;
+  }
+
+  getCardSize() { return 3; }
+  getGridOptions() { return { columns: 6, min_columns: 3, rows: 'auto' }; }
+
+  // the texts of the integration's language, from any top5 sensor of the area
+  _labels() {
+    for (const f of Object.values(this._sensors || {})) {
+      const top = f.top5 && this._hass.states[f.top5];
+      if (top && top.attributes && top.attributes.labels) return top.attributes.labels;
+    }
+    return {};
+  }
+
+  _state(fuel, role) {
+    const id = ((this._sensors || {})[fuel] || {})[role];
+    return id ? this._hass.states[id] : null;
+  }
+
+  _fuels() {
+    const have = Object.keys(this._sensors || {}).filter((f) => this._sensors[f].top5);
+    const wanted = Array.isArray(this._config.fuels) && this._config.fuels.length ? this._config.fuels : FUEL_ORDER.concat(have);
+    return wanted.filter((f, i) => have.includes(f) && wanted.indexOf(f) === i);
+  }
+
+  _message() {
+    const cs = ((this._hass && this._hass.language) || 'en').split('-')[0] === 'cs';
+    const text = {
+      missing: cs ? 'nebyly nalezeny žádné senzory Ceny paliv.' : 'no Ceny paliv sensors found.',
+      ambiguous: cs ? 'máte více oblastí — vyberte jednu v editoru karty.' : 'there are several areas — choose one in the card editor.',
+      gone: cs ? 'zvolená oblast už neexistuje — vyberte ji znovu v editoru karty.' : 'the chosen area no longer exists — choose it again in the card editor.',
+    }[this._why];
+    return `<ha-card class="card message"><ha-icon icon="mdi:gas-station-off-outline"></ha-icon><span>Ceny paliv: ${esc(text)}</span></ha-card>`;
+  }
+
+  _money(value) { return `${this._num(value, 0)} Kč`; }
+
+  _open(e) {
+    const t = e.composedPath ? e.composedPath().find((n) => n.dataset && n.dataset.moreInfo) : null;
+    if (t) this.dispatchEvent(new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: t.dataset.moreInfo } }));
+  }
+
+  static getConfigElement() {
+    const editor = document.createElement('ceny-paliv-mini-editor');
+    editor.card = this;
+    return editor;
+  }
+}
+// the formatting of the main card: numbers, days and texts as there
+for (const m of ['_T', '_numberLocale', '_num', '_day', '_arrow', '_source']) CenyPalivMiniCard.prototype[m] = CenyPalivCard.prototype[m];
+
+// ------------------------------------------------------------------ 1. every fuel at a glance
+class CenyPalivFuelsCard extends CenyPalivMiniCard {
+  static getStubConfig() { return { type: 'custom:ceny-paliv-fuels-card' }; }
+
+  static editorSchema(hass) {
+    return [{ name: 'fuels', selector: { select: { multiple: true, mode: 'list', options: CenyPalivCard.fuels(hass) } } }];
+  }
+
+  getCardSize() { return 1 + this._fuels().length; }
+
+  _render() {
+    const T = (k, v) => this._T(k, v);
+    const fuels = this._fuels();
+    const first = this._state(fuels[0], 'top5');
+    const rows = fuels.map((fuel) => {
+      const top = this._state(fuel, 'top5');
+      const home = this._state(fuel, 'home');
+      const a = top.attributes || {};
+      const cheapest = (a.stations || [])[0];
+      const ok = !['unavailable', 'unknown'].includes(top.state);
+      const unit = a.unit_of_measurement || 'Kč/l';
+      // the price's direction since yesterday: your station's, else the cheapest station's
+      const trend = (home && home.attributes.trends && home.attributes.trends['1']) || (cheapest && cheapest.trends && cheapest.trends['1']);
+      const r = this._arrow(trend);
+      const mine = home && !['unavailable', 'unknown'].includes(home.state) ? T('mine_short', { p: this._num(home.state) }) : '';
+      const where = cheapest ? (cheapest.title || cheapest.name || '') : T('no_recent');
+      return `<div class="row" role="button" tabindex="0" data-more-info="${esc(top.entity_id || this._sensors[fuel].top5)}" aria-label="${esc(a.fuel_label || fuel)}: ${ok ? this._num(top.state) : '—'} ${esc(unit)}">
+        <span class="icon fuel"><ha-icon icon="mdi:gas-station"></ha-icon></span>
+        <div class="info"><span class="primary">${esc(a.fuel_label || fuel)}</span><span class="secondary">${esc(where)}</span></div>
+        <span class="change ${r.cls}" title="${esc(T('vs_yesterday'))}">${trend ? `<ha-icon icon="${r.icon}"></ha-icon>` : ''}${esc(r.txt)}</span>
+        <span class="price"><span class="number">${ok ? this._num(top.state) : '—'}</span>${mine ? `<span class="diff mine">${esc(mine)}</span>` : ''}</span>
+      </div>`;
+    }).join('');
+    const area = first ? first.attributes.city_name || '' : '';
+    return `<ha-card class="card">
+      <div class="head"><span class="icon fuel"><ha-icon icon="mdi:gas-station-outline"></ha-icon></span>
+        <div class="info"><span class="primary">${esc(T('fuels_title'))}</span><span class="secondary">${esc(area)}</span></div></div>
+      <div class="rows">${rows}</div>
+      <span class="source">${this._source()}</span>
+    </ha-card>`;
+  }
+}
+
+// ------------------------------------------------------------------ 2. what a full tank costs, and the saving
+// Your station against the cheapest and the area average; the extra drive to the cheapest is counted as in the main
+// card's "worth it" order (there and back, in a straight line, at your consumption).
+function fillUpSaving({ mine, cheapest, tank, consumption, kmMine, kmCheapest }) {
+  if (cheapest == null || mine == null || mine <= cheapest) return null;
+  const save = (mine - cheapest) * tank;
+  if (kmMine == null || kmCheapest == null) return { save, extraKm: null, driveCost: null, net: null };
+  const extraKm = Math.max(0, 2 * (kmCheapest - kmMine));
+  const driveCost = (extraKm * consumption / 100) * cheapest;
+  return { save, extraKm, driveCost, net: save - driveCost };
+}
+
+class CenyPalivSavingsCard extends CenyPalivMiniCard {
+  static get defaults() { return { tank_litres: 40, consumption: 6.5 }; }
+
+  static getStubConfig(hass) {
+    const found = CenyPalivCard.fuels(hass)[0];
+    return { type: 'custom:ceny-paliv-savings-card', fuel: found ? found.value : 'n95' };
+  }
+
+  static editorSchema(hass) {
+    return [
+      { name: 'fuel', required: true, selector: { select: { mode: 'dropdown', options: CenyPalivCard.fuels(hass) } } },
+      { name: 'tank_litres', selector: { number: { min: 5, max: 150, step: 1, mode: 'box' } } },
+      { name: 'consumption', selector: { number: { min: 1, max: 30, step: 0.1, mode: 'box' } } },
+    ];
+  }
+
+  setConfig(config) {
+    if (!config || !config.fuel) throw new Error('ceny-paliv-savings-card: set "fuel", for example "n95"');
+    super.setConfig(config);
+  }
+
+  _km(station, at) {
+    if (!station) return null;
+    if (station.distance_km != null && isFinite(Number(station.distance_km))) return Number(station.distance_km);
+    const lat = Number(station.lat != null ? station.lat : station.latitude);
+    const lng = Number(station.lng != null ? station.lng : station.longitude);
+    const center = CenyPalivCard.prototype._center.call(this, at);
+    return center && isFinite(lat) && isFinite(lng) && (station.lat != null || station.latitude != null) ? kmBetween(center[0], center[1], lat, lng) : null;
+  }
+
+  _render() {
+    const T = (k, v) => this._T(k, v);
+    const fuel = this._config.fuel;
+    const top = this._state(fuel, 'top5');
+    if (!top) { this._why = 'missing'; return this._message(); }
+    const home = this._state(fuel, 'home');
+    const avg = this._state(fuel, 'area_average');
+    const at = top.attributes || {};
+    const positive = (v, d) => (Number(v) > 0 ? Number(v) : d);
+    const tank = positive(this._config.tank_litres, 40);
+    const consumption = positive(this._config.consumption, 6.5);
+    const amount = /kg/.test(at.unit_of_measurement || '') ? 'kg' : 'l';
+    const number = (st) => (st && !['unavailable', 'unknown'].includes(st.state) && isFinite(Number(st.state)) ? Number(st.state) : null);
+    const cheapestStation = (at.stations || [])[0];
+    const cheapest = number(top);
+    const mine = number(home);
+    const average = number(avg);
+    const name = (cheapestStation && cheapestStation.name) || '';
+    const tile = (label, price, best) => `<div class="trend${best ? ' best' : ''}"><span class="label">${esc(label)}</span>
+      <span class="delta">${price == null ? '—' : esc(this._money(price * tank))}</span></div>`;
+    const tiles = [
+      home ? tile(T('my_station'), mine, mine != null && mine <= cheapest) : '',
+      tile(T('cheapest_badge'), cheapest, true),
+      avg ? tile(T('series_average'), average, false) : '',
+    ].filter(Boolean);
+    const saving = fillUpSaving({ mine, cheapest, tank, consumption, kmMine: this._km(home && home.attributes, at), kmCheapest: this._km(cheapestStation, at) });
+    let status;
+    if (saving) status = { cls: 'good', icon: 'mdi:piggy-bank-outline', text: T('save_at', { name, d: this._num(saving.save, 0) }) };
+    else if (mine != null && cheapest != null) status = { cls: 'good', icon: 'mdi:trophy-outline', text: T('mine_cheapest') };
+    else if (average != null && cheapest != null && average > cheapest) status = { cls: 'good', icon: 'mdi:piggy-bank-outline', text: T('save_vs_avg', { name, d: this._num((average - cheapest) * tank, 0) }) };
+    else status = null;
+    let drive = '';
+    if (saving && saving.extraKm != null && saving.extraKm > 0) {
+      const worth = saving.net > 0;
+      drive = `<div class="status ${worth ? 'muted' : 'warn'}"><ha-icon icon="mdi:car-arrow-right"></ha-icon><span>${esc(T('drive_extra', { km: this._num(saving.extraKm, 1), d: this._num(saving.driveCost, 0) }))} · ${esc(worth ? T('worth_yes', { d: this._num(saving.net, 0) }) : T('worth_no'))}</span></div>`;
+    }
+    return `<ha-card class="card" role="button" tabindex="0" data-more-info="${esc(this._sensors[fuel].home || this._sensors[fuel].top5)}">
+      <div class="head"><span class="icon home"><ha-icon icon="mdi:fuel"></ha-icon></span>
+        <div class="info"><span class="primary">${esc(T('savings_title'))} · ${esc(at.fuel_label || fuel)}</span>
+          <span class="secondary">${esc(T('fill_up', { n: this._num(tank, 0), u: amount }))} · ${esc(at.city_name || '')}</span></div></div>
+      <div class="tiles" style="grid-template-columns: repeat(${tiles.length}, minmax(0, 1fr))">${tiles.join('')}</div>
+      ${status ? `<div class="status ${status.cls}"><ha-icon icon="${status.icon}"></ha-icon><span>${esc(status.text)}</span></div>` : ''}
+      ${drive}
+      <span class="source">${this._source()}</span>
+    </ha-card>`;
+  }
+}
+
+// ------------------------------------------------------------------ the editor of the small cards
+class CenyPalivMiniEditor extends HTMLElement {
+  setConfig(config) { this._config = config; this._render(); }
+  set hass(hass) { this._hass = hass; this._render(); }
+
+  _render() {
+    if (!this._hass || !this._config || !this.card) return;
+    const code = (this._hass.language || 'en').split('-')[0];
+    const L = EDITOR_TEXT[code in EDITOR_TEXT ? code : 'en'];
+    const areas = areaOptions(this._hass);
+    const stale = !!this._config.config_id && !areas.some((a) => a.value === this._config.config_id);
+    const schema = [
+      ...(areas.length > 1 || stale ? [{ name: 'config_id', selector: { select: { mode: 'dropdown', options: areas } } }] : []),
+      ...this.card.editorSchema(this._hass),
+    ];
+    const key = JSON.stringify([code, schema, this._config]);
+    if (key === this._key) return;
+    this._key = key;
+    if (!this._form) {
+      this._form = document.createElement('ha-form');
+      this._form.addEventListener('value-changed', (e) => {
+        // keep only what the user set: the defaults shown in the form are not saved
+        const defaults = this.card.defaults;
+        const config = Object.assign({}, this._config);
+        for (const [k, v] of Object.entries(e.detail.value || {})) {
+          if (!(k in this._config) && JSON.stringify(v) === JSON.stringify(defaults[k])) continue;
+          config[k] = v;
+        }
+        for (const k of Object.keys(config)) {
+          const v = config[k];
+          if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) delete config[k];
+        }
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config }, bubbles: true, composed: true }));
+      });
+      this.appendChild(this._form);
+    }
+    this._form.hass = this._hass;
+    this._form.data = Object.assign({}, this.card.defaults, this._config);
+    this._form.schema = schema;
+    this._form.computeLabel = (field) => L[field.name] || field.name;
+  }
+}
+
+const MINI_CARDS = [
+  ['ceny-paliv-fuels-card', CenyPalivFuelsCard, 'Ceny paliv: all fuels', 'Every fuel of an area at a glance: the cheapest price, your station and the trend.'],
+  ['ceny-paliv-savings-card', CenyPalivSavingsCard, 'Ceny paliv: full tank', 'What a full tank costs at your station, the cheapest one and the average, and whether the drive pays off.'],
+];
+if (!customElements.get('ceny-paliv-mini-editor')) customElements.define('ceny-paliv-mini-editor', CenyPalivMiniEditor);
+for (const [type, cls, name, description] of MINI_CARDS) {
+  if (!customElements.get(type)) customElements.define(type, cls);
+  if (!window.customCards.some((c) => c.type === type)) window.customCards.push({ type, name, preview: true, description });
+}
+
 console.info(`%c Ceny paliv card %c ${CARD_VERSION} `, 'color:#fff;background:#f5b14c;font-weight:700', 'color:#f5b14c;background:#171a20');

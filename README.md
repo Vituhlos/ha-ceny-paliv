@@ -214,6 +214,24 @@ map_height: 260
 
 (The three cards are separate; `---` only separates them here.) In a *sections* dashboard the card also resizes itself to its content.
 
+### More cards for a dashboard
+
+Besides the main card, the integration brings smaller cards, also in the card picker (search "Ceny paliv"). Each shows one area; with several areas choose one in its editor (`config_id`).
+
+| Card | What it shows | Options |
+|---|---|---|
+| `custom:ceny-paliv-fuels-card` | every fuel of the area at a glance: the cheapest price and station, your station's price, the trend since yesterday | `fuels` (which and in what order; default all) |
+| `custom:ceny-paliv-savings-card` | what a full tank costs at your station, at the cheapest one and at the area's average price, how much you save, and whether the longer drive to the cheapest pays off | `fuel` (required), `tank_litres` (40; kg for CNG), `consumption` (6.5 per 100 km) |
+
+```yaml
+type: custom:ceny-paliv-savings-card
+fuel: n95
+tank_litres: 45
+consumption: 7.2
+```
+
+The drive is counted only when the cheapest station is farther than yours: twice the extra distance (there and back, in a straight line) at your consumption and the cheapest price.
+
 For a notification when your station's price changes, see `examples/price_alert.yaml`.
 
 ## 4. Station logos (optional)

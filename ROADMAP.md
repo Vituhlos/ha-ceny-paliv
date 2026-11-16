@@ -69,8 +69,22 @@ Stav: přepínač paliv a detail stanice s navigací (Mapy.com, Google Maps, Waz
 - Nová karta: více paliv s přepínačem, detail stanice (vysouvací panel s historií a navigací do Mapy.cz,
   Google Maps a Waze), vlastní graf (moje stanice proti nejlevnější v okolí), vlastní mapa s barevnými cenami
   a kruhem oblasti, řazení podle ceny / vzdálenosti / „vyplatí se dojet?“.
-- Odznak s nejnižší cenou a prvky pro dlaždicovou (tile) kartu.
-- Strategie, která sama vygeneruje celý dashboard „Ceny paliv“.
+- Karty pro dashboard (pořadí schválené 16. 11. 2026):
+  1. Všechna paliva najednou – hotovo.
+  2. Kolik ušetříte na plné nádrži (i s cestou) – hotovo.
+  3. Srovnání cen: oblast proti kraji a republice, pořadí krajů.
+  4. Mapa krajů ČR obarvená podle průměrné ceny.
+  5. Mapa stanic s barevnými cenami a kruhem oblasti.
+  6. Porovnání oblastí (domov, práce, chata).
+  7. Na cestě: nejbližší stanice s navigací (oblast, která jede s vámi).
+  8. Co se změnilo: časová osa z událostí změny ceny.
+  9. Trend týdne: průměr oblasti a vaše stanice za 7 a 14 dní.
+  10. Velká cena pro nástěnný tablet.
+  11. Odznak s nejnižší cenou.
+  12. Prvek do dlaždicové (tile) karty.
+  13. Žebříček řetězců (průměry počítá integrace z celého stažení).
+  14. Výhodnost LPG a CNG (cena za kilometr podle spotřeby).
+- Strategie, která sama vygeneruje celý dashboard „Ceny paliv“ z těchto karet.
 
 ## 0.10 – kniha tankování a hlas
 
