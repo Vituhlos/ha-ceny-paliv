@@ -23,12 +23,22 @@
       },
       "location_method": {
         "title": "GPS area centre",
-        "description": "Choose how to set the centre of the search area. No phone location or GPS tracker is used.",
+        "description": "Choose how to set the centre of the search area. A person's or a device's location is used only if you choose it here.",
         "data": {
           "location_method": "Location source"
         },
         "data_description": {
-          "location_method": "Where the centre of the GPS area comes from: Home Assistant's home location, a saved zone, a point on the map or typed coordinates."
+          "location_method": "Where the centre of the GPS area comes from: Home Assistant's home location, a person or device you follow, a saved zone, a point on the map or typed coordinates."
+        }
+      },
+      "location_person": {
+        "title": "Follow a person or device",
+        "description": "The GPS area moves with this person or device tracker, so away from home you see the stations around you. It is computed again from the prices already downloaded once they move 1 km or more: following them sends no extra request to mBenzin.cz. Without a location (for example the phone is off) the area stays around Home Assistant's home location.",
+        "data": {
+          "person_entity": "Person or device"
+        },
+        "data_description": {
+          "person_entity": "A person, or a device tracker with GPS coordinates (for example the Home Assistant app on your phone)."
         }
       },
       "location_zone": {
@@ -146,7 +156,8 @@
       "no_fuel": "Pick at least one fuel.",
       "invalid_zone": "Choose an existing zone with valid coordinates.",
       "invalid_coordinates": "Enter valid latitude and longitude coordinates.",
-      "invalid_radius": "Choose a radius from 5 to 50 km."
+      "invalid_radius": "Choose a radius from 5 to 50 km.",
+      "invalid_person": "Choose an existing person or device tracker."
     },
     "abort": {
       "already_configured": "This city is already configured.",
@@ -168,12 +179,22 @@
       },
       "location_method": {
         "title": "GPS area centre",
-        "description": "Choose how to set the centre. No phone location or GPS tracker is used.",
+        "description": "Choose how to set the centre. A person's or a device's location is used only if you choose it here.",
         "data": {
           "location_method": "Location source"
         },
         "data_description": {
-          "location_method": "Where the centre of the GPS area comes from: Home Assistant's home location, a saved zone, a point on the map or typed coordinates."
+          "location_method": "Where the centre of the GPS area comes from: Home Assistant's home location, a person or device you follow, a saved zone, a point on the map or typed coordinates."
+        }
+      },
+      "location_person": {
+        "title": "Follow a person or device",
+        "description": "The GPS area moves with this person or device tracker, so away from home you see the stations around you. It is computed again from the prices already downloaded once they move 1 km or more: following them sends no extra request to mBenzin.cz. Without a location (for example the phone is off) the area stays around Home Assistant's home location.",
+        "data": {
+          "person_entity": "Person or device"
+        },
+        "data_description": {
+          "person_entity": "A person, or a device tracker with GPS coordinates (for example the Home Assistant app on your phone)."
         }
       },
       "location_zone": {
@@ -272,7 +293,8 @@
       "invalid_zone": "Choose an existing zone with valid coordinates.",
       "invalid_coordinates": "Enter valid latitude and longitude coordinates.",
       "invalid_radius": "Choose a radius from 5 to 50 km.",
-      "already_configured": "This city is already set up in another configuration."
+      "already_configured": "This city is already set up in another configuration.",
+      "invalid_person": "Choose an existing person or device tracker."
     }
   },
   "selector": {
@@ -285,6 +307,7 @@
     "location_method": {
       "options": {
         "home": "Home location",
+        "person": "Follow a person or device (moves with you)",
         "zone": "Saved Home Assistant zone",
         "map": "Choose a point on the map",
         "manual": "Manual coordinates (advanced)"
@@ -367,6 +390,10 @@
     "invalid_location": {
       "title": "The GPS area of {title} has no valid centre",
       "description": "The location the GPS area of {title} is centred on has no valid coordinates, so no stations are shown. Set the home location in Settings → System → General, or open Settings → Devices & services → Ceny paliv → Configure and choose another location source."
+    },
+    "person_missing": {
+      "title": "The person or device followed by {title} no longer exists",
+      "description": "The GPS area of {title} follows {person}, which no longer exists, so no stations are shown. Restore it, or open Settings → Devices & services → Ceny paliv → Configure and choose another person, device or location source."
     }
   }
 }

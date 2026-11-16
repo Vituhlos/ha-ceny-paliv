@@ -4,6 +4,12 @@
 
 ### New
 
+- **The GPS area can follow you**: a new location source, "Follow a person or device", centres the area on a
+  `person.*` or `device_tracker.*` (for example the Home Assistant app on your phone), so away from home you see the
+  stations around you. The area is computed again once they are 1 km or more away, from the prices already
+  downloaded: following someone sends no extra request to mBenzin.cz. Without a location the area stays around home;
+  a deleted person or device raises a Repairs issue. Their entity id is redacted in the diagnostics and forgotten
+  when another source is chosen. A person's location is used only if you choose this source.
 - **Average prices and the standing of your area**: per fuel, three new sensors with long-term statistics: the
   average price in the Czech Republic (with all 14 regions in its attributes, ranked), in the region (kraj) of your
   area, and in your area, with how much cheaper or dearer the area is than the region and the country. They count

@@ -13,7 +13,7 @@ Integrace pro HACS, která v Home Assistantu ukazuje ceny paliv z [mBenzin.cz](h
 ## Co umí
 
 - Vyberete si **město**, **jedno či více paliv** (třeba Natural 95 a LPG pro vůz na dvě paliva) a pro každé palivo **oblíbenou stanici**.
-- Nebo nastavíte GPS oblast kolem polohy domácnosti Home Assistantu, uložené zóny `zone.*`, bodu vybraného na mapě nebo (pokročile) ručně zadaných souřadnic. Poloměr je **5–50 km**, výchozí **40 km**. Nepoužívá se poloha telefonu, GPS tracker, geokódovací služba ani další požadavek na mBenzin.
+- Nebo nastavíte GPS oblast kolem polohy domácnosti Home Assistantu, **osoby nebo zařízení, které sledujete** (oblast jede s vámi), uložené zóny `zone.*`, bodu vybraného na mapě nebo (pokročile) ručně zadaných souřadnic. Poloměr je **5–50 km**, výchozí **40 km**. Poloha osoby nebo telefonu se použije, jen pokud ji zvolíte; nepoužívá se geokódovací služba ani další požadavek na mBenzin.
 - Pro každé palivo **5 nejlevnějších stanic ve městě** (jen z vašeho města, nikoli z celého kraje), odkaz na Google Maps a **mapu s cenami**.
 - U oblíbené stanice: aktuální cena, **trendy oproti 1, 2, 7, 14 a 30 dnům**, pořadí ve městě a dlouhodobá statistika (graf za 30 dní).
 - **Průměrné ceny** v celé republice, ve vašem kraji a ve vaší oblasti a to, jak si vaše oblast proti nim stojí, s dlouhodobými statistikami a ze stejného stažení.
@@ -71,7 +71,8 @@ Vše kromě přístupového klíče se zadává při přidání integrace a dá 
 |---|---|---|
 | Přístupový klíč | přidání, ⋮ → Překonfigurovat | Váš osobní klíč k mBenzin.cz; před uložením se ověří skutečným stažením dat. |
 | Oblast vyhledávání | vždy | **Město**: stanice jednoho města. **GPS okolí**: stanice v okruhu kolem bodu. |
-| Zdroj polohy | GPS okolí | Střed: poloha domácnosti v Home Assistantu, uložená zóna, bod na mapě nebo ruční souřadnice. |
+| Zdroj polohy | GPS okolí | Střed: poloha domácnosti v Home Assistantu, osoba nebo zařízení, které sledujete, uložená zóna, bod na mapě nebo ruční souřadnice. |
+| Osoba nebo zařízení | zdroj polohy Osoba | `person.*` nebo `device_tracker.*` (např. aplikace Home Assistant v telefonu). Oblast se s ním posune, jakmile je aspoň 1 km daleko, a spočítá se z už stažených cen; bez polohy zůstane kolem domova. |
 | Zóna | zdroj polohy Zóna | Zóna, jejíž střed se použije; přesun zóny vyvolá aktualizaci, smazaná zóna nechá oblast prázdnou. |
 | Střed GPS oblasti | zdroj polohy Mapa | Bod vybraný na mapě. |
 | Zeměpisná šířka, délka | zdroj polohy Ruční | Ve stupních (−90 až 90, −180 až 180). |
@@ -144,7 +145,7 @@ Když sledovaná osoba nebo posunutá GPS oblast přejede do jiného kraje, kraj
 ## Jak se data aktualizují
 
 - **Každých 6 hodin** integrace stáhne z mBenzin.cz celorepublikové ceny každého paliva (jeden požadavek na palivo), a také při přidání integrace nebo startu Home Assistantu. Oblasti se stejným klíčem každé stažení sdílejí po dobu necelých 6 hodin, takže každá plánovaná aktualizace dostane nová data a druhá oblast nestojí žádný další požadavek.
-- Výběr města nebo GPS kruhu, oblíbená stanice, pořadí i trendy se počítají z tohoto stažení; změna oblasti ani znovunačtení integrace nic dalšího nestahují. Restart Home Assistantu ho vymaže.
+- Výběr města nebo GPS kruhu, oblíbená stanice, pořadí i trendy se počítají z tohoto stažení; změna oblasti, posun sledované osoby ani znovunačtení integrace nic dalšího nestahují. Restart Home Assistantu ho vymaže.
 - Akce [`ceny_paliv.refresh`](#akce) aktualizuje hned; znovu stahuje jen data starší než 30 minut.
 - **HTTP 429** (příliš mnoho požadavků): všechna paliva daného klíče počkají na hodnotu `Retry-After` od mBenzinu (nejvýše 24 hodin), bez ní necelých 6 hodin. Čekání se drží jen v paměti.
 - **Když mBenzin.cz pro palivo neodpoví**, jeho senzory budou do příští úspěšné aktualizace nedostupné; výpadek i obnova se zalogují jen jednou a po 24 hodinách bez cen to ohlásí **Nastavení → Opravy**. Karta dál ukazuje poslední známé ceny s upozorněním.
@@ -372,7 +373,7 @@ Pro hlubší pohled: **Nastavení → Zařízení a služby → Ceny paliv → �
 - **E10** mBenzin nerozlišuje: u Natural 95 jde o cenu pro všechny 95oktanové benzíny.
 - Entity se jmenují `sensor.ceny_paliv_<palivo>_…`; druhá konfigurace stejného paliva má v Home Assistantu vlastní ID. Pro přiřazení karty použijte `config_id`.
 - Denní záznam cen potřebný pro trendy ukládá Home Assistant a postupně se plní (hvězdička u trendu v kartě označuje trend z kratší historie).
-- **Nastavení → Opravy** vás upozorní, když je potřeba váš zásah: palivo bez cen z mBenzin.cz déle než 24 hodin (ověřte web a svůj klíč), smazaná zóna, kolem které byla GPS oblast, nebo střed GPS oblasti bez platných souřadnic. Zpráva sama zmizí, jakmile příčina pomine.
+- **Nastavení → Opravy** vás upozorní, když je potřeba váš zásah: palivo bez cen z mBenzin.cz déle než 24 hodin (ověřte web a svůj klíč), smazaná zóna nebo osoba, kolem které byla GPS oblast, nebo střed GPS oblasti bez platných souřadnic. Zpráva sama zmizí, jakmile příčina pomine.
 - K hlášení problému přiložte diagnostiku: **Nastavení → Zařízení a služby → Ceny paliv → ⋮ → Stáhnout diagnostiku** (anglicky Download diagnostics). Soubor ukazuje nastavení a průběh poslední aktualizace každého paliva; přístupový klíč, střed GPS oblasti a oblíbené stanice jsou nahrazené `**REDACTED**` a seznamy stanic v něm nejsou. Obsahuje také seznam polí, která mBenzin.cz u stanice posílá, s jednou ukázkou: první stanicí celostátního seznamu, nikdy stanicí z vaší oblasti.
 
 ## Vývojářské testy

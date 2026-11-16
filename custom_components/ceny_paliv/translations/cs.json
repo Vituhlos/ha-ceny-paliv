@@ -23,12 +23,22 @@
       },
       "location_method": {
         "title": "Střed GPS oblasti",
-        "description": "Vyberte způsob určení středu oblasti. Nepoužívá se poloha telefonu ani GPS tracker.",
+        "description": "Zvolte, jak nastavit střed oblasti vyhledávání. Poloha osoby nebo zařízení se použije, jen pokud ji tady zvolíte.",
         "data": {
           "location_method": "Zdroj polohy"
         },
         "data_description": {
-          "location_method": "Odkud se vezme střed GPS oblasti: poloha domácnosti v Home Assistantu, uložená zóna, bod na mapě nebo zadané souřadnice."
+          "location_method": "Odkud se vezme střed GPS oblasti: poloha domácnosti v Home Assistantu, osoba nebo zařízení, které sledujete, uložená zóna, bod na mapě nebo zadané souřadnice."
+        }
+      },
+      "location_person": {
+        "title": "Sledovat osobu nebo zařízení",
+        "description": "GPS oblast se posouvá s touto osobou nebo sledovaným zařízením, takže mimo domov vidíte stanice kolem sebe. Jakmile se posune aspoň o 1 km, oblast se znovu spočítá z už stažených cen: sledování nevytváří žádný další požadavek na mBenzin.cz. Bez polohy (např. vypnutý telefon) zůstane oblast kolem polohy domácnosti v Home Assistantu.",
+        "data": {
+          "person_entity": "Osoba nebo zařízení"
+        },
+        "data_description": {
+          "person_entity": "Osoba, nebo sledované zařízení s GPS souřadnicemi (např. aplikace Home Assistant v telefonu)."
         }
       },
       "location_zone": {
@@ -146,7 +156,8 @@
       "no_fuel": "Vyberte alespoň jedno palivo.",
       "invalid_zone": "Vyberte existující zónu s platnými souřadnicemi.",
       "invalid_coordinates": "Zadejte platnou zeměpisnou šířku a délku.",
-      "invalid_radius": "Zvolte poloměr od 5 do 50 km."
+      "invalid_radius": "Zvolte poloměr od 5 do 50 km.",
+      "invalid_person": "Zvolte existující osobu nebo sledované zařízení."
     },
     "abort": {
       "already_configured": "Toto město je již nastaveno.",
@@ -168,12 +179,22 @@
       },
       "location_method": {
         "title": "Střed GPS oblasti",
-        "description": "Vyberte způsob určení středu. Poloha telefonu ani GPS tracker se nepoužívají.",
+        "description": "Zvolte, jak nastavit střed. Poloha osoby nebo zařízení se použije, jen pokud ji tady zvolíte.",
         "data": {
           "location_method": "Zdroj polohy"
         },
         "data_description": {
-          "location_method": "Odkud se vezme střed GPS oblasti: poloha domácnosti v Home Assistantu, uložená zóna, bod na mapě nebo zadané souřadnice."
+          "location_method": "Odkud se vezme střed GPS oblasti: poloha domácnosti v Home Assistantu, osoba nebo zařízení, které sledujete, uložená zóna, bod na mapě nebo zadané souřadnice."
+        }
+      },
+      "location_person": {
+        "title": "Sledovat osobu nebo zařízení",
+        "description": "GPS oblast se posouvá s touto osobou nebo sledovaným zařízením, takže mimo domov vidíte stanice kolem sebe. Jakmile se posune aspoň o 1 km, oblast se znovu spočítá z už stažených cen: sledování nevytváří žádný další požadavek na mBenzin.cz. Bez polohy (např. vypnutý telefon) zůstane oblast kolem polohy domácnosti v Home Assistantu.",
+        "data": {
+          "person_entity": "Osoba nebo zařízení"
+        },
+        "data_description": {
+          "person_entity": "Osoba, nebo sledované zařízení s GPS souřadnicemi (např. aplikace Home Assistant v telefonu)."
         }
       },
       "location_zone": {
@@ -272,7 +293,8 @@
       "invalid_zone": "Vyberte existující zónu s platnými souřadnicemi.",
       "invalid_coordinates": "Zadejte platnou zeměpisnou šířku a délku.",
       "invalid_radius": "Zvolte poloměr od 5 do 50 km.",
-      "already_configured": "Toto město už má jiná konfigurace."
+      "already_configured": "Toto město už má jiná konfigurace.",
+      "invalid_person": "Zvolte existující osobu nebo sledované zařízení."
     }
   },
   "selector": {
@@ -285,6 +307,7 @@
     "location_method": {
       "options": {
         "home": "Poloha domácnosti",
+        "person": "Sledovat osobu nebo zařízení (jede s vámi)",
         "zone": "Uložená zóna Home Assistantu",
         "map": "Vybrat bod na mapě",
         "manual": "Ruční souřadnice (pokročilé)"
@@ -367,6 +390,10 @@
     "invalid_location": {
       "title": "GPS oblast {title} nemá platný střed",
       "description": "Poloha, kolem které je GPS oblast {title}, nemá platné souřadnice, a nezobrazují se proto žádné stanice. Nastavte polohu domácnosti v Nastavení → Systém → Obecné, nebo otevřete Nastavení → Zařízení a služby → Ceny paliv → Konfigurovat a zvolte jiný zdroj polohy."
+    },
+    "person_missing": {
+      "title": "Osoba nebo zařízení, které sleduje {title}, už neexistuje",
+      "description": "GPS oblast {title} sleduje {person}, které už neexistuje, a nezobrazují se proto žádné stanice. Obnovte ho, nebo otevřete Nastavení → Zařízení a služby → Ceny paliv → Konfigurovat a zvolte jinou osobu, zařízení nebo zdroj polohy."
     }
   }
 }
