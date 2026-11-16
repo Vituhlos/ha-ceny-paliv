@@ -51,6 +51,8 @@ na PyPI, integrace ji používá; `mypy --strict` v CI. Bronze 20/20, Silver 10/
 
 ## 0.8 – chytrá data a upozornění
 
+Stav: okolí jede se mnou – hotovo (zdroj polohy „osoba nebo zařízení“, bez dalších požadavků na mBenzin).
+
 - Okolí jede se mnou: mimo domov se okolí posouvá podle polohy osoby (data jsou celostátní, takže bez dalších
   požadavků na mBenzin).
 - Celostátní a krajské průměry, postavení okolí, dlouhodobé statistiky.

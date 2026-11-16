@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- **The GPS area can follow you**: a new location source, "Follow a person or device", centres the area on a
+  `person.*` or `device_tracker.*` (for example the Home Assistant app on your phone), so away from home you see the
+  stations around you. The area is computed again once they are 1 km or more away, from the prices already
+  downloaded: following someone sends no extra request to mBenzin.cz. Without a location the area stays around home;
+  a deleted person or device raises a Repairs issue. Their entity id is redacted in the diagnostics and forgotten
+  when another source is chosen. A person's location is used only if you choose this source.
+
 ## 0.7.0
 
 The integration now meets the **Platinum** tier of the Home Assistant integration quality scale (self-assessed in

@@ -13,7 +13,7 @@ A HACS integration that shows the cheapest stations in **your city** or a **5–
 ## Features
 
 - Pick your **city**, one or **several fuels** (e.g. Natural 95 + LPG for a dual-fuel car) and a **favourite station per fuel**
-- Or choose a GPS area centred on Home Assistant's configured home location, a saved `zone.*`, a point selected on Home Assistant's map, or (advanced) manually entered coordinates; choose a **5–50 km** radius (default **40 km**). No phone location, GPS tracker, geocoder, or extra mBenzin request is used
+- Or choose a GPS area centred on Home Assistant's configured home location, **a person or device you follow** (the area moves with you), a saved `zone.*`, a point selected on Home Assistant's map, or (advanced) manually entered coordinates; choose a **5–50 km** radius (default **40 km**). A person's or a phone's location is used only if you choose it; no geocoder or extra mBenzin request is used
 - Per fuel: the **top 5 cheapest** stations in the city (only that city, not the region), with a Google Maps link, and a **map**
 - Favourite station: price, **trends vs 1/2/7/14/30 days ago**, rank in town, long-term statistics (the 30-day graph)
 - A ready-made **dashboard card** (`ceny-paliv-card`) shipped with the integration — add it from the card picker, no YAML to copy — in **English or Czech** (your choice during setup). It is **flexible**: two columns on a wide dashboard, one on a phone, a compact version, and every part (favourite station, list, map, graph) can be placed as its own card
@@ -64,7 +64,8 @@ Everything except the access key is asked during setup and can be changed later 
 |---|---|---|
 | Access key | setup, Reconfigure | Your personal mBenzin.cz key; checked with a real download before it is saved. |
 | Search area | always | **City**: the stations of one city. **GPS area**: the stations within a radius of a point. |
-| Location source | GPS area | The centre: Home Assistant's home location, a saved zone, a point on the map, or manual coordinates. |
+| Location source | GPS area | The centre: Home Assistant's home location, a person or device you follow, a saved zone, a point on the map, or manual coordinates. |
+| Person or device | location source Person | A `person.*` or `device_tracker.*` (for example the Home Assistant app on your phone). The area moves with it once it is 1 km or more away, computed from the prices already downloaded; without a location it stays around home. |
 | Zone | location source Zone | The zone whose centre is used; a moved zone triggers a refresh, a deleted one leaves the area empty. |
 | GPS centre | location source Map | The point picked on the map. |
 | Latitude, Longitude | location source Manual | Decimal degrees (−90 to 90, −180 to 180). |
@@ -124,7 +125,7 @@ Each station in `stations` (and `home`) has `rank`, `name`, `title` (a readable 
 ## How the data is updated
 
 - **Every 6 hours** the integration downloads the nationwide prices of each fuel from mBenzin.cz (one request per fuel), and at setup or Home Assistant start. Areas with the same key share each download for just under 6 hours, so every scheduled refresh still gets new data and a second area costs no extra request.
-- City and GPS filtering, the favourite station, the ranking and the trends are computed from that download; changing the area or reloading the integration reuses it. A Home Assistant restart clears it.
+- City and GPS filtering, the favourite station, the ranking and the trends are computed from that download; changing the area, a followed person moving, or reloading the integration reuses it. A Home Assistant restart clears it.
 - The action [`ceny_paliv.refresh`](#actions) refreshes now; it downloads again only data older than 30 minutes.
 - **HTTP 429** (too many requests): every fuel of that key waits for mBenzin's `Retry-After` (at most 24 hours), or just under 6 hours without it. The wait is kept in memory only.
 - **When mBenzin.cz cannot be reached** for a fuel, its sensors are unavailable until the next successful refresh; the failure and the recovery are logged once, and after 24 hours without prices **Settings → Repairs** says so. The card keeps showing the last known prices with a warning.
@@ -352,7 +353,7 @@ To look deeper: **Settings → Devices & services → Ceny paliv → ⋮ → Ena
 - **E10** is not distinguished by mBenzin: "Natural 95" is the price shown for 95-octane petrol.
 - Entity ids are `sensor.ceny_paliv_<fuel>_…`; a second configuration for the same fuel receives distinct Home Assistant entity IDs. Use `config_id` to bind a dashboard card to one area.
 - The daily price log used for the trends is stored by Home Assistant and fills up over time (a `*` next to a trend in the card marks a trend computed from a shorter history).
-- **Settings → Repairs** tells you when something needs you: a fuel without prices from mBenzin.cz for more than 24 hours (check the website and your key), a deleted zone the GPS area was centred on, or a GPS centre without valid coordinates. The message disappears by itself once the cause is gone.
+- **Settings → Repairs** tells you when something needs you: a fuel without prices from mBenzin.cz for more than 24 hours (check the website and your key), a deleted zone or person the GPS area was centred on, or a GPS centre without valid coordinates. The message disappears by itself once the cause is gone.
 - To report a problem, attach the diagnostics: **Settings → Devices & services → Ceny paliv → ⋮ → Download diagnostics**. The file shows the settings and how the last refresh of each fuel went; the access key, the GPS centre and the favourite stations are replaced by `**REDACTED**`, and the station lists are left out. It also lists the fields mBenzin.cz sends for a station, with one example: the first station of the nationwide list, never one of your area.
 
 ## Development tests
