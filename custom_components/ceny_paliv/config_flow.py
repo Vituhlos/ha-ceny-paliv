@@ -32,11 +32,9 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
     TextSelectorType,
 )
+from aiombenzin import InvalidAuth, MBenzinError, RateLimited
 
 from .api import (
-    InvalidAuth,
-    MBenzinError,
-    RateLimited,
     async_fetch_markers,
     city_of,
     city_options,

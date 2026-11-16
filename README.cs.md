@@ -43,6 +43,7 @@ Co je dobré vědět:
 - Klíč změníte v menu integrace ⋮ → **Překonfigurovat**. Pokud ho mBenzin.cz přestane přijímat (HTTP 401/403 nebo jeho HTML stránka s odmítnutím ve dvou aktualizacích po sobě), Home Assistant nabídne **Opětovné ověření**. Nastavení, historie cen i senzory přitom zůstanou zachovány.
 - Poskytovatel zatím nepotvrdil limit požadavků pro tuto integraci. Automatická aktualizace zůstává každých **6 hodin** a požadavky se stejným klíčem a palivem se sdílejí mezi konfiguracemi. Toto sdílení a dočasná prodleva po HTTP 429 nejsou kvótou požadavků na klíč; trvalá kvóta se nevynucuje. Tu lze zavést až s potvrzeným limitem od poskytovatele a perzistentním počítáním požadavků. Po HTTP 429 se pozastaví všechna paliva daného klíče do času z platné hlavičky `Retry-After` (nejvýše 24 hodin), případně na necelých 6 hodin, pokud ji poskytovatel neposlal; restart Home Assistantu tuto paměťovou ochranu vymaže.
 - Klíč se odesílá v HTTP hlavičce, nikoli v URL požadavku.
+- Stahování obstarává knihovna [aiombenzin](https://pypi.org/project/aiombenzin/) (od stejného autora), kterou Home Assistant nainstaluje spolu s integrací.
 - Integrace používá data cenové mapy mBenzin, nikoli oficiálně zdokumentované API. Buďte k serveru ohleduplní a respektujte podmínky mBenzin.
 
 ## 2. Instalace přes HACS

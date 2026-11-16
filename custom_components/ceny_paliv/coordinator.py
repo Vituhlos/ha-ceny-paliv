@@ -15,10 +15,10 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from aiombenzin import InvalidAuth, MBenzinError
+
 from .logos import logo_dir, scan_logos
 from .api import (
-    InvalidAuth,
-    MBenzinError,
     async_fetch_snapshot,
     build_payload,
     next_update_at,

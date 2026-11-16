@@ -37,6 +37,7 @@ mBenzin blocks plain scraping with a browser check, but they give a **personal a
 - To change the key, open the integration's ⋮ menu → **Reconfigure**. If mBenzin.cz stops accepting it (HTTP 401/403, or its HTML refusal page on two refreshes in a row), Home Assistant shows a **Reauthenticate** prompt. Either way, settings, price history and sensors stay.
 - The provider has not confirmed a request limit for this integration. Automatic refreshes remain every **6 hours**, and requests for the same key and fuel are shared across configurations. This deduplication and the temporary HTTP 429 cooldown are not a per-key request quota; no persistent quota is enforced. A true quota would require a provider-confirmed limit and persistent tracking. After HTTP 429, all fuels for that key wait for a valid `Retry-After` value (capped at 24 hours) or just under 6 hours when none is provided; this in-memory cooldown is cleared by a Home Assistant restart.
 - The key is sent in an HTTP header, not in the request URL.
+- The download is done by the [aiombenzin](https://pypi.org/project/aiombenzin/) library (by the same author), which Home Assistant installs with the integration.
 - It uses mBenzin's price-map data, which is not a documented public API: be gentle and respect their conditions.
 
 ## 2. Install with HACS

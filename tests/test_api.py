@@ -29,8 +29,9 @@ from custom_components.ceny_paliv.api import (
     parse_fresh,
     shared_marker_cache,
     station_options,
-    _retry_after_seconds,
 )
+# the Retry-After parsing lives in aiombenzin since 0.7; the integration relies on its behaviour
+from aiombenzin import retry_after_seconds as _retry_after_seconds
 
 
 def payload(markers, now, *, fuel="n95", home=None, history=None, city="Praha"):

@@ -42,6 +42,9 @@ diagnostika z 0.6.0 ukázala, že mBenzin posílá adresu (`addr`), takže sezna
 
 ## 0.7 – Platinum
 
+Stav: knihovna [aiombenzin 0.1.0](https://pypi.org/project/aiombenzin/) je na PyPI a integrace ji používá;
+`mypy --strict` v CI. Platinum 3/3, Bronze 20/20 (sebehodnocení).
+
 - Knihovna **`aiombenzin`** (samostatný veřejný repozitář, PyPI): asynchronní, přebírá HTTP session od HA,
   typy (`py.typed`), testy, vydávání přes CI. Bez jakéhokoli klíče. Účet a trusted publishing na PyPI zakládá správce.
 - Integrace plně staticky typovaná (`mypy --strict` v CI).

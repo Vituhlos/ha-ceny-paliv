@@ -28,8 +28,10 @@ rules:
       Setup is UI-only, the key is in data and the rest in options, and every field has a data_description in
       English and Czech (test_every_setting_field_has_a_description).
   dependency-transparency:
-    status: todo
-    comment: The mBenzin client is inside the integration; it moves to the aiombenzin library on PyPI (0.7).
+    status: done
+    comment: >-
+      The download is the aiombenzin library (manifest requirements): public source (github.com/Vituhlos/aiombenzin),
+      MIT, on PyPI, built and published by its release workflow with trusted publishing from a tagged release.
   docs-actions:
     status: done
     comment: README "Actions" (and the Czech README) describes ceny_paliv.refresh, its field and its errors.
@@ -177,11 +179,11 @@ rules:
 
   # Platinum
   async-dependency:
-    status: todo
-    comment: The client is async but not a separate library yet.
+    status: done
+    comment: aiombenzin is asyncio-based (aiohttp); api.py awaits aiombenzin.async_fetch_markers.
   inject-websession:
-    status: todo
-    comment: The integration passes Home Assistant's session; the library must accept it too.
+    status: done
+    comment: aiombenzin takes the caller's aiohttp session; the integration passes async_get_clientsession(hass).
   strict-typing:
     status: done
     comment: >-

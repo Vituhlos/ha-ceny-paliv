@@ -1,4 +1,4 @@
-"""mBenzin.cz price-map client and data processing."""
+"""Processing of the mBenzin.cz price map; the download itself is the aiombenzin library."""
 from __future__ import annotations
 
 import asyncio
@@ -10,13 +10,14 @@ from collections import OrderedDict
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import timezone
-from email.utils import parsedate_to_datetime
 from numbers import Real
 from typing import Any, Callable
 import unicodedata
 from zoneinfo import ZoneInfo
 
 import aiohttp
+import aiombenzin
+from aiombenzin import CannotConnect, InvalidAuth, MBenzinError, RateLimited
 
 from homeassistant.core import HomeAssistant
 
@@ -29,13 +30,11 @@ from .const import (
     LABELS,
     MAPS,
     MARKER_CACHE_TTL,
-    MAX_RETRY_AFTER,
     MAX_AGE_DAYS_BY_FUEL,
     MAX_AGE_DAYS_DEFAULT,
     PERIODS,
     TOP,
     UPDATE_INTERVAL,
-    URL,
     USER_AGENT,
 )
 from .geography import (
@@ -49,34 +48,6 @@ _GPS_NEAREST_LIMIT = 10
 _MAX_ATTRIBUTE_TEXT = 120
 
 
-class MBenzinError(Exception):
-    """Base error."""
-
-
-class CannotConnect(MBenzinError):
-    """The site cannot be reached."""
-
-
-class InvalidAuth(MBenzinError):
-    """The access key is missing, wrong or not accepted.
-
-    `definite` is True for HTTP 401/403. mBenzin also answers a key it does not accept with an HTML page, but
-    such a page can come from an outage too, so the coordinator only trusts it when it repeats.
-    """
-
-    def __init__(self, *args: object, definite: bool = False) -> None:
-        super().__init__(*args)
-        self.definite = definite
-
-
-class RateLimited(MBenzinError):
-    """HTTP 429: the provider is temporarily limiting requests."""
-
-    def __init__(self, retry_after: float | None = None) -> None:
-        super().__init__()
-        self.retry_after = retry_after
-
-
 def _now_prague() -> dt.datetime:
     return dt.datetime.now(_CZECH_TIMEZONE)
 
@@ -88,70 +59,14 @@ def next_update_at(now: dt.datetime) -> dt.datetime:
     return (now.astimezone(timezone.utc) + UPDATE_INTERVAL).astimezone(now.tzinfo)
 
 
-def _retry_after_seconds(value: str | None, now: dt.datetime | None = None) -> float | None:
-    """Parse a valid Retry-After header as a non-negative delay."""
-    if not value:
-        return None
-    value = value.strip()
-    if value.isdecimal():
-        try:
-            delay = float(int(value))
-        except (OverflowError, ValueError):
-            return None
-        return min(delay, MAX_RETRY_AFTER.total_seconds()) if math.isfinite(delay) else None
-    try:
-        retry_at = parsedate_to_datetime(value)
-        if retry_at.tzinfo is None:
-            retry_at = retry_at.replace(tzinfo=dt.timezone.utc)
-        current = now or dt.datetime.now(timezone.utc)
-        if current.tzinfo is None:
-            current = current.replace(tzinfo=timezone.utc)
-        delay = (retry_at - current.astimezone(timezone.utc)).total_seconds()
-        return min(max(0.0, delay), MAX_RETRY_AFTER.total_seconds())
-    except (TypeError, ValueError, OverflowError):
-        return None
-
-
 async def _async_fetch_markers(
     session: aiohttp.ClientSession,
     key: str,
     fuel: str,
     clock: Callable[[], dt.datetime] = _now_prague,
 ) -> list[dict[str, Any]]:
-    """Download the price-map markers of one fuel (all of the Czech Republic)."""
-    error_name: str | None
-    try:
-        async with session.get(
-            URL,
-            params={"fuel": fuel, "ccs": "0"},
-            headers={"User-Agent": USER_AGENT, "X-Mbenzin-Klic": key},
-            timeout=aiohttp.ClientTimeout(total=60),
-        ) as resp:
-            if resp.status == 429:
-                now = clock()
-                if now.tzinfo is None:
-                    now = now.replace(tzinfo=_CZECH_TIMEZONE)
-                raise RateLimited(_retry_after_seconds(resp.headers.get("Retry-After"), now))
-            if resp.status in (401, 403):
-                raise InvalidAuth(definite=True)
-            if resp.status != 200:
-                raise CannotConnect(f"HTTP {resp.status}")
-            try:
-                data = await resp.json(content_type=None)
-            except ValueError:  # an HTML "browser check" page = key not accepted
-                data = None
-    except (aiohttp.ClientError, TimeoutError) as err:
-        error_name = type(err).__name__
-    except ValueError:  # aiohttp refuses a header value with control characters: not a usable key
-        raise InvalidAuth from None
-    else:
-        error_name = None
-    if error_name is not None:
-        raise CannotConnect(error_name)
-    markers = data.get("markers") if isinstance(data, dict) else None
-    if not isinstance(markers, list):
-        raise InvalidAuth
-    return markers
+    """Download the price-map markers of one fuel (all of the Czech Republic) through aiombenzin."""
+    return await aiombenzin.async_fetch_markers(session, key, fuel, user_agent=USER_AGENT, clock=clock)
 
 
 @dataclass
