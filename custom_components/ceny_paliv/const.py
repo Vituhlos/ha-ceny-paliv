@@ -9,6 +9,7 @@ CARD_URL = "/ceny_paliv_static/ceny-paliv-card.js"
 CARD_VERSION = "0.8.0"
 
 # Optional station logos (pack in the GitHub repository, downloaded on request, see logos.py)
+REGIONS_URL = "/ceny_paliv_static/regions.json"  # the region boundaries, for the regions card
 LOGO_URL = "/ceny_paliv_static/logos"  # served from <config>/ceny_paliv_logos/
 LOGO_DIR_NAME = "ceny_paliv_logos"
 _PACK = "https://raw.githubusercontent.com/Vituhlos/ha-ceny-paliv/main/logos"
@@ -148,6 +149,16 @@ LABELS: dict[str, dict[str, str]] = {
         "drive_extra": "{km} km more there and back ≈ {d} Kč",
         "worth_yes": "worth it: you still save {d} Kč",
         "worth_no": "not worth the drive",
+        "compare_title": "Price comparison",
+        "compare_sub": "average prices in {unit}, against the country",
+        "compare_area": "Area",
+        "compare_region": "Region",
+        "compare_country": "Czech Republic",
+        "compare_ranks": "The {n} regions, cheapest first",
+        "regions_title": "Regions",
+        "regions_sub": "average price by region; tap a region",
+        "regions_loading": "Loading the map…",
+        "regions_source": "Boundaries: ČÚZK",
         "vs_yesterday": "vs yesterday",
         "source": "Ceny: mbenzin.cz",
     },
@@ -206,6 +217,16 @@ LABELS: dict[str, dict[str, str]] = {
         "drive_extra": "o {km} km delší cesta tam a zpět ≈ {d} Kč",
         "worth_yes": "vyplatí se: i tak ušetříte {d} Kč",
         "worth_no": "nevyplatí se dojet",
+        "compare_title": "Srovnání cen",
+        "compare_sub": "průměrné ceny v {unit}, proti celé republice",
+        "compare_area": "Oblast",
+        "compare_region": "Kraj",
+        "compare_country": "Česko",
+        "compare_ranks": "{n} krajů od nejlevnějšího",
+        "regions_title": "Kraje",
+        "regions_sub": "průměrná cena podle krajů; klepněte na kraj",
+        "regions_loading": "Načítám mapu…",
+        "regions_source": "Hranice: ČÚZK",
         "vs_yesterday": "oproti včerejšku",
         "source": "Ceny: mbenzin.cz",
     },

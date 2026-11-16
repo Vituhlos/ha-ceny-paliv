@@ -4,6 +4,8 @@
  *   custom:ceny-paliv-card          one fuel: your station, the cheapest stations, map and graph (below)
  *   custom:ceny-paliv-fuels-card    every fuel of an area at a glance (config_id, fuels)
  *   custom:ceny-paliv-savings-card  what a full tank costs and how much you save (fuel, config_id, tank_litres, consumption)
+ *   custom:ceny-paliv-compare-card  your station, the area, the region and the country, and the 14 regions (fuel, config_id)
+ *   custom:ceny-paliv-regions-card  a map of the 14 regions coloured by their average price (fuel, config_id)
  *
  * Prices come from mBenzin.cz; this project is independent and not affiliated with mBenzin.
  *
@@ -1363,7 +1365,7 @@ const EDITOR_TEXT = {
   en: {
     fuel: 'Fuel', fuels: 'Fuels (switch, or the fuels shown)', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
     map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
-    sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
+    show_regions: 'Show the 14 regions', sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
     consumption: 'Consumption per 100 km in litres, kg for CNG (for "worth it")', price: 'Price', distance: 'Distance', worth: 'Worth the drive',
     home: 'My station', list: 'Cheapest stations', map: 'Map', graph: '30-day graph: my station, the cheapest, the average',
     auto: 'Automatic: 2 columns when the card is wide', columns: 'Always 2 columns', stack: 'Always 1 column',
@@ -1371,7 +1373,7 @@ const EDITOR_TEXT = {
   cs: {
     fuel: 'Palivo', fuels: 'Paliva (přepínač, nebo zobrazená paliva)', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
     map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
-    sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
+    show_regions: 'Zobrazit 14 krajů', sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
     consumption: 'Spotřeba na 100 km v litrech, u CNG v kg (pro „vyplatí se“)', price: 'Cena', distance: 'Vzdálenost', worth: 'Vyplatí se dojet',
     home: 'Moje stanice', list: 'Nejlevnější stanice', map: 'Mapa', graph: 'Graf za 30 dní: moje stanice, nejlevnější, průměr',
     auto: 'Automaticky: 2 sloupce, je-li karta široká', columns: 'Vždy 2 sloupce', stack: 'Vždy 1 sloupec',
@@ -1727,6 +1729,241 @@ class CenyPalivSavingsCard extends CenyPalivMiniCard {
   }
 }
 
+// ------------------------------------------------------------------ 3. the area against the region and the country
+// "Hlavní město Praha" -> "Praha", "Jihomoravský kraj" -> "Jihomoravský", "Kraj Vysočina" -> "Vysočina"
+const shortRegion = (name) => String(name || '').replace(/^Hlavní město /, '').replace(/^Kraj /, '').replace(/ kraj$/, '');
+
+const COMPARE_STYLE = `
+  .bars { display: flex; flex-direction: column; gap: var(--ha-space-2, 8px); }
+  .bar-row { color: var(--cp-text); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--ha-space-3, 12px); align-items: baseline; }
+  .bar-row .label { font-size: var(--ha-font-size-m, 14px); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-row .value { font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
+  .bar-row .vs { font-size: var(--ha-font-size-xs, 10px); color: var(--cp-muted); margin-inline-start: 4px; font-weight: var(--ha-font-weight-normal, 400); }
+  .bar { grid-column: 1 / -1; position: relative; height: 8px; border-radius: var(--ha-border-radius-pill, 9999px); overflow: hidden; }
+  .bar::before { content: ""; position: absolute; inset: 0; background: var(--cp-neutral); opacity: 0.2; }
+  .bar span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--bar, var(--cp-muted)); }
+  .bar-row.mine { --bar: var(--cp-home); }
+  .bar-row.best { --bar: var(--cp-good-base); }
+  .ranks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px var(--ha-space-4, 16px); font-size: var(--ha-font-size-s, 12px); line-height: 18px; }
+  .ranks span { display: flex; gap: var(--ha-space-2, 8px); color: var(--cp-muted); min-width: 0; }
+  .ranks .n { flex: none; width: 18px; text-align: end; font-variant-numeric: tabular-nums; }
+  .ranks .r { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ranks b { font-weight: var(--ha-font-weight-normal, 400); font-variant-numeric: tabular-nums; }
+  .ranks .own { color: var(--cp-text); font-weight: var(--ha-font-weight-medium, 500); }
+  .ranks .own b { font-weight: var(--ha-font-weight-medium, 500); color: var(--cp-home); }
+  .section { font-size: var(--ha-font-size-s, 12px); color: var(--cp-muted); letter-spacing: 0.4px; }
+`;
+
+class CenyPalivCompareCard extends CenyPalivMiniCard {
+  static get defaults() { return { show_regions: true }; }
+
+  static getStubConfig(hass) {
+    const found = CenyPalivCard.fuels(hass)[0];
+    return { type: 'custom:ceny-paliv-compare-card', fuel: found ? found.value : 'n95' };
+  }
+
+  static editorSchema(hass) {
+    return [
+      { name: 'fuel', required: true, selector: { select: { mode: 'dropdown', options: CenyPalivCard.fuels(hass) } } },
+      { name: 'show_regions', selector: { boolean: {} } },
+    ];
+  }
+
+  setConfig(config) {
+    if (!config || !config.fuel) throw new Error('ceny-paliv-compare-card: set "fuel", for example "n95"');
+    super.setConfig(config);
+  }
+
+  getCardSize() { return this._config && this._config.show_regions !== false ? 7 : 4; }
+
+  _render() {
+    const T = (k, v) => this._T(k, v);
+    const fuel = this._config.fuel;
+    const top = this._state(fuel, 'top5');
+    const national = this._state(fuel, 'national_average');
+    if (!top || !national) { this._why = 'missing'; return this._message(); }
+    const value = (st) => (st && !['unavailable', 'unknown'].includes(st.state) && isFinite(Number(st.state)) ? Number(st.state) : null);
+    const home = this._state(fuel, 'home');
+    const region = this._state(fuel, 'region_average');
+    const area = this._state(fuel, 'area_average');
+    const country = value(national);
+    const regionName = region && region.attributes.region;
+    const rows = [
+      home && { cls: 'mine', label: T('my_station'), v: value(home), id: this._sensors[fuel].home },
+      { cls: '', label: `${T('compare_area')} · ${top.attributes.city_name || ''}`, v: value(area), id: this._sensors[fuel].area_average },
+      region && { cls: '', label: `${T('compare_region')} · ${shortRegion(regionName)}`, v: value(region), id: this._sensors[fuel].region_average },
+      { cls: '', label: T('compare_country'), v: country, id: this._sensors[fuel].national_average, country: true },
+    ].filter((r) => r && r.v != null);
+    const values = rows.map((r) => r.v);
+    const lo = Math.min(...values);
+    const hi = Math.max(...values);
+    const bars = rows.map((r) => {
+      // the shortest bar is a quarter: the differences are a few crowns of some forty
+      const width = hi > lo ? 25 + 75 * (r.v - lo) / (hi - lo) : 100;
+      const vs = r.country ? '' : `<span class="vs">${esc(this._signed(r.v - country))}</span>`;
+      return `<div class="bar-row ${r.cls}${r.v === lo && rows.length > 1 ? ' best' : ''}" role="button" tabindex="0" data-more-info="${esc(r.id)}">
+        <span class="label">${esc(r.label)}</span><span class="value">${esc(this._num(r.v))}${vs}</span>
+        <span class="bar" aria-hidden="true"><span style="width:${width.toFixed(1)}%"></span></span></div>`;
+    }).join('');
+    let ranks = '';
+    const list = Array.isArray(national.attributes.regions) ? national.attributes.regions : [];
+    if (this._config.show_regions !== false && list.length) {
+      const own = region && region.attributes.region_code;
+      const half = Math.ceil(list.length / 2);
+      // column by column: 1-7 on the left, 8-14 on the right
+      const ordered = [];
+      for (let i = 0; i < half; i += 1) { ordered.push(list[i]); if (list[i + half]) ordered.push(list[i + half]); }
+      ranks = `<span class="section">${esc(T('compare_ranks', { n: list.length }))}</span>
+        <div class="ranks">${ordered.map((r) => `<span class="${r.code === own ? 'own' : ''}"><span class="n">${esc(r.rank)}.</span><span class="r">${esc(shortRegion(r.name))}</span><b>${esc(this._num(r.average))}</b></span>`).join('')}</div>`;
+    }
+    return `<ha-card class="card"><style>${COMPARE_STYLE}</style>
+      <div class="head"><span class="icon fuel"><ha-icon icon="mdi:scale-balance"></ha-icon></span>
+        <div class="info"><span class="primary">${esc(T('compare_title'))} · ${esc(top.attributes.fuel_label || fuel)}</span>
+          <span class="secondary">${esc(T('compare_sub', { unit: top.attributes.unit_of_measurement || 'Kč/l' }))}</span></div></div>
+      <div class="bars">${bars}</div>
+      ${ranks}
+      <span class="source">${this._source()}</span>
+    </ha-card>`;
+  }
+
+  _signed(d) { return `${d > 0 ? '+' : d < 0 ? '−' : '±'}${this._num(Math.abs(d))}`; }
+}
+
+// ------------------------------------------------------------------ 4. a map of the regions
+// The boundaries come from the integration (regions.json, ČÚZK RÚIAN, CC BY 4.0), loaded once per page.
+const REGIONS_URL = '/ceny_paliv_static/regions.json';
+let regionGeometry = null;
+let regionGeometryLoad = null;
+
+function loadRegionGeometry() {
+  if (regionGeometry || regionGeometryLoad || typeof fetch !== 'function') return regionGeometryLoad;
+  regionGeometryLoad = fetch(`${REGIONS_URL}?v=${CARD_VERSION}`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => { regionGeometry = data; return data; })
+    .catch(() => null)
+    .finally(() => { regionGeometryLoad = null; });
+  return regionGeometryLoad;
+}
+
+// The regions as SVG paths: longitude shrunk by the cosine of the country's latitude, so the map is not stretched.
+function regionPaths(data, width) {
+  const regions = (data && data.regions) || [];
+  let south = 90; let north = -90; let west = 180; let east = -180;
+  for (const r of regions) for (const p of r.polygons) for (const [lat, lng] of p[0]) {
+    south = Math.min(south, lat); north = Math.max(north, lat); west = Math.min(west, lng); east = Math.max(east, lng);
+  }
+  const k = Math.cos(((south + north) / 2) * Math.PI / 180);
+  const scale = width / ((east - west) * k || 1);
+  const height = (north - south) * scale;
+  const pt = ([lat, lng]) => `${((lng - west) * k * scale).toFixed(1)},${((north - lat) * scale).toFixed(1)}`;
+  const paths = regions.map((r) => ({
+    code: r.code,
+    name: r.name,
+    holes: r.polygons.reduce((n, p) => n + p.length - 1, 0),
+    d: r.polygons.map((p) => p.map((ring) => `M${ring.map(pt).join('L')}Z`).join('')).join(''),
+  }));
+  // a region with a hole (Středočeský around Prague) goes first, so the region inside it is drawn on top
+  paths.sort((x, y) => y.holes - x.holes);
+  return { paths, width, height: Math.ceil(height) };
+}
+
+const REGIONS_STYLE = `
+  .regions svg { display: block; width: 100%; height: auto; }
+  .regions path { stroke: var(--cp-surface); stroke-width: 1; stroke-linejoin: round; fill-rule: evenodd; cursor: pointer; outline: none; }
+  .regions path.none { fill: var(--cp-neutral); fill-opacity: 0.4; }
+  .regions path.own { stroke: var(--cp-text); stroke-width: 2.5; }
+  .regions path.picked { stroke: var(--cp-home); stroke-width: 2.5; }
+  .regions path:focus-visible { stroke: var(--cp-home); stroke-width: 3; }
+  .scale { display: flex; align-items: center; gap: var(--ha-space-2, 8px); font-size: var(--ha-font-size-s, 12px); color: var(--cp-muted); font-variant-numeric: tabular-nums; }
+  .scale .ramp { flex: 1 1 auto; height: 8px; border-radius: var(--ha-border-radius-pill, 9999px);
+    background: linear-gradient(90deg, var(--cp-good-base), color-mix(in srgb, var(--cp-good-base), var(--cp-bad-base)), var(--cp-bad-base)); opacity: 0.85; }
+  .picked-info { font-size: var(--ha-font-size-m, 14px); min-height: 20px; }
+  .picked-info b { font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; }
+`;
+
+class CenyPalivRegionsCard extends CenyPalivMiniCard {
+  constructor() {
+    super();
+    // a tap (or Enter) on a region shows its price and rank under the map
+    this.shadowRoot.addEventListener('click', (e) => this._pick(e));
+    this.shadowRoot.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') this._pick(e); });
+  }
+
+  static getStubConfig(hass) {
+    const found = CenyPalivCard.fuels(hass)[0];
+    return { type: 'custom:ceny-paliv-regions-card', fuel: found ? found.value : 'n95' };
+  }
+
+  static editorSchema(hass) {
+    return [{ name: 'fuel', required: true, selector: { select: { mode: 'dropdown', options: CenyPalivCard.fuels(hass) } } }];
+  }
+
+  setConfig(config) {
+    if (!config || !config.fuel) throw new Error('ceny-paliv-regions-card: set "fuel", for example "n95"');
+    super.setConfig(config);
+  }
+
+  getCardSize() { return 5; }
+
+  _render() {
+    const T = (k, v) => this._T(k, v);
+    const fuel = this._config.fuel;
+    const national = this._state(fuel, 'national_average');
+    const top = this._state(fuel, 'top5');
+    if (!national || !top) { this._why = 'missing'; return this._message(); }
+    if (!regionGeometry) {
+      const loading = loadRegionGeometry();
+      if (loading) loading.then(() => { this._sig = ''; if (this._hass) this.hass = this._hass; });
+    }
+    const list = Array.isArray(national.attributes.regions) ? national.attributes.regions : [];
+    const byCode = {};
+    for (const r of list) byCode[r.code] = r;
+    const prices = list.map((r) => Number(r.average)).filter((v) => isFinite(v));
+    const lo = prices.length ? Math.min(...prices) : 0;
+    const hi = prices.length ? Math.max(...prices) : 0;
+    const region = this._state(fuel, 'region_average');
+    const own = region && region.attributes.region_code;
+    this._regions = byCode;
+    let map = `<span class="note">${esc(T('regions_loading'))}</span>`;
+    if (regionGeometry) {
+      const shape = regionPaths(regionGeometry, 400);
+      map = `<svg viewBox="0 0 ${shape.width} ${shape.height}" role="group" aria-label="${esc(T('regions_title'))}">${shape.paths.map((p) => {
+        const r = byCode[p.code];
+        const v = r ? Number(r.average) : NaN;
+        // cheapest green, dearest red, mixed in between: both theme colours, so it works in light and dark
+        const t = isFinite(v) && hi > lo ? Math.round(100 * (v - lo) / (hi - lo)) : 50;
+        const fill = isFinite(v) ? `fill: color-mix(in srgb, var(--cp-bad-base) ${t}%, var(--cp-good-base)); fill-opacity: 0.85` : '';
+        const label = r ? `${p.name}: ${this._num(v)} (${r.rank}.)` : p.name;
+        const cls = [isFinite(v) ? '' : 'none', p.code === own ? 'own' : '', p.code === this._picked ? 'picked' : ''].filter(Boolean).join(' ');
+        return `<path class="${cls}" d="${p.d}" style="${fill}" tabindex="0" role="button" data-region="${esc(p.code)}" aria-label="${esc(label)}"><title>${esc(label)}</title></path>`;
+      }).join('')}</svg>`;
+    }
+    const pickedCode = this._picked || own;
+    const picked = pickedCode && byCode[pickedCode];
+    const info = picked
+      ? `${esc(picked.name)}: <b>${esc(this._num(picked.average))} ${esc(top.attributes.unit_of_measurement || 'Kč/l')}</b> · ${esc(T('rank_of', { rank: picked.rank, n: list.length }))}`
+      : '';
+    return `<ha-card class="card"><style>${REGIONS_STYLE}</style>
+      <div class="head"><span class="icon fuel"><ha-icon icon="mdi:map-outline"></ha-icon></span>
+        <div class="info"><span class="primary">${esc(T('regions_title'))} · ${esc(top.attributes.fuel_label || fuel)}</span>
+          <span class="secondary">${esc(T('regions_sub'))}</span></div></div>
+      <div class="regions">${map}</div>
+      <div class="picked-info" aria-live="polite">${info}</div>
+      ${prices.length ? `<div class="scale"><span>${esc(this._num(lo))}</span><span class="ramp" aria-hidden="true"></span><span>${esc(this._num(hi))}</span></div>` : ''}
+      <span class="source">${this._source()} · ${esc(T('regions_source'))}</span>
+    </ha-card>`;
+  }
+
+  _pick(e) {
+    const t = e.composedPath ? e.composedPath().find((n) => n.dataset && n.dataset.region) : null;
+    if (!t) return;
+    if (e.preventDefault) e.preventDefault();
+    this._picked = t.dataset.region;
+    this._sig = '';
+    if (this._hass) this.hass = this._hass;
+  }
+}
+
 // ------------------------------------------------------------------ the editor of the small cards
 class CenyPalivMiniEditor extends HTMLElement {
   setConfig(config) { this._config = config; this._render(); }
@@ -1773,6 +2010,8 @@ class CenyPalivMiniEditor extends HTMLElement {
 const MINI_CARDS = [
   ['ceny-paliv-fuels-card', CenyPalivFuelsCard, 'Ceny paliv: all fuels', 'Every fuel of an area at a glance: the cheapest price, your station and the trend.'],
   ['ceny-paliv-savings-card', CenyPalivSavingsCard, 'Ceny paliv: full tank', 'What a full tank costs at your station, the cheapest one and the average, and whether the drive pays off.'],
+  ['ceny-paliv-compare-card', CenyPalivCompareCard, 'Ceny paliv: comparison', 'Your station and area against the region and the country, and the 14 regions ranked.'],
+  ['ceny-paliv-regions-card', CenyPalivRegionsCard, 'Ceny paliv: regions map', 'A map of the 14 Czech regions coloured by their average price.'],
 ];
 if (!customElements.get('ceny-paliv-mini-editor')) customElements.define('ceny-paliv-mini-editor', CenyPalivMiniEditor);
 for (const [type, cls, name, description] of MINI_CARDS) {

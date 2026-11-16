@@ -228,6 +228,8 @@ Kromě hlavní karty přináší integrace menší karty, také v nabídce karet
 |---|---|---|
 | `custom:ceny-paliv-fuels-card` | všechna paliva oblasti najednou: nejnižší cena a stanice, cena u vaší stanice, trend od včerejška | `fuels` (která a v jakém pořadí; výchozí všechna) |
 | `custom:ceny-paliv-savings-card` | kolik stojí plná nádrž u vaší stanice, u nejlevnější a za průměrnou cenu oblasti, kolik ušetříte a zda se delší cesta k nejlevnější vyplatí | `fuel` (povinné), `tank_litres` (40; u CNG kg), `consumption` (6,5 na 100 km) |
+| `custom:ceny-paliv-compare-card` | vaše stanice, oblast, váš kraj a Česko vedle sebe jako pruhy, každý proti celé republice, a 14 krajů od nejlevnějšího | `fuel` (povinné), `show_regions` (true) |
+| `custom:ceny-paliv-regions-card` | mapa 14 krajů obarvená od nejlevnějšího (zelená) po nejdražší (červená), váš kraj obtažený; klepnutím na kraj jeho cena a pořadí | `fuel` (povinné) |
 
 ```yaml
 type: custom:ceny-paliv-savings-card

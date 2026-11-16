@@ -8,6 +8,10 @@
   price and station, your station, the trend since yesterday); `ceny-paliv-savings-card` shows what a full tank costs
   at your station, at the cheapest one and at the average price, how much you save and whether the longer drive to
   the cheapest pays off. Both are in the card picker, with a visual editor.
+- **Price comparison and a map of the regions**: `ceny-paliv-compare-card` puts your station, the area, your region
+  and the Czech Republic side by side and ranks the 14 regions; `ceny-paliv-regions-card` colours a map of the
+  regions by their average price, from the boundaries the integration already has (served to the card at
+  `/ceny_paliv_static/regions.json`).
 - **Station details and navigation in the card**: tapping a station of the top 5 opens a panel (a bottom sheet on
   phones) with its price, price date, rank among the area's up-to-date stations, distance and trends, and buttons to
   navigate there with Mapy.com, Google Maps or Waze. Before, a tap opened Google Maps directly.

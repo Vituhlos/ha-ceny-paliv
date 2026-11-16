@@ -2,7 +2,7 @@
 import json
 from unittest.mock import AsyncMock, MagicMock
 
-from custom_components.ceny_paliv import CenyPalivLogoView
+from custom_components.ceny_paliv import CenyPalivLogoView, CenyPalivRegionsView
 from custom_components.ceny_paliv.logos import (
     ID_RE,
     PNG_MAGIC,
@@ -88,3 +88,17 @@ async def test_logo_view_serves_only_valid_ids(hass, tmp_path):
     assert (await view.get(MagicMock(), "orlen\n")).status == 404
     assert (await view.get(MagicMock(), "shell")).status == 404
     assert (await view.get(MagicMock(), "orlen")).status == 200
+
+
+async def test_the_region_boundaries_are_served_to_the_regions_card():
+    from pathlib import Path
+
+    import custom_components.ceny_paliv as integration
+
+    path = Path(integration.__file__).parent / "regions.json"
+    view = CenyPalivRegionsView(path)
+    assert view.url == "/ceny_paliv_static/regions.json"
+    assert view.requires_auth is False  # loaded by the card like the card itself
+    response = await view.get(MagicMock())
+    assert response.headers["Cache-Control"] == "no-cache"
+    assert response._path == path
