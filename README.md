@@ -26,7 +26,7 @@ A HACS integration that shows the cheapest stations in **your city** or a **5–
 - **Fill up where it is cheapest** on your way: the card lists the five cheapest stations in your city or around your home, with the price date and a tap to Google Maps.
 - **Follow your usual station**: its price, its rank in town, how far it is from the cheapest one, and how its price moved over 1–30 days, with a 30-day graph.
 - **Dual-fuel or several cars**: one card per fuel (for example Natural 95 and LPG), or one area per town you drive in.
-- **Get told instead of looking**: a phone notification when your station's price changes or when the cheapest price drops under your limit (see [Examples](#examples)).
+- **Get told instead of looking**: a phone notification when your station gets cheaper, when a price drops under your limit, or about a cheap station near you on the road (see [Blueprints](#blueprints)).
 - **Rural areas**: a GPS circle of 5–50 km collects the stations of several small towns, and "Show older prices too" keeps stations that update their prices rarely.
 
 ## 1. Get your access key (free)
@@ -90,6 +90,7 @@ For each fuel `<fuel>` (`n95`, `benzinplus`, `diesel`, `dieselplus`, `lpg`, `cng
 | `sensor.ceny_paliv_<fuel>_national_average` | average price of the up-to-date stations in the Czech Republic; the 14 regions in attributes |
 | `sensor.ceny_paliv_<fuel>_region_average` | average price in the region (kraj) of your area |
 | `sensor.ceny_paliv_<fuel>_area_average` | average price in your area (town or GPS area) and how it compares |
+| `event.ceny_paliv_<fuel>_price_change` | events when your favourite station gets cheaper or dearer, or the area's cheapest price drops |
 
 Each configured area is a service device (named after the entry, for example `Ceny paliv Praha`) and its sensors have translated names under it, for example `Ceny paliv Praha Natural 95 · cheapest #1`; the station a position or favourite sensor currently shows is in its `station` attribute. Existing entity IDs remain stable when upgrading or changing area mode. A former favourite station keeps an archived sensor for its statistics (diagnostic, disabled; see [section 5](#5-without-the-card-standard-cards)).
 
@@ -135,6 +136,15 @@ Each station in `stations` (and `home`) has `rank`, `name`, `title` (a readable 
 | `_area_average` | the average of the stations in your area | `station_count`, `region`, `region_rank`, `vs_national` and `vs_region` (Kč; below zero: your area is cheaper) |
 
 When a followed person or a moved GPS area crosses into another region, the region sensor continues with that region's average.
+
+**`event.ceny_paliv_<fuel>_price_change`** — an event entity that compares each refresh with the one before. Its event types:
+
+| Event type | When |
+|---|---|
+| `favourite_cheaper` / `favourite_dearer` | the price at your favourite station went down / up (choosing another favourite is not a change) |
+| `cheapest_cheaper` | the area's cheapest price went down (also when a moved GPS area finds a cheaper station) |
+
+Each event carries `fuel`, `unit`, `area`, `station`, `address`, `price`, `previous_price`, `change` (Kč), `distance_km` (GPS mode) and `maps`. Its entity id stays the same when you choose another favourite station, so automations keep working. The prices at start-up are only the baseline: a restart, or a refresh that failed, reports nothing.
 
 ## How the data is updated
 
@@ -265,6 +275,16 @@ action: ceny_paliv.refresh
 data:
   config_entry_id: 01JC0EXAMPLE  # optional: the area picked in the action editor
 ```
+
+## Blueprints
+
+Ready-made automations: import one with its button (or **Settings → Automations & scenes → Blueprints → Import blueprint** with the file's link), then create an automation from it. Each one lets you choose the message language (English or Czech) and what to do, for example a notification to your phone with `{{ title }}` and `{{ message }}`; by default it creates a notification in Home Assistant.
+
+| Blueprint | What it does | |
+|---|---|---|
+| [Favourite station price change](blueprints/automation/ceny_paliv/favourite_price_change.yaml) | your favourite station got cheaper (or dearer too), by at least your smallest change; uses the price-change events | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FVituhlos%2Fha-ceny-paliv%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fceny_paliv%2Ffavourite_price_change.yaml) |
+| [Price under a limit](blueprints/automation/ceny_paliv/price_below_limit.yaml) | a price (the area's cheapest, your favourite or an average) dropped under your limit; once per crossing | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FVituhlos%2Fha-ceny-paliv%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fceny_paliv%2Fprice_below_limit.yaml) |
+| [Cheap station nearby](blueprints/automation/ceny_paliv/cheap_station_nearby.yaml) | while you are away from home, the cheapest station of a GPS area within your price and distance, with a pause between messages; best with an area that follows you | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FVituhlos%2Fha-ceny-paliv%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fceny_paliv%2Fcheap_station_nearby.yaml) |
 
 ## Examples
 

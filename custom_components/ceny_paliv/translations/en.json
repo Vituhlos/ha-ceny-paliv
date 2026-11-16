@@ -322,6 +322,32 @@
     }
   },
   "entity": {
+    "event": {
+      "price_change": {
+        "name": "{fuel} · price change",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "favourite_cheaper": "Favourite station cheaper",
+              "favourite_dearer": "Favourite station dearer",
+              "cheapest_cheaper": "Cheapest in the area cheaper"
+            }
+          },
+          "station": {
+            "name": "Station"
+          },
+          "price": {
+            "name": "Price"
+          },
+          "previous_price": {
+            "name": "Previous price"
+          },
+          "change": {
+            "name": "Change"
+          }
+        }
+      }
+    },
     "sensor": {
       "cheapest": {
         "name": "{fuel} · cheapest"

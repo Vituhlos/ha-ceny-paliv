@@ -16,6 +16,11 @@
   the up-to-date stations of the same download: no extra request to mBenzin.cz. Each station's region comes from its
   coordinates and region boundaries bundled with the integration (ČÚZK, RÚIAN, CC BY 4.0, simplified; rebuilt with
   `script/build_regions.py`).
+- **Price-change events and blueprints**: per fuel, an event entity `event.ceny_paliv_<fuel>_price_change` reports
+  when your favourite station gets cheaper or dearer and when the area's cheapest price drops, with the station,
+  the old and new price and a Google Maps link; its entity id stays the same when you choose another favourite. Three
+  blueprints, in English or Czech: a favourite station price change, a price under a limit, and a cheap station
+  nearby while you are away from home (best with an area that follows you).
 
 ## 0.7.0
 

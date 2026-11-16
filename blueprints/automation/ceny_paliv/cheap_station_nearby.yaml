@@ -1,0 +1,124 @@
+blueprint:
+  name: Ceny paliv – cheap station nearby
+  description: >-
+    While you are away from home, tells you about a cheap station close by: the cheapest one of a GPS area that is
+    at most your price and distance. Works best with an area whose location source follows you (a person or the
+    Home Assistant app on your phone), so the stations are the ones around you. At most one message per pause.
+    Česky: upozornění na levnou stanici poblíž, když jste mimo domov.
+  domain: automation
+  author: Ceny paliv
+  source_url: https://github.com/Vituhlos/ha-ceny-paliv/blob/main/blueprints/automation/ceny_paliv/cheap_station_nearby.yaml
+  homeassistant:
+    min_version: "2025.1.0"
+  input:
+    cheapest_sensor:
+      name: Cheapest stations of a GPS area
+      description: The area's `sensor.ceny_paliv_<fuel>_top5` (only GPS areas know how far a station is).
+      selector:
+        entity:
+          filter:
+            - integration: ceny_paliv
+              domain: sensor
+    person:
+      name: Who
+      description: Messages are sent only while this person or device is not at home.
+      selector:
+        entity:
+          filter:
+            - domain: [person, device_tracker]
+    max_price:
+      name: Highest price
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 0.1
+          unit_of_measurement: Kč
+          mode: box
+    max_distance:
+      name: Farthest distance
+      description: From the centre of the area (where the person was when the area last moved).
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          unit_of_measurement: km
+    pause:
+      name: Pause between messages
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 24
+          unit_of_measurement: h
+    language:
+      name: Message language
+      default: en
+      selector:
+        select:
+          options:
+            - label: English
+              value: en
+            - label: Čeština
+              value: cs
+    actions:
+      name: Actions
+      description: >-
+        What to do, for example notify your phone with `{{ title }}` and `{{ message }}`. Also available:
+        `{{ station }}`, `{{ price }}`, `{{ distance_km }}`, `{{ unit }}` and `{{ maps }}` (a Google Maps link).
+      default:
+        - action: persistent_notification.create
+          data:
+            title: "{{ title }}"
+            message: "{{ message }}"
+      selector:
+        action: {}
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  # any change of the area's stations or prices, and leaving home
+  - trigger: state
+    entity_id: !input cheapest_sensor
+  - trigger: state
+    entity_id: !input person
+    from: home
+
+variables:
+  cheapest_sensor: !input cheapest_sensor
+  who: !input person
+  max_price: !input max_price
+  max_distance: !input max_distance
+  pause: !input pause
+  language: !input language
+  nearby: >-
+    {{ (state_attr(cheapest_sensor, 'stations') or [])
+       | selectattr('distance_km', 'defined')
+       | selectattr('price', 'le', max_price | float)
+       | selectattr('distance_km', 'le', max_distance | float)
+       | list }}
+
+conditions:
+  - condition: template
+    value_template: "{{ states(who) not in ['home', 'unknown', 'unavailable'] and nearby | count > 0 }}"
+  - condition: template
+    value_template: >-
+      {{ this.attributes.last_triggered is none
+         or now() - this.attributes.last_triggered >= timedelta(hours=pause | float) }}
+
+actions:
+  - variables:
+      found: "{{ nearby[0] }}"
+      station: "{{ found.title }}"
+      price: "{{ found.price }}"
+      distance_km: "{{ found.distance_km }}"
+      maps: "{{ found.maps }}"
+      unit: "{{ state_attr(cheapest_sensor, 'unit_of_measurement') }}"
+      title: >-
+        {% if language == 'cs' %}⛽ Levná stanice poblíž{% else %}⛽ Cheap station nearby{% endif %}
+      message: >-
+        {{ station }}: {{ '%.2f' | format(price | float) }} {{ unit }},
+        {{ '%.1f' | format(distance_km | float) }} km
+  - sequence: !input actions

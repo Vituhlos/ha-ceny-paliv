@@ -322,6 +322,32 @@
     }
   },
   "entity": {
+    "event": {
+      "price_change": {
+        "name": "{fuel} · změna ceny",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "favourite_cheaper": "Oblíbená stanice zlevnila",
+              "favourite_dearer": "Oblíbená stanice zdražila",
+              "cheapest_cheaper": "Nejlevnější v oblasti zlevnila"
+            }
+          },
+          "station": {
+            "name": "Stanice"
+          },
+          "price": {
+            "name": "Cena"
+          },
+          "previous_price": {
+            "name": "Předchozí cena"
+          },
+          "change": {
+            "name": "Změna"
+          }
+        }
+      }
+    },
     "sensor": {
       "cheapest": {
         "name": "{fuel} · nejlevnější"

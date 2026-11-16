@@ -53,7 +53,7 @@ na PyPI, integrace ji používá; `mypy --strict` v CI. Bronze 20/20, Silver 10/
 
 Stav: okolí jede se mnou – hotovo (zdroj polohy „osoba nebo zařízení“, bez dalších požadavků na mBenzin).
 Celostátní a krajské průměry a postavení okolí – hotovo (tři senzory s dlouhodobými statistikami, hranice krajů
-z ČÚZK, bez dalších požadavků na mBenzin).
+z ČÚZK, bez dalších požadavků na mBenzin). Události a blueprinty – hotovo (entita událostí změny ceny, tři blueprinty).
 
 - Okolí jede se mnou: mimo domov se okolí posouvá podle polohy osoby (data jsou celostátní, takže bez dalších
   požadavků na mBenzin).
