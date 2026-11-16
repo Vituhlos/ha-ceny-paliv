@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
+
+Smarter data and notifications: the GPS area can follow you, average prices show how your area stands, and price
+changes arrive as events with three ready-made blueprints. All of it comes from the same downloads as before: no
+extra request to mBenzin.cz. New entities per fuel: three average-price sensors and one event entity.
 
 ### New
 
@@ -21,6 +25,12 @@
   the old and new price and a Google Maps link; its entity id stays the same when you choose another favourite. Three
   blueprints, in English or Czech: a favourite station price change, a price under a limit, and a cheap station
   nearby while you are away from home (best with an area that follows you).
+
+### Known limitations
+
+- Validated with offline tests on Home Assistant 2025.1 and 2026.10 (the blueprints run as real automations in
+  them) and CI before release; checked on a live instance only after release. A real phone tracker, live national
+  averages and importing the blueprints through my.home-assistant.io are not verified yet.
 
 ## 0.7.0
 
