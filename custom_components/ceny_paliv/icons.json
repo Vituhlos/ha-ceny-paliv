@@ -12,6 +12,15 @@
       },
       "position": {
         "default": "mdi:gas-station"
+      },
+      "national_average": {
+        "default": "mdi:map"
+      },
+      "region_average": {
+        "default": "mdi:map-outline"
+      },
+      "area_average": {
+        "default": "mdi:map-marker-radius"
       }
     }
   },

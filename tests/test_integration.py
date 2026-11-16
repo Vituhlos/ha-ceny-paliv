@@ -1183,7 +1183,7 @@ async def test_entities_share_the_area_device_and_translated_names(
         assert device.entry_type is DeviceEntryType.SERVICE
         assert device.manufacturer == "mBenzin.cz"
         entities = er.async_entries_for_config_entry(registry, entry.entry_id)
-        assert len(entities) == 2 * 6 + 1  # per fuel: top5 and 5 positions; the n95 favourite
+        assert len(entities) == 2 * 9 + 1  # per fuel: top5, 5 positions and 3 averages; the n95 favourite
         assert {e.device_id for e in entities} == {device.id}
         assert all(e.has_entity_name for e in entities)
         assert registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_n95_top5") == "sensor.my_cheapest"
@@ -1195,6 +1195,7 @@ async def test_entities_share_the_area_device_and_translated_names(
                 "sensor.ceny_paliv_n95_home",
                 "sensor.ceny_paliv_n95_2",
                 "sensor.ceny_paliv_cng_top5",
+                "sensor.ceny_paliv_n95_national_average",
             )
         }
         assert names == {
@@ -1202,6 +1203,7 @@ async def test_entities_share_the_area_device_and_translated_names(
             "sensor.ceny_paliv_n95_home": "Ceny paliv Praha Natural 95 · favourite station",
             "sensor.ceny_paliv_n95_2": "Ceny paliv Praha Natural 95 · cheapest #2",
             "sensor.ceny_paliv_cng_top5": "Ceny paliv Praha CNG · cheapest",
+            "sensor.ceny_paliv_n95_national_average": "Ceny paliv Praha Natural 95 · Czech average",
         }
         assert hass.states.get("sensor.ceny_paliv_cng_top5").attributes["unit_of_measurement"] == "Kč/kg"
         # the station is no longer in the name: its readable title is in the attribute (no street: the town)
@@ -1216,8 +1218,9 @@ def test_entity_translations_and_icons_cover_every_sensor():
     from custom_components.ceny_paliv import sensor
 
     root = Path(sensor.__file__).parent
-    keys = {"cheapest", "favourite", "archived_favourite", "position"}
-    assert keys == set(re.findall(r'_attr_translation_key = "(\w+)"', (root / "sensor.py").read_text("utf-8")))
+    averages = {"national_average", "region_average", "area_average"}  # f"{scope}_average"
+    keys = {"cheapest", "favourite", "archived_favourite", "position"} | averages
+    assert keys - averages == set(re.findall(r'_attr_translation_key = "(\w+)"', (root / "sensor.py").read_text("utf-8")))
     for language in ("en", "cs"):
         names = json.loads((root / "translations" / f"{language}.json").read_text("utf-8"))["entity"]["sensor"]
         assert set(names) == keys
@@ -1770,7 +1773,7 @@ async def test_removing_a_fuel_removes_its_sensors_but_not_another_areas(
             for e in er.async_entries_for_config_entry(registry, praha.entry_id)
             if "_diesel_" in e.unique_id
         ]
-        assert len(diesel_ids) == 7  # top5, favourite and 5 positions
+        assert len(diesel_ids) == 10  # top5, favourite, 5 positions and 3 averages
 
         hass.config_entries.async_update_entry(praha, options={"fuels": ["n95"], "homes": {}})
         await hass.async_block_till_done()
@@ -1779,6 +1782,6 @@ async def test_removing_a_fuel_removes_its_sensors_but_not_another_areas(
         assert fuels_of(praha) == ["n95"]
         assert all(hass.states.get(entity_id) is None for entity_id in diesel_ids)
         assert fuels_of(brno) == ["diesel"]
-        assert len(er.async_entries_for_config_entry(registry, brno.entry_id)) == 6
+        assert len(er.async_entries_for_config_entry(registry, brno.entry_id)) == 9
     for entry in (praha, brno):
         assert await hass.config_entries.async_unload(entry.entry_id)

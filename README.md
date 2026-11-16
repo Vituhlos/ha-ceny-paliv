@@ -16,6 +16,7 @@ A HACS integration that shows the cheapest stations in **your city** or a **5–
 - Or choose a GPS area centred on Home Assistant's configured home location, a saved `zone.*`, a point selected on Home Assistant's map, or (advanced) manually entered coordinates; choose a **5–50 km** radius (default **40 km**). No phone location, GPS tracker, geocoder, or extra mBenzin request is used
 - Per fuel: the **top 5 cheapest** stations in the city (only that city, not the region), with a Google Maps link, and a **map**
 - Favourite station: price, **trends vs 1/2/7/14/30 days ago**, rank in town, long-term statistics (the 30-day graph)
+- **Average prices** in the whole country, in your region (kraj) and in your area, and how your area stands against them, with long-term statistics, from the same download
 - A ready-made **dashboard card** (`ceny-paliv-card`) shipped with the integration — add it from the card picker, no YAML to copy — in **English or Czech** (your choice during setup). It is **flexible**: two columns on a wide dashboard, one on a phone, a compact version, and every part (favourite station, list, map, graph) can be placed as its own card
 - Optional **station logos** (Orlen, MOL, Shell, Tesco…): tick the chains you want in the setup and they are downloaded for you. Chains without a logo get a colour badge with their initials
 - Stale prices are hidden (older than yesterday for petrol/diesel, 3 days for CNG, 7 days for LPG/AdBlue). Small stations update their prices less often: the **Show older prices too** setting (up to 3 or 7 days) keeps them in the list, with the price date shown
@@ -85,10 +86,13 @@ For each fuel `<fuel>` (`n95`, `benzinplus`, `diesel`, `dieselplus`, `lpg`, `cng
 | `sensor.ceny_paliv_<fuel>_top5` | price of the cheapest station; attributes: the 5 cheapest stations (name, address, price, coordinates, Google Maps link, trends…). GPS mode also provides `gps_area` metadata and at most 10 compact `gps_nearest_stations` summaries ordered by distance |
 | `sensor.ceny_paliv_<fuel>_home` | price at your favourite station (only if you chose one); trends, rank, statistics |
 | `sensor.ceny_paliv_<fuel>_1` … `_5` | the 5 cheapest stations, with latitude/longitude for the map card |
+| `sensor.ceny_paliv_<fuel>_national_average` | average price of the up-to-date stations in the Czech Republic; the 14 regions in attributes |
+| `sensor.ceny_paliv_<fuel>_region_average` | average price in the region (kraj) of your area |
+| `sensor.ceny_paliv_<fuel>_area_average` | average price in your area (town or GPS area) and how it compares |
 
 Each configured area is a service device (named after the entry, for example `Ceny paliv Praha`) and its sensors have translated names under it, for example `Ceny paliv Praha Natural 95 · cheapest #1`; the station a position or favourite sensor currently shows is in its `station` attribute. Existing entity IDs remain stable when upgrading or changing area mode. A former favourite station keeps an archived sensor for its statistics (diagnostic, disabled; see [section 5](#5-without-the-card-standard-cards)).
 
-All sensors show the price in Kč/l (CNG in Kč/kg) and carry the attribution `Ceny: mbenzin.cz`. The card finds its sensors by the `cp_fuel`, `cp_role` (`top5`, `home`, `position`, `home_archive`), `cp_index` and `cp_config_id` attributes.
+All sensors show the price in Kč/l (CNG in Kč/kg) and carry the attribution `Ceny: mbenzin.cz`. The card finds its sensors by the `cp_fuel`, `cp_role` (`top5`, `home`, `position`, `home_archive`, `national_average`, `region_average`, `area_average`), `cp_index` and `cp_config_id` attributes.
 
 ### Attributes
 
@@ -120,6 +124,16 @@ Each station in `stations` (and `home`) has `rank`, `name`, `title` (a readable 
 | `statistic_id` | the station's own long-term statistics, for example `ceny_paliv:n95_3fa2b1c4d5e6` (see below) |
 
 **`sensor.ceny_paliv_<fuel>_1` … `_5`** — state: the price of the n-th cheapest station; attributes `station` (the readable title), `price`, `latitude` and `longitude` for the map (no coordinates when that station is your favourite, which the favourite sensor draws). A position without a station is `unknown`.
+
+**Average prices** — the three sensors below count only the up-to-date stations (the same age limit as the list, including **Show older prices too**) and keep long-term statistics (`state_class: measurement`). Each station's region comes from its coordinates and the region boundaries bundled with the integration (ČÚZK, simplified: a station within about 200 m of a regional border may count for the neighbouring region).
+
+| Sensor | State | Attributes |
+|---|---|---|
+| `_national_average` | the average in the Czech Republic | `station_count`, `median`, `regions`: for each region `code` (NUTS 3, for example `CZ010`), `name`, `average`, `station_count`, `vs_national` and `rank` (1 = the cheapest region) |
+| `_region_average` | the average in your area's region (a city's region, or the GPS centre's); unavailable when the centre lies outside the Czech Republic | `region`, `region_code`, `station_count`, `rank`, `vs_national` |
+| `_area_average` | the average of the stations in your area | `station_count`, `region`, `region_rank`, `vs_national` and `vs_region` (Kč; below zero: your area is cheaper) |
+
+When a followed person or a moved GPS area crosses into another region, the region sensor continues with that region's average.
 
 ## How the data is updated
 
@@ -363,6 +377,7 @@ CI also tests Python 3.14 with `requirements_test_latest.txt`. These requirement
 the test framework, which in turn pins Home Assistant 2025.1.0 and 2026.10.4 respectively.
 The Home Assistant frontend and HTTP server are mocked in integration tests.
 The card has its own tests without dependencies: `node --test tests/test_card.js` (Node 22+).
+The region boundaries in `custom_components/ceny_paliv/regions.json` are built by `python script/build_regions.py` from ČÚZK's download service.
 CI additionally runs hassfest, the HACS validation, ruff, `mypy --strict custom_components/ceny_paliv` (with the Home Assistant 2026.10 pin) and a check that the manifest and card versions match.
 
 ## 🇨🇿 Česky
@@ -372,3 +387,5 @@ CI additionally runs hassfest, the HACS validation, ruff, `mypy --strict custom_
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+The region boundaries (`regions.json`) are derived from RÚIAN data by ČÚZK (Český úřad zeměměřický a katastrální), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); simplified.

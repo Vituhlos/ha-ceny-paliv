@@ -51,6 +51,9 @@ na PyPI, integrace ji používá; `mypy --strict` v CI. Bronze 20/20, Silver 10/
 
 ## 0.8 – chytrá data a upozornění
 
+Stav: celostátní a krajské průměry a postavení okolí – hotovo (tři senzory s dlouhodobými statistikami, hranice krajů
+z ČÚZK, bez dalších požadavků na mBenzin).
+
 - Okolí jede se mnou: mimo domov se okolí posouvá podle polohy osoby (data jsou celostátní, takže bez dalších
   požadavků na mBenzin).
 - Celostátní a krajské průměry, postavení okolí, dlouhodobé statistiky.

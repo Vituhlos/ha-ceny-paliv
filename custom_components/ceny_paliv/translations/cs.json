@@ -311,6 +311,15 @@
       },
       "position": {
         "name": "{fuel} · {position}. nejlevnější"
+      },
+      "national_average": {
+        "name": "{fuel} · celostátní průměr"
+      },
+      "region_average": {
+        "name": "{fuel} · krajský průměr"
+      },
+      "area_average": {
+        "name": "{fuel} · průměr v oblasti"
       }
     }
   },

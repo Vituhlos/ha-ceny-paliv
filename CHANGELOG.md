@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- **Average prices and the standing of your area**: per fuel, three new sensors with long-term statistics: the
+  average price in the Czech Republic (with all 14 regions in its attributes, ranked), in the region (kraj) of your
+  area, and in your area, with how much cheaper or dearer the area is than the region and the country. They count
+  the up-to-date stations of the same download: no extra request to mBenzin.cz. Each station's region comes from its
+  coordinates and region boundaries bundled with the integration (ČÚZK, RÚIAN, CC BY 4.0, simplified; rebuilt with
+  `script/build_regions.py`).
+
 ## 0.7.0
 
 The integration now meets the **Platinum** tier of the Home Assistant integration quality scale (self-assessed in

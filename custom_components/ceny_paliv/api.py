@@ -6,11 +6,12 @@ import datetime as dt
 import hashlib
 import math
 import re
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import timezone
 from numbers import Real
+from statistics import median
 from typing import Any, Callable
 import unicodedata
 from zoneinfo import ZoneInfo
@@ -42,6 +43,7 @@ from .geography import (
     nearest_stations_within_radius,
     stations_within_radius,
 )
+from .regions import REGION_NAMES, region_of
 
 _CZECH_TIMEZONE = ZoneInfo("Europe/Prague")
 _GPS_NEAREST_LIMIT = 10
@@ -500,6 +502,65 @@ def _trend(log: list[list[Any]], price: float, today: dt.date, days: int) -> dic
     }
 
 
+def warm_regions(markers: list[dict[str, Any]]) -> None:
+    """Find every station's region once, in an executor job; build_payload then reads them from the cache."""
+    for marker in markers:
+        if _usable_marker(marker):
+            region_of(marker["lat"], marker["lng"])
+
+
+def _average(prices: list[float]) -> float | None:
+    return round(sum(prices) / len(prices), 2) if prices else None
+
+
+def _difference(value: float | None, reference: float | None) -> float | None:
+    return round(value - reference, 2) if value is not None and reference is not None else None
+
+
+def price_overview(
+    fresh_markers: list[dict[str, Any]], area_prices: list[float], area_region: str | None
+) -> dict[str, Any]:
+    """The average price in the country and in each region, and how the area stands against them."""
+    national = [marker["price"] for marker in fresh_markers]
+    national_average = _average(national)
+    by_region: dict[str, list[float]] = {}
+    for marker in fresh_markers:
+        if (code := region_of(marker["lat"], marker["lng"])) is not None:
+            by_region.setdefault(code, []).append(marker["price"])
+    regions: list[dict[str, Any]] = sorted(
+        (
+            {
+                "code": code,
+                "name": REGION_NAMES[code],
+                "average": _average(prices),
+                "station_count": len(prices),
+                "vs_national": _difference(_average(prices), national_average),
+            }
+            for code, prices in by_region.items()
+        ),
+        key=lambda region: (region["average"], region["code"]),
+    )
+    for rank, region in enumerate(regions, start=1):
+        region["rank"] = rank  # 1 = the cheapest region
+    area_region_data: dict[str, Any] | None = next((region for region in regions if region["code"] == area_region), None)
+    area_average = _average(area_prices)
+    return {
+        "national": {
+            "average": national_average,
+            "median": round(median(national), 2) if national else None,
+            "station_count": len(national),
+        },
+        "regions": regions,
+        "region": area_region_data,
+        "area": {
+            "average": area_average,
+            "station_count": len(area_prices),
+            "vs_national": _difference(area_average, national_average),
+            "vs_region": _difference(area_average, area_region_data["average"] if area_region_data else None),
+        },
+    }
+
+
 def build_payload(
     markers: list[dict[str, Any]],
     *,
@@ -667,11 +728,15 @@ def build_payload(
             data["distance_km"] = m["distance_km"]
         return data
 
+    def fresh_date(m: dict[str, Any]) -> dt.date | None:
+        """The day of the price, or None when it is unknown or older than the window."""
+        d = parse_fresh(m.get("fresh"), sample_day)
+        return d if d is not None and max(0, (today - d).days) <= max_age else None
+
     kept: list[tuple[dict[str, Any], dt.date]] = []
     excluded = 0
     for m in candidate_markers:
-        d = parse_fresh(m.get("fresh"), sample_day)
-        if d is None or max(0, (today - d).days) > max_age:
+        if (d := fresh_date(m)) is None:
             excluded += 1
             continue
         kept.append((m, d))
@@ -730,6 +795,18 @@ def build_payload(
         if home is not None:
             home["url"] = m["url"]  # the station's identity, for its long-term statistics (statistics.py)
 
+    if gps_mode:
+        area_region = region_of(*gps_center) if gps_center is not None else None
+    else:
+        # a town lies in one region; the most common one only guards against a station placed across the border
+        found = Counter(code for m in in_city if (code := region_of(m["lat"], m["lng"])) is not None)
+        area_region = found.most_common(1)[0][0] if found else None
+    overview = price_overview(
+        [m for m in markers if _usable_marker(m) and fresh_date(m) is not None],
+        [m["price"] for m, _ in kept],
+        area_region,
+    )
+
     stamp = fetched_stamp.isoformat(timespec="seconds")
     result = {
         "stations": stations,
@@ -746,6 +823,7 @@ def build_payload(
         "language": language,
         "labels": LABELS.get(language, LABELS[DEFAULT_LANGUAGE]),
         "next_update": next_update_at(now).isoformat(timespec="seconds"),
+        "overview": overview,
     }
     if not gps_mode:
         result["city_total"] = len(in_city)

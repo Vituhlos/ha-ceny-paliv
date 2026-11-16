@@ -1,9 +1,11 @@
-"""Sensors: top-5 summary, favourite station and 5 map positions, per fuel.
+"""Sensors: top-5 summary, favourite station, 5 map positions and the average prices, per fuel.
 
 Entity ids are suggested for new installs (the dashboard card finds the sensors by their cp_* attributes):
   sensor.ceny_paliv_<fuel>_top5   cheapest price, all details in attributes
   sensor.ceny_paliv_<fuel>_home   price at your favourite station (if one is chosen)
   sensor.ceny_paliv_<fuel>_1 .. 5 the 5 cheapest stations, with latitude/longitude for the map card
+  sensor.ceny_paliv_<fuel>_national_average / _region_average / _area_average
+                                  average price in the country, in the area's region and in the area
 
 Names come from the translations (entity.sensor.<translation_key>) under the area's device; the station a sensor
 currently describes is in its `station` attribute.
@@ -83,6 +85,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: CenyPalivConfigEntry, as
                 entities.append(archived)
                 existing_ids.add(archived.unique_id)
         entities.extend(CenyPalivPositionSensor(coordinator, entry, fuel, i) for i in range(TOP))
+        entities.extend(CenyPalivAverageSensor(coordinator, entry, fuel, scope) for scope in ("national", "region", "area"))
     async_add_entities(entities)
 
 
@@ -248,10 +251,61 @@ class CenyPalivPositionSensor(CenyPalivSensor):
         if s:
             # the favourite station is drawn by its own sensor on the map: no coordinates here
             attrs.update(
-                station=s["title"],  # 'VS Petrol · Obory'
+                station=s["title"],  # 'Benzina · Karlovarská'
                 price=s["price"],  # the map marker label (the state with its unit does not fit)
                 latitude=None if s["home"] else s["lat"],
                 longitude=None if s["home"] else s["lng"],
             )
         return attrs
 
+
+
+class CenyPalivAverageSensor(CenyPalivSensor):
+    """Average price of the up-to-date stations in the country, in the area's region or in the area.
+
+    state_class=measurement: Home Assistant keeps their long-term statistics.
+    """
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
+    # the 14 regions are for the card, read from the live state
+    _unrecorded_attributes = frozenset({"regions"})
+
+    def __init__(self, coordinator: CenyPalivCoordinator, entry: CenyPalivConfigEntry, fuel: str, scope: str) -> None:
+        super().__init__(coordinator, entry, fuel, f"{scope}_average")
+        self._scope = scope
+        self._attr_translation_key = f"{scope}_average"
+
+    @property
+    def _overview(self) -> dict[str, Any]:
+        return self._payload.get("overview") or {}
+
+    @property
+    def available(self) -> bool:
+        # the area's region is unknown when its centre lies outside the Czech Republic
+        return super().available and (self._scope != "region" or self._overview.get("region") is not None)
+
+    @property
+    def native_value(self) -> float | None:
+        data = self._overview.get(self._scope) or {}
+        return data.get("average")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        overview = self._overview
+        data = overview.get(self._scope) or {}
+        region = overview.get("region") or {}
+        attrs: dict[str, Any] = {"station_count": data.get("station_count")}
+        if self._scope == "national":
+            attrs.update(median=data.get("median"), regions=overview.get("regions"))
+        elif self._scope == "region":
+            attrs.update(region=region.get("name"), region_code=region.get("code"), rank=region.get("rank"), vs_national=region.get("vs_national"))
+        else:
+            attrs.update(
+                region=region.get("name"),
+                region_rank=region.get("rank"),
+                vs_national=data.get("vs_national"),
+                vs_region=data.get("vs_region"),
+            )
+        attrs.update(cp_fuel=self._fuel, cp_role=f"{self._scope}_average", cp_config_id=self._entry_id)
+        return attrs
