@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
+
+The integration now meets the **Platinum** tier of the Home Assistant integration quality scale (self-assessed in
+`quality_scale.yaml`: Bronze 20/20, Silver 10/10, Gold 21/21, Platinum 3/3). Nothing changes in use: on the first
+start Home Assistant installs the new dependency `aiombenzin` from PyPI.
 
 ### Changed
 
@@ -11,6 +15,11 @@
 - **Fully typed** (quality scale: strict-typing): the integration passes `mypy --strict`, checked in CI. It imports
   probatio, Home Assistant's schema library since 2026.x, where it exists, and voluptuous on older versions. No change
   in behaviour.
+
+### Known limitations
+
+- Validated with offline tests on Home Assistant 2025.1 and 2026.10 and CI before release; Home Assistant installing
+  aiombenzin from PyPI is checked on a live instance only after release.
 
 ## 0.6.2
 
