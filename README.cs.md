@@ -14,7 +14,7 @@ Integrace pro HACS, která v Home Assistantu ukazuje ceny paliv z [mBenzin.cz](h
 
 - Vyberete si **město**, **jedno či více paliv** (třeba Natural 95 a LPG pro vůz na dvě paliva) a pro každé palivo **oblíbenou stanici**.
 - Nebo nastavíte GPS oblast kolem polohy domácnosti Home Assistantu, **osoby nebo zařízení, které sledujete** (oblast jede s vámi), uložené zóny `zone.*`, bodu vybraného na mapě nebo (pokročile) ručně zadaných souřadnic. Poloměr je **5–50 km**, výchozí **40 km**. Poloha osoby nebo telefonu se použije, jen pokud ji zvolíte; nepoužívá se geokódovací služba ani další požadavek na mBenzin.
-- Pro každé palivo **5 nejlevnějších stanic ve městě** (jen z vašeho města, nikoli z celého kraje), odkaz na Google Maps a **mapu s cenami**.
+- Pro každé palivo **5 nejlevnějších stanic ve městě** (jen z vašeho města, nikoli z celého kraje) a **mapu s cenami**; klepnutím na stanici zobrazíte podrobnosti a **navigaci v Mapy.com, Google Maps nebo Waze**.
 - U oblíbené stanice: aktuální cena, **trendy oproti 1, 2, 7, 14 a 30 dnům**, pořadí ve městě a dlouhodobá statistika (graf za 30 dní).
 - **Průměrné ceny** v celé republice, ve vašem kraji a ve vaší oblasti a to, jak si vaše oblast proti nim stojí, s dlouhodobými statistikami a ze stejného stažení.
 - Hotová **karta pro dashboard** (`ceny-paliv-card`) přímo v integraci – přidáte ji z nabídky karet, bez kopírování YAML – s volbou jazyka **čeština / angličtina**. Je **přizpůsobitelná**: na širokém dashboardu dva sloupce, v telefonu jeden, kompaktní verze a každou část (oblíbená stanice, seznam, mapa, graf) lze umístit jako samostatnou kartu.
@@ -23,7 +23,7 @@ Integrace pro HACS, která v Home Assistantu ukazuje ceny paliv z [mBenzin.cz](h
 
 ## K čemu se hodí
 
-- **Tankovat tam, kde je to nejlevnější**: karta ukáže pět nejlevnějších stanic ve vašem městě nebo kolem domova, s datem ceny a klepnutím do Google Maps.
+- **Tankovat tam, kde je to nejlevnější**: karta ukáže pět nejlevnějších stanic ve vašem městě nebo kolem domova, s datem ceny; klepnutím na stanici se k ní necháte navigovat v Mapy.com, Google Maps nebo Waze.
 - **Sledovat svou obvyklou stanici**: její cenu, pořadí ve městě, o kolik je dražší než nejlevnější a jak se cena změnila za 1–30 dní, s grafem za 30 dní.
 - **Auto na dvě paliva nebo víc aut**: jedna karta na palivo (třeba Natural 95 a LPG), nebo jedna oblast na každé město, kde jezdíte.
 - **Nechat si to hlásit**: upozornění do telefonu, když vaše stanice zlevní, když cena klesne pod váš limit, nebo na levnou stanici poblíž na cestě (viz [Blueprinty](#blueprinty)).
@@ -177,11 +177,12 @@ type: custom:ceny-paliv-card
 fuel: n95            # n95 | benzinplus | diesel | dieselplus | lpg | cng | adblue
 ```
 
-Pro každé palivo jedna karta: pro vůz na dvě paliva přidejte druhou kartu s `fuel: lpg`. Karta má čtyři části: vaši oblíbenou stanici (cena, trendy, pořadí), 5 nejlevnějších stanic (klepnutím se otevře Google Maps), mapu a graf za 30 dní. Pokud máte pro stejné palivo více konfigurací, vyberte správnou konfiguraci ve vizuálním editoru (nebo v YAML přidejte `config_id` z atributu `cp_config_id` senzoru top5); karta bez volby konfigurace nikdy nebude míchat entity z různých oblastí. Všechny volby níže jsou i ve vizuálním editoru karty.
+Pro každé palivo jedna karta, nebo více paliv v jedné kartě s přepínačem nahoře (`fuels: [n95, lpg]`, třeba pro vůz na dvě paliva). Karta má čtyři části: vaši oblíbenou stanici (cena, trendy, pořadí), 5 nejlevnějších stanic, mapu a graf za 30 dní. Klepnutím na stanici z pětice zobrazíte její podrobnosti (cena, datum, pořadí, vzdálenost, trendy) a navigaci do Mapy.com, Google Maps nebo Waze; dlouhým stisknutím historii vaší oblíbené stanice. Pokud máte pro stejné palivo více konfigurací, vyberte správnou konfiguraci ve vizuálním editoru (nebo v YAML přidejte `config_id` z atributu `cp_config_id` senzoru top5); karta bez volby konfigurace nikdy nebude míchat entity z různých oblastí. Všechny volby níže jsou i ve vizuálním editoru karty.
 
 | Volba | Výchozí | |
 |---|---|---|
-| `fuel` | – | povinné |
+| `fuel` | – | povinné (nebo `fuels`); s `fuels` palivo zobrazené jako první |
+| `fuels` | – | paliva přepínače nahoře v kartě, např. `[n95, diesel]` (přepínač si nic nepamatuje: karta se otevře na `fuel`) |
 | `config_id` | automaticky, je-li jednoznačné | při více konfiguracích stejného paliva vybere jednu oblast |
 | `show` | `[home, list, map, graph]` | které části zobrazit: `home` (oblíbená stanice), `list` (nejlevnější stanice), `map`, `graph` (30 dní) |
 | `layout` | `auto` | `auto`: dva sloupce (stanice a seznam vlevo, mapa a graf vpravo), je-li karta široká, a jeden sloupec, je-li úzká, třeba v telefonu; `columns`: vždy dva; `stack`: vždy jeden |
@@ -404,7 +405,7 @@ CI testuje také Python 3.14 s `requirements_test_latest.txt`. Tyto soubory fixu
 verzi testovacího frameworku, který následně fixuje Home Assistant na 2025.1.0,
 respektive 2026.10.4. Frontend a HTTP server Home Assistantu jsou v integračních
 testech simulovány.
-Karta má vlastní testy bez závislostí: `node --test tests/test_card.js` (Node 22+).
+Karta má vlastní testy bez závislostí: `node --test tests/test_card.js` (Node 22+). Prohlédnout si ji bez Home Assistantu můžete tak, že repozitář zpřístupníte (`python -m http.server 8765`) a otevřete `http://localhost:8765/tools/card-demo.html?theme=dark&lang=cs` (vymyšlená data; `theme`, `lang`, `width`, `compact`, `show`).
 CI navíc spouští hassfest, validaci HACS, ruff, `mypy --strict custom_components/ceny_paliv` (s verzí Home Assistantu 2026.10) a kontrolu, že verze manifestu a karty souhlasí.
 
 ## Licence

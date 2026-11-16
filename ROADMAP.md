@@ -62,6 +62,9 @@ entita událostí změny ceny a tři blueprinty; vše bez dalších požadavků 
 
 ## 0.9 – karta a dashboard
 
+Stav: přepínač paliv a detail stanice s navigací (Mapy.com, Google Maps, Waze) – hotovo; ukázková stránka karty
+`tools/card-demo.html`.
+
 - Nová karta: více paliv s přepínačem, detail stanice (vysouvací panel s historií a navigací do Mapy.cz,
   Google Maps a Waze), vlastní graf (moje stanice proti nejlevnější v okolí), vlastní mapa s barevnými cenami
   a kruhem oblasti, řazení podle ceny / vzdálenosti / „vyplatí se dojet?“.

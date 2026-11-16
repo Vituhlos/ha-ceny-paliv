@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- **Station details and navigation in the card**: tapping a station of the top 5 opens a panel (a bottom sheet on
+  phones) with its price, price date, rank among the area's up-to-date stations, distance and trends, and buttons to
+  navigate there with Mapy.com, Google Maps or Waze. Before, a tap opened Google Maps directly.
+- **A fuel switch in the card**: `fuels: [n95, diesel]` (also in the visual editor) puts a switch at the top of the
+  card, so one card shows several fuels.
+- `tools/card-demo.html`: the card with made-up data and no Home Assistant, in light or dark, Czech or English, to
+  check how it looks.
+
 ## 0.8.0
 
 Smarter data and notifications: the GPS area can follow you, average prices show how your area stands, and price

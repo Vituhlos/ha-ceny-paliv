@@ -41,10 +41,10 @@ const context = {
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown };`,
+  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels };`,
   context,
 );
-const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown } = context.testExports;
+const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels } = context.testExports;
 
 const sensor = (fuel, role, configId, extra = {}) => ({
   state: "32.00",
@@ -393,6 +393,7 @@ test("the unavailable message clears map and graph so they are rebuilt when data
     shadowRoot: { getElementById: (id) => (slots[id] = slots[id] || { innerHTML: "" }) },
     _message: CenyPalivCard.prototype._message,
     _resetExtra: CenyPalivCard.prototype._resetExtra,
+    _switchHtml: CenyPalivCard.prototype._switchHtml,
   };
   CenyPalivCard.prototype._renderTexts.call(card);
   assert.equal(card._extraReady, false);
@@ -462,8 +463,9 @@ test("the editor does not rebuild its form on unrelated state changes", () => {
 });
 
 test("a long press is cancelled when the pointer moves away, and Enter opens a focused row", () => {
-  const row = { dataset: { maps: "https://www.google.com/maps/search/?api=1&query=50.1,14.4" } };
-  const card = { _ids: { top5: "t", home: null }, _entityId: CenyPalivCard.prototype._entityId };
+  const row = { dataset: { station: "1" } };
+  const opened = [];
+  const card = { _ids: { top5: "t", home: null }, _entityId: CenyPalivCard.prototype._entityId, _openStation: (i) => opened.push(i) };
   const event = { clientX: 0, clientY: 0, composedPath: () => [row] };
   CenyPalivCard.prototype._down.call(card, event);
   const timer = card._timer;
@@ -474,7 +476,7 @@ test("a long press is cancelled when the pointer moves away, and Enter opens a f
 
   card._click = CenyPalivCard.prototype._click;
   CenyPalivCard.prototype._key.call(card, { key: "Enter", preventDefault() {}, composedPath: () => [row] });
-  assert.equal(context.window.opened.at(-1), row.dataset.maps);
+  assert.deepEqual(opened, [1]); // the station's details, no longer straight to Google Maps
 });
 
 test("numbers and times follow the Home Assistant profile, texts the integration's language", () => {
@@ -655,4 +657,76 @@ test("the 30-day graph shows the station's own statistics, or the sensor's befor
   };
   assert.deepEqual(await graphOf({ statistic_id: "ceny_paliv:n95_0123456789ab" }), ["ceny_paliv:n95_0123456789ab"]);
   assert.deepEqual(await graphOf({}), ["sensor.home"]);
+});
+
+test("navigation links put each service's coordinates in its own order", () => {
+  const links = navigationLinks({ lat: 49.19, lng: 16.61 });
+  same(links.map((l) => l.label), ["Mapy.com", "Google Maps", "Waze"]);
+  assert.equal(links[0].url, "https://mapy.com/fnc/v1/route?end=16.61,49.19&routeType=car_fast"); // lon,lat
+  assert.equal(links[1].url, "https://www.google.com/maps/dir/?api=1&destination=49.19%2C16.61&travelmode=driving");
+  assert.equal(links[2].url, "https://waze.com/ul?ll=49.19%2C16.61&navigate=yes");
+  assert.equal(navigationLinks({ lat: "x", lng: 16 }).length, 0);
+  assert.equal(navigationLinks({ lat: 99, lng: 16 }).length, 0);
+});
+
+test("the fuel switch lists the fuels once, the first shown first", () => {
+  same(switchFuels({ fuel: "n95" }), ["n95"]);
+  same(switchFuels({ fuel: "lpg", fuels: ["n95", "diesel", "n95"] }), ["lpg", "n95", "diesel"]);
+  same(switchFuels({ fuels: ["diesel", "n95"] }), ["diesel", "n95"]);
+
+  const card = new CenyPalivCard();
+  card.getBoundingClientRect = () => ({ width: 400 });
+  card.setConfig({ fuels: ["diesel", "n95"] });
+  assert.equal(card._config.fuel, "diesel");
+  assert.throws(() => card.setConfig({ fuels: [] }), /fuel/);
+});
+
+test("the switch shows each fuel's name and moves the card to the other fuel's sensors", () => {
+  const hass = { language: "en", states: { ...area("a"), ...area("a", "diesel") } };
+  const card = new CenyPalivCard();
+  card.getBoundingClientRect = () => ({ width: 400 });
+  card.setConfig({ fuel: "n95", fuels: ["n95", "diesel"], show: ["list"] });
+  card.hass = hass;
+  const html = card._switchHtml();
+  assert.match(html, /role="tablist"/);
+  assert.match(html, /class="option selected" role="tab" aria-selected="true" data-fuel="n95"><span>N95</);
+  assert.match(html, /aria-selected="false" data-fuel="diesel"><span>DIESEL</);
+  assert.equal(card._ids.top5, "sensor.ceny_paliv_n95_top5_a");
+
+  card._click({ composedPath: () => [{ dataset: { fuel: "diesel" } }] });
+  assert.equal(card._config.fuel, "diesel");
+  assert.equal(card._ids.top5, "sensor.ceny_paliv_diesel_top5_a");
+  card._switchFuel("lpg"); // not in the switch
+  assert.equal(card._config.fuel, "diesel");
+  card.setConfig({ fuel: "n95" });
+  assert.equal(card._switchHtml(), "");
+});
+
+test("a station's details: price, rank, distance, trends and navigation", () => {
+  const card = new CenyPalivCard();
+  card._config = { fuel: "n95", logo_path: "" };
+  card._hass = { language: "en", locale: { number_format: "comma_decimal" }, states: { t: { attributes: { labels: {
+    rank_of: "#{rank} of {n}", more_than_cheapest: "+{d} vs the cheapest", cheapest_badge: "Cheapest", close: "Close",
+    navigate: "Navigate", today: "Today", trends_start: "Trends start tomorrow",
+  } } } } };
+  card._ids = { top5: "t", home: null, pos: [] };
+  const today = new Date().toISOString().slice(0, 10);
+  const cheap = { name: "Levna", street: "Hlavni 1", city: "Brno", price: 33, lat: 49.19, lng: 16.61, updated_date: today, trends: {} };
+  const dear = { ...cheap, name: "Draha", price: 34.5, distance_km: 2.345, trends: { 1: { dir: "down", delta: -0.4, ref_date: today, ref_price: 34.9 } } };
+  card._rows = { list: [cheap, dear], fresh: 7, unit: "Kč/l" };
+
+  const first = card._stationHtml(cheap, 1);
+  assert.match(first, /id="sheet-title">Levna</);
+  assert.match(first, /Hlavni 1, Brno/);
+  assert.match(first, /#1 of 7/);
+  assert.match(first, /class="good">Cheapest/);
+  assert.match(first, /Trends start tomorrow/);
+  assert.match(first, /aria-label="Close"/);
+  assert.match(first, /href="https:\/\/mapy\.com\/fnc\/v1\/route\?end=16\.61,49\.19&amp;routeType=car_fast" target="_blank" rel="noopener noreferrer"/);
+  assert.match(first, /Ceny: mbenzin\.cz/);
+
+  const second = card._stationHtml(dear, 2);
+  assert.match(second, /\+1\.50 vs the cheapest/);
+  assert.match(second, /2\.3 km/);
+  assert.match(second, /mdi:arrow-down/);
 });

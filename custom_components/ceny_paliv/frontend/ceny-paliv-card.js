@@ -6,6 +6,7 @@
  *   fuel: n95            # n95 | benzinplus | diesel | dieselplus | lpg | cng | adblue
  *
  * Optional (all of them are also in the visual editor: Add card > Ceny paliv):
+ *   fuels: [n95, diesel] # a switch between these fuels at the top of the card (fuel: the one shown first)
  *   show: [home, list, map, graph]   # which parts to draw; use several cards to place them freely
  *   layout: auto         # auto = 2 columns when the card is wide | columns | stack
  *   stations: 5          # 1-5 stations in the list
@@ -13,6 +14,8 @@
  *   show_footer: true    # update times, legend (default: false when compact)
  *   map_height: 300      # px, default: the map card's own height
  *   logo_path: /local/   # only to use your own PNG files instead of the downloaded logo pack
+ *
+ * Tap a station for its details and navigation (Mapy.com, Google Maps, Waze); long-press for your station's history.
  *
  * Station logos: tick the chains in the integration's setup (Configure > Station logos); the card finds them by
  * itself. Chains without a logo get a coloured badge with their initials.
@@ -32,7 +35,26 @@ function shownParts(config) {
 
 // What the card uses for an option the config does not set (the editor shows these, but never saves them).
 function editorDefaults(config) {
-  return { show: shownParts(config), layout: 'auto', stations: 5, compact: false, show_footer: !config.compact, map_height: 0 };
+  return { fuels: [], show: shownParts(config), layout: 'auto', stations: 5, compact: false, show_footer: !config.compact, map_height: 0 };
+}
+
+// Fuels a config can switch between: `fuels`, with `fuel` first when it is not in the list. One fuel: no switch.
+function switchFuels(config) {
+  const list = (Array.isArray(config.fuels) ? config.fuels : []).map(String).filter(Boolean);
+  if (config.fuel && !list.includes(config.fuel)) list.unshift(config.fuel);
+  return list.filter((f, i) => list.indexOf(f) === i);
+}
+
+// Navigation to a station. Mapy.com takes "lon,lat", Waze and Google Maps "lat,lng" (their URL documentation).
+function navigationLinks(s) {
+  const lat = Number(s && s.lat);
+  const lng = Number(s && s.lng);
+  if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return [];
+  return [
+    { label: 'Mapy.com', icon: 'mdi:map-legend', url: `https://mapy.com/fnc/v1/route?end=${lng},${lat}&routeType=car_fast` },
+    { label: 'Google Maps', icon: 'mdi:google-maps', url: `https://www.google.com/maps/dir/?api=1&destination=${lat}%2C${lng}&travelmode=driving` },
+    { label: 'Waze', icon: 'mdi:waze', url: `https://waze.com/ul?ll=${lat}%2C${lng}&navigate=yes` },
+  ];
 }
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -195,10 +217,68 @@ const STYLE = `
   .message { flex-direction: row; align-items: flex-start; font-size: var(--ha-font-size-m, 14px); line-height: 20px; color: var(--cp-muted); --mdc-icon-size: 20px; }
   .message ha-icon { flex: none; color: var(--cp-muted); }
 
+  /* fuel switch: the segmented control of core cards (ha-control-select), in the theme's primary colour */
+  .fuels { position: relative; display: flex; gap: 4px; padding: 4px; height: 40px; box-sizing: border-box;
+    border-radius: var(--ha-border-radius-lg, 12px); }
+  .fuels::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--cp-neutral); opacity: 0.2; }
+  .fuels .option { position: relative; flex: 1 1 0; min-width: 0; padding: 0 var(--ha-space-2, 8px); border: none; background: none;
+    border-radius: calc(var(--ha-border-radius-lg, 12px) - 4px); cursor: pointer; outline: none;
+    font: inherit; font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); color: var(--cp-text); }
+  .fuels .option::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--cp-home); opacity: 0;
+    transition: opacity 80ms ease-in-out; }
+  .fuels .option:hover::before { opacity: 0.2; }
+  .fuels .option:focus-visible { box-shadow: 0 0 0 2px var(--cp-home); }
+  .fuels .option.selected { color: var(--text-primary-color, #fff); }
+  .fuels .option.selected::before { opacity: 1; }
+  .fuels .option span { position: relative; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* station details: Home Assistant's dialog, a bottom sheet on phones (ha-adaptive-dialog) */
+  dialog.sheet {
+    width: min(580px, 95vw); max-height: min(80vh, 720px); padding: 0; border: none; overflow: hidden;
+    border-radius: var(--ha-dialog-border-radius, var(--ha-border-radius-3xl, 24px));
+    background: var(--ha-dialog-surface-background, var(--card-background-color, var(--cp-surface)));
+    color: var(--cp-text); box-shadow: var(--ha-box-shadow-l, 0 16px 32px -6px rgba(0, 0, 0, 0.2));
+    font-family: var(--ha-font-family-body, Roboto, Noto, sans-serif);
+  }
+  dialog.sheet[open] { display: flex; flex-direction: column; }
+  dialog.sheet::backdrop { background: rgba(0, 0, 0, 0.32); }
+  .sheet-head { display: flex; align-items: center; gap: var(--ha-space-3, 12px); padding: var(--ha-space-6, 24px) var(--ha-space-6, 24px) var(--ha-space-3, 12px); }
+  .sheet-head .primary { font-size: var(--ha-font-size-xl, 20px); font-weight: var(--ha-font-weight-normal, 400); line-height: 1.2; white-space: normal; }
+  .sheet-head .secondary { white-space: normal; }
+  .sheet-body { display: flex; flex-direction: column; gap: var(--ha-space-4, 16px); padding: 0 var(--ha-space-6, 24px) var(--ha-space-6, 24px); overflow: auto; }
+  .sheet-body > * { flex: none; }  /* the body scrolls; its parts never shrink */
+  .close { position: relative; flex: none; width: 40px; height: 40px; margin: -8px -8px -8px 0; padding: 0; border: none; background: none;
+    border-radius: var(--ha-border-radius-pill, 9999px); color: var(--cp-text); cursor: pointer; outline: none; --mdc-icon-size: 24px;
+    display: flex; align-items: center; justify-content: center; }
+  .close::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--cp-neutral); opacity: 0; transition: opacity 180ms ease-in-out; }
+  .close:hover::before { opacity: 0.2; }
+  .close:focus-visible { box-shadow: 0 0 0 2px var(--cp-home); }
+  .facts { display: flex; flex-wrap: wrap; gap: 2px var(--ha-space-3, 12px); font-size: var(--ha-font-size-s, 12px); line-height: 16px; color: var(--cp-muted); }
+  /* navigation: card feature buttons */
+  .nav { display: flex; gap: var(--ha-space-3, 12px); }
+  .nav a {
+    position: relative; overflow: hidden; flex: 1 1 0; min-width: 0; height: 42px; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center; gap: var(--ha-space-2, 8px); padding: 0 var(--ha-space-2, 8px);
+    border-radius: var(--cp-radius); text-decoration: none; outline: none; color: var(--cp-text);
+    font-size: var(--ha-font-size-m, 14px); font-weight: var(--ha-font-weight-medium, 500); --mdc-icon-size: 20px;
+  }
+  .nav a::before { content: ""; position: absolute; inset: 0; background: var(--cp-neutral); opacity: 0.2; transition: opacity 180ms ease-in-out; }
+  .nav a:hover::before { opacity: 0.3; }
+  .nav a:focus-visible { box-shadow: 0 0 0 2px var(--cp-home); }
+  .nav a > * { position: relative; }
+  .nav a span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 870px), (max-height: 500px) {
+    dialog.sheet { width: 100vw; max-width: 100vw; margin: auto 0 0; max-height: 90vh;
+      border-radius: var(--ha-border-radius-2xl, 20px) var(--ha-border-radius-2xl, 20px) 0 0;
+      padding-bottom: var(--safe-area-inset-bottom, 0px); }
+  }
+  /* stacked on a narrow phone: each button keeps its height instead of sharing the row's width */
+  @media (max-width: 420px) { .nav { flex-direction: column; } .nav a { flex: none; } }
+
   .map, .graph { border-radius: var(--ha-card-border-radius, var(--ha-border-radius-lg, 12px)); overflow: hidden; }
   .map.fixed { position: relative; min-width: 200px; }
   .map.fixed > * { position: absolute; inset: 0; display: block; }
-  @media (prefers-reduced-motion: reduce) { .row::before { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .row::before, .fuels .option::before, .nav a::before, .close::before { transition: none; } }
 `;
 
 // A state Home Assistant restored for an entity no integration provides (yet): it carries no data or attributes.
@@ -295,8 +375,9 @@ class CenyPalivCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config || !config.fuel) throw new Error('ceny-paliv-card: set "fuel", for example "n95"');
-    this._config = Object.assign({ layout: 'auto', stations: 5, compact: false, logo_path: '' }, config);
+    if (!config || !(config.fuel || switchFuels(config).length)) throw new Error('ceny-paliv-card: set "fuel", for example "n95"');
+    this._fuels = switchFuels(config);
+    this._config = Object.assign({ layout: 'auto', stations: 5, compact: false, logo_path: '' }, config, { fuel: config.fuel || this._fuels[0] });
     this._show = shownParts(config);
     this._layout = ['auto', 'columns', 'stack'].includes(this._config.layout) ? this._config.layout : 'auto';
     this._n = Math.min(5, Math.max(1, Math.round(Number(this._config.stations) || 5)));
@@ -434,10 +515,11 @@ class CenyPalivCard extends HTMLElement {
     const h = { home: this._compact ? 2 : 4, list: this._compact ? 1 + this._n : 2 + 2 * this._n, map: this._mapHeight ? Math.ceil(this._mapHeight / 50) : 6, graph: 4 };
     const sizes = this._show.map((p) => h[p]);
     const sd = this._sides();
-    if (!sd.wide) return sizes.reduce((x, y) => x + y, 0);
+    const switcher = this._fuels && this._fuels.length > 1 ? 1 : 0;
+    if (!sd.wide) return sizes.reduce((x, y) => x + y, 0) + switcher;
     const left = ['home', 'list'].filter((p) => this._show.includes(p)).reduce((x, p) => x + h[p], 0);
     const right = ['map', 'graph'].filter((p) => this._show.includes(p)).reduce((x, p) => x + h[p], 0);
-    return Math.max(left, right);
+    return Math.max(left, right) + switcher;
   }
 
   getGridOptions() {
@@ -689,8 +771,13 @@ class CenyPalivCard extends HTMLElement {
     const hass = this._hass;
     const top = hass.states[this._ids.top5];
     const root = this.shadowRoot;
-    const slot = (p, html) => { const el = root.getElementById(p); if (el) el.innerHTML = html; };
     const first = this._show.find((p) => p === 'home' || p === 'list') || this._show[0];
+    // the fuel switch is the first row of the first card, so it stays with the prices it switches
+    const sw = this._switchHtml();
+    const slot = (p, html) => {
+      const el = root.getElementById(p);
+      if (el) el.innerHTML = sw && p === first ? html.replace(/^(\s*<ha-card[^>]*>)/, `$1${sw}`) : html;
+    };
     if (!top || top.state === 'unavailable') {
       // the message replaces the map and graph containers' content: rebuild them once the data is back
       this._resetExtra();
@@ -702,7 +789,35 @@ class CenyPalivCard extends HTMLElement {
     slot('list', this._show.includes('list') ? this._listHtml() : '');
     // only "my station" and its graph were asked for, but no favourite is set: say so instead of an empty card
     if (!hass.states[this._ids.home] && this._show.every((p) => p === 'home' || p === 'graph')) slot(first, this._message('no_home'));
+    // only the list was asked for and it is the first card: the switch sits there; without home or list, above the map
+    if (sw && !['home', 'list'].includes(first)) slot(first, `<ha-card class="card">${sw}</ha-card>`);
     this._buildExtra();
+  }
+
+  _switchHtml() {
+    if (!this._fuels || this._fuels.length < 2) return '';
+    const labels = {};
+    for (const f of CenyPalivCard.fuels(this._hass)) labels[f.value] = f.label;
+    const options = this._fuels.map((f) => {
+      const on = f === this._config.fuel;
+      return `<button class="option${on ? ' selected' : ''}" role="tab" aria-selected="${on}" data-fuel="${esc(f)}"><span>${esc(labels[f] || f.toUpperCase())}</span></button>`;
+    }).join('');
+    return `<div class="fuels" role="tablist">${options}</div>`;
+  }
+
+  // Another fuel of the switch: bind its sensors and rebuild the map and graph for them.
+  _switchFuel(fuel) {
+    if (!fuel || fuel === this._config.fuel || !this._fuels.includes(fuel)) return;
+    this._config = Object.assign({}, this._config, { fuel });
+    this._ids = null;
+    this._sig = '';
+    this._scanAt = 0;
+    for (const id of ['map', 'graph']) {
+      const container = this.shadowRoot.getElementById(id);
+      if (container) container.replaceChildren();
+    }
+    this._resetExtra();
+    if (this._hass) this.hass = this._hass;
   }
 
   _message(why) {
@@ -738,24 +853,11 @@ class CenyPalivCard extends HTMLElement {
     const updated = a.cp_stale ? T('stale') : a.age_days == 0 ? T('updated_today') : (a.age_days == 1 ? T('updated_yesterday')
       : T('price_from', { d: this._day(a.updated_date, { day: 'numeric', month: 'numeric', year: 'numeric' }) || a.updated || '—' }));
     const tr = a.trends || {};
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    let partial = null;
-    const tile = (n) => {
-      const t = tr[String(n)]; const r = this._arrow(t);
-      let covered = true;
-      if (t) {
-        const target = new Date(today); target.setDate(target.getDate() - n);
-        covered = new Date(t.ref_date + 'T00:00:00') <= target; if (!covered) partial = t.ref_date;
-      }
-      return `<div class="trend"><span class="label">${n} d${t && !covered ? '*' : ''}</span>
-        <span class="delta ${r.cls}">${t ? `<ha-icon icon="${r.icon}"></ha-icon>` : ''}${esc(r.txt)}</span></div>`;
-    };
+    const tiles = this._trendTiles(tr);
     const trends = cp
       ? `<div class="trends-inline">${[1, 7, 30].map((n) => { const r = this._arrow(tr[String(n)]); return `<span class="muted">${n} d <span class="delta ${r.cls}">${esc(r.txt)}</span></span>`; }).join('')}</div>`
-      : `<div class="trends">${[1, 2, 7, 14, 30].map(tile).join('')}</div>`;
-    const anyTrend = Object.values(tr).some(Boolean);
-    const note = cp ? '' : !anyTrend ? T('trends_start')
-      : (partial ? T('since_partial', { d: this._day(partial, { day: 'numeric', month: 'short' }) || partial }) : '');
+      : tiles.html;
+    const note = cp ? '' : tiles.note;
     let status;
     if (a.rank == null) status = { icon: 'mdi:clock-alert-outline', cls: 'warn', text: T('not_ranked') };
     else if (Number(a.vs_cheapest) <= 0) status = { icon: 'mdi:trophy-outline', cls: 'good', text: T(topAttrs.gps_area ? 'cheapest_area' : 'cheapest_town', { rank: a.rank, n: a.fresh_count }) };
@@ -777,6 +879,28 @@ class CenyPalivCard extends HTMLElement {
     </ha-card>`;
   }
 
+  // The five trend tiles (1, 2, 7, 14, 30 days) and the note under them: no history yet, or a shorter one (*).
+  _trendTiles(tr) {
+    const T = (k, v) => this._T(k, v);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let partial = null;
+    const tile = (n) => {
+      const t = tr[String(n)]; const r = this._arrow(t);
+      let covered = true;
+      if (t) {
+        const target = new Date(today); target.setDate(target.getDate() - n);
+        covered = new Date(t.ref_date + 'T00:00:00') <= target; if (!covered) partial = t.ref_date;
+      }
+      return `<div class="trend"><span class="label">${n} d${t && !covered ? '*' : ''}</span>
+        <span class="delta ${r.cls}">${t ? `<ha-icon icon="${r.icon}"></ha-icon>` : ''}${esc(r.txt)}</span></div>`;
+    };
+    const html = `<div class="trends">${[1, 2, 7, 14, 30].map(tile).join('')}</div>`;
+    const anyTrend = Object.values(tr).some(Boolean);
+    const note = !anyTrend ? T('trends_start')
+      : (partial ? T('since_partial', { d: this._day(partial, { day: 'numeric', month: 'short' }) || partial }) : '');
+    return { html, note };
+  }
+
   _listHtml() {
     const S = this._hass.states[this._ids.top5];
     const at = S.attributes;
@@ -786,6 +910,10 @@ class CenyPalivCard extends HTMLElement {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const fresh = all.filter((s) => this._age(s, today) <= maxAge);
     const list = fresh.slice(0, this._n);
+    // for the station details; the area's up-to-date stations: all stations of the town or circle minus the outdated ones
+    const total = at.city_total != null ? at.city_total : (at.gps_area && at.gps_area.station_count);
+    const upToDate = total != null && isFinite(Number(total)) ? Number(total) - Number(at.excluded || 0) : fresh.length;
+    this._rows = { list, fresh: Math.max(upToDate, fresh.length), unit: at.unit_of_measurement || 'Kč/l' };
     const cp = this._compact;
     const prices = list.map((s) => Number(s.price)).filter((p) => !isNaN(p));
     const min = prices.length ? Math.min(...prices) : null;
@@ -809,7 +937,7 @@ class CenyPalivCard extends HTMLElement {
       const home = s.home ? `<ha-icon icon="mdi:home" title="${esc(T('my_station'))}"></ha-icon>` : '';
       // the price date first: a long address is what gets cut
       const where = [`<span class="${when.old ? 'warn' : ''}">${esc(when.text)}</span>`, esc(addr)].filter((w) => w !== '');
-      return `<div class="row" role="link" tabindex="0" data-maps="${esc(s.maps)}" aria-label="${esc(name)} ${esc(addr)}: ${this._num(s.price)} ${esc(unit)}">
+      return `<div class="row" role="button" tabindex="0" aria-haspopup="dialog" data-station="${i}" aria-label="${esc(name)} ${esc(addr)}: ${this._num(s.price)} ${esc(unit)}">
         ${this._avatar(s, i + 1, best)}
         <div class="info"><span class="primary">${esc(name)}${cp && addr ? ` <span class="muted">${esc(addr)}</span>` : ''}${home}</span>
           ${cp ? '' : `<span class="secondary">${where.join(' · ')}</span>`}</div>
@@ -837,9 +965,58 @@ class CenyPalivCard extends HTMLElement {
     return `<ha-card class="card list${cp ? ' compact' : ''}" data-more-info="${esc(this._ids.home || this._ids.top5)}">${head}${alert}<div class="rows">${rows}</div>${foot}</ha-card>`;
   }
 
+  // ---------------------------------------------------------------- station details
+  _stationHtml(s, rank) {
+    const T = (k, v) => this._T(k, v);
+    const rows = this._rows || { list: [], fresh: 0, unit: 'Kč/l' };
+    const prices = rows.list.map((x) => Number(x.price)).filter((p) => !isNaN(p));
+    const min = prices.length ? Math.min(...prices) : Number(s.price);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const when = this._when(s, this._age(s, today));
+    const best = Number(s.price) === min;
+    const addr = s.street !== undefined ? [s.street, s.city].filter(Boolean).join(', ') : (s.address || '');
+    const facts = [
+      `<span class="${when.old ? 'warn' : ''}">${esc(when.text)}</span>`,
+      esc(T('rank_of', { rank, n: rows.fresh })),
+      best ? `<span class="good">${esc(T('cheapest_badge'))}</span>` : esc(T('more_than_cheapest', { d: this._num(Number(s.price) - min) })),
+    ];
+    if (s.distance_km != null && isFinite(Number(s.distance_km))) facts.push(`${this._num(s.distance_km, 1)} km`);
+    const tiles = this._trendTiles(s.trends || {});
+    const nav = navigationLinks(s).map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer"><ha-icon icon="${l.icon}"></ha-icon><span>${esc(l.label)}</span></a>`).join('');
+    return `<div class="sheet-head">${this._avatar(s, rank, best)}
+        <div class="info"><span class="primary" id="sheet-title">${esc(s.name || '—')}</span><span class="secondary">${esc(addr)}</span></div>
+        <button class="close" data-close aria-label="${esc(T('close'))}"><ha-icon icon="mdi:close"></ha-icon></button>
+      </div>
+      <div class="sheet-body">
+        <div class="head"><div class="info"><div class="facts">${facts.join('<span aria-hidden="true">·</span>')}</div></div>
+          <div class="value"><span class="number">${this._num(s.price)}</span><span class="unit">${esc(rows.unit)}</span></div></div>
+        ${tiles.html}
+        ${tiles.note ? `<span class="note">${esc(tiles.note)}</span>` : ''}
+        ${nav ? `<div class="nav" role="group" aria-label="${esc(T('navigate'))}">${nav}</div>` : ''}
+        <span class="source">${this._source()}</span>
+      </div>`;
+  }
+
+  _openStation(index) {
+    const s = this._rows && this._rows.list[index];
+    if (!s) return;
+    let dialog = this._sheet;
+    if (!dialog || !dialog.isConnected) {
+      dialog = document.createElement('dialog');
+      dialog.className = 'sheet';
+      dialog.setAttribute('aria-labelledby', 'sheet-title');
+      // a tap on the dimmed page around it closes it, like Home Assistant's dialogs
+      dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
+      this.shadowRoot.appendChild(dialog);
+      this._sheet = dialog;
+    }
+    dialog.innerHTML = this._stationHtml(s, index + 1);
+    if (!dialog.open) dialog.showModal();
+  }
+
   // ---------------------------------------------------------------- interaction
   _entityId(e) {
-    const t = e.composedPath ? e.composedPath().find((n) => n.dataset && (n.dataset.maps || n.dataset.moreInfo)) : null;
+    const t = e.composedPath ? e.composedPath().find((n) => n.dataset && (n.dataset.station !== undefined || n.dataset.fuel || n.dataset.close !== undefined || n.dataset.moreInfo)) : null;
     return t || null;
   }
 
@@ -848,7 +1025,7 @@ class CenyPalivCard extends HTMLElement {
     this._long = false;
     clearTimeout(this._timer);
     this._start = { x: e.clientX, y: e.clientY };
-    if (t && t.dataset.maps) {
+    if (t && t.dataset.station !== undefined) {
       this._timer = setTimeout(() => {
         this._long = true;
         this._moreInfo(this._ids.home || this._ids.top5);
@@ -875,8 +1052,10 @@ class CenyPalivCard extends HTMLElement {
     const t = this._entityId(e);
     if (!t) return;
     if (this._long) { this._long = false; return; }
-    if (t.dataset.maps) window.open(t.dataset.maps, '_blank', 'noopener');
-    else if (t.dataset.moreInfo && !e.composedPath().some((n) => n.dataset && n.dataset.maps)) this._moreInfo(t.dataset.moreInfo);
+    if (t.dataset.fuel) this._switchFuel(t.dataset.fuel);
+    else if (t.dataset.close !== undefined) { if (this._sheet) this._sheet.close(); }
+    else if (t.dataset.station !== undefined) this._openStation(Number(t.dataset.station));
+    else if (t.dataset.moreInfo) this._moreInfo(t.dataset.moreInfo);
   }
 
   _moreInfo(entityId) {
@@ -888,13 +1067,13 @@ class CenyPalivCard extends HTMLElement {
 // ------------------------------------------------------------------ visual editor
 const EDITOR_TEXT = {
   en: {
-    fuel: 'Fuel', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
+    fuel: 'Fuel', fuels: 'Switch between fuels', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
     map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
     home: 'My station', list: 'Cheapest stations', map: 'Map', graph: '30-day graph',
     auto: 'Automatic: 2 columns when the card is wide', columns: 'Always 2 columns', stack: 'Always 1 column',
   },
   cs: {
-    fuel: 'Palivo', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
+    fuel: 'Palivo', fuels: 'Přepínat mezi palivy', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
     map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
     home: 'Moje stanice', list: 'Nejlevnější stanice', map: 'Mapa', graph: 'Graf za 30 dní',
     auto: 'Automaticky: 2 sloupce, je-li karta široká', columns: 'Vždy 2 sloupce', stack: 'Vždy 1 sloupec',
@@ -951,6 +1130,7 @@ class CenyPalivCardEditor extends HTMLElement {
     this._form.data = Object.assign(editorDefaults(this._config), this._config);
     this._form.schema = [
       { name: 'fuel', required: true, selector: { select: { options, mode: 'dropdown' } } },
+      ...(options.length > 1 ? [{ name: 'fuels', selector: { select: { multiple: true, mode: 'list', options } } }] : []),
       // shown while several configurations offer the fuel, or to repair a pinned one that no longer exists
       ...(configurations.length > 1 || (stale && configurations.length)
         ? [{ name: 'config_id', selector: { select: { options: configurations, mode: 'dropdown' } } }]
@@ -975,7 +1155,7 @@ if (!window.customCards.some((c) => c.type === 'ceny-paliv-card')) {
     type: 'ceny-paliv-card',
     name: 'Ceny paliv',
     preview: true,
-    description: 'Czech fuel prices: cheapest stations of your city, your favourite station, map and 30-day graph (data from mBenzin.cz).',
+    description: 'Czech fuel prices: cheapest stations of your city, your favourite station, map and 30-day graph, with navigation to a station (data from mBenzin.cz).',
   });
 }
 console.info(`%c Ceny paliv card %c ${CARD_VERSION} `, 'color:#fff;background:#f5b14c;font-weight:700', 'color:#f5b14c;background:#171a20');

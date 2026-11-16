@@ -14,7 +14,7 @@ A HACS integration that shows the cheapest stations in **your city** or a **5–
 
 - Pick your **city**, one or **several fuels** (e.g. Natural 95 + LPG for a dual-fuel car) and a **favourite station per fuel**
 - Or choose a GPS area centred on Home Assistant's configured home location, **a person or device you follow** (the area moves with you), a saved `zone.*`, a point selected on Home Assistant's map, or (advanced) manually entered coordinates; choose a **5–50 km** radius (default **40 km**). A person's or a phone's location is used only if you choose it; no geocoder or extra mBenzin request is used
-- Per fuel: the **top 5 cheapest** stations in the city (only that city, not the region), with a Google Maps link, and a **map**
+- Per fuel: the **top 5 cheapest** stations in the city (only that city, not the region), and a **map**; tap a station for its details and **navigation in Mapy.com, Google Maps or Waze**
 - Favourite station: price, **trends vs 1/2/7/14/30 days ago**, rank in town, long-term statistics (the 30-day graph)
 - **Average prices** in the whole country, in your region (kraj) and in your area, and how your area stands against them, with long-term statistics, from the same download
 - A ready-made **dashboard card** (`ceny-paliv-card`) shipped with the integration — add it from the card picker, no YAML to copy — in **English or Czech** (your choice during setup). It is **flexible**: two columns on a wide dashboard, one on a phone, a compact version, and every part (favourite station, list, map, graph) can be placed as its own card
@@ -23,7 +23,7 @@ A HACS integration that shows the cheapest stations in **your city** or a **5–
 
 ## Use cases
 
-- **Fill up where it is cheapest** on your way: the card lists the five cheapest stations in your city or around your home, with the price date and a tap to Google Maps.
+- **Fill up where it is cheapest** on your way: the card lists the five cheapest stations in your city or around your home, with the price date; tap one to navigate there with Mapy.com, Google Maps or Waze.
 - **Follow your usual station**: its price, its rank in town, how far it is from the cheapest one, and how its price moved over 1–30 days, with a 30-day graph.
 - **Dual-fuel or several cars**: one card per fuel (for example Natural 95 and LPG), or one area per town you drive in.
 - **Get told instead of looking**: a phone notification when your station gets cheaper, when a price drops under your limit, or about a cheap station near you on the road (see [Blueprints](#blueprints)).
@@ -171,11 +171,12 @@ type: custom:ceny-paliv-card
 fuel: n95            # n95 | benzinplus | diesel | dieselplus | lpg | cng | adblue
 ```
 
-One card per fuel: for a dual-fuel car add a second card with `fuel: lpg`. The card has four parts: your favourite station (price, trends, rank), the top 5 with a Google Maps link on tap, a map and the 30-day graph. Everything below is also in the card's visual editor. If the same fuel has multiple Ceny paliv configurations, select the intended configuration in the visual editor (or set `config_id` from the top5 sensor's `cp_config_id` in YAML); a card without an explicit configuration will not mix entities from different areas.
+One card per fuel, or several fuels in one card with a switch at the top (`fuels: [n95, lpg]`, for example for a dual-fuel car). The card has four parts: your favourite station (price, trends, rank), the top 5, a map and the 30-day graph. Tap a station of the top 5 for its details (price, date, rank, distance, trends) and to navigate there with Mapy.com, Google Maps or Waze; long-press it for your favourite station's history. Everything below is also in the card's visual editor. If the same fuel has multiple Ceny paliv configurations, select the intended configuration in the visual editor (or set `config_id` from the top5 sensor's `cp_config_id` in YAML); a card without an explicit configuration will not mix entities from different areas.
 
 | Option | Default | |
 |---|---|---|
-| `fuel` | – | required |
+| `fuel` | – | required (or `fuels`); with `fuels`, the one shown first |
+| `fuels` | – | the fuels of a switch at the top of the card, for example `[n95, diesel]` (the switch remembers nothing: the card opens on `fuel`) |
 | `config_id` | automatic when unambiguous | choose one configuration when the same fuel is configured more than once |
 | `show` | `[home, list, map, graph]` | the parts to draw: `home` (favourite station), `list` (cheapest stations), `map`, `graph` (30 days) |
 | `layout` | `auto` | `auto`: two columns (station and list on the left, map and graph on the right) when the card is wide, one column when it is narrow, as on a phone; `columns`: always two; `stack`: always one |
@@ -397,7 +398,7 @@ The tests use simulated data and block network sockets; no mBenzin key is needed
 CI also tests Python 3.14 with `requirements_test_latest.txt`. These requirements pin
 the test framework, which in turn pins Home Assistant 2025.1.0 and 2026.10.4 respectively.
 The Home Assistant frontend and HTTP server are mocked in integration tests.
-The card has its own tests without dependencies: `node --test tests/test_card.js` (Node 22+).
+The card has its own tests without dependencies: `node --test tests/test_card.js` (Node 22+). To look at it without Home Assistant, serve the repository (`python -m http.server 8765`) and open `http://localhost:8765/tools/card-demo.html?theme=dark&lang=cs` (made-up data; `theme`, `lang`, `width`, `compact`, `show`).
 The region boundaries in `custom_components/ceny_paliv/regions.json` are built by `python script/build_regions.py` from ČÚZK's download service.
 CI additionally runs hassfest, the HACS validation, ruff, `mypy --strict custom_components/ceny_paliv` (with the Home Assistant 2026.10 pin) and a check that the manifest and card versions match.
 
