@@ -41,10 +41,10 @@ const context = {
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard };`,
+  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas };`,
   context,
 );
-const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard } = context.testExports;
+const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas } = context.testExports;
 
 const sensor = (fuel, role, configId, extra = {}) => ({
   state: "32.00",
@@ -1175,4 +1175,68 @@ test("the big price: one number for a wall tablet, with what it is and the trend
   html = card.shadowRoot.innerHTML;
   assert.match(html, /N95 · My station[^]*39\.10[^]*Shell · Videnska[^]*mdi:equal/);
   assert.match(html, /data-more-info="sensor.ceny_paliv_n95_home_a"/);
+});
+
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+test("what changed: the fuel's event entity of the area, its history newest first", async () => {
+  const hass = { states: { "event.ceny_paliv_n95_price_change": {}, "event.ceny_paliv_n95_price_change_2": {}, "sensor.ceny_paliv_n95_top5_b": {} },
+    entities: { "event.ceny_paliv_n95_price_change": { device_id: "a" }, "event.ceny_paliv_n95_price_change_2": { device_id: "b" }, "sensor.ceny_paliv_n95_top5_b": { device_id: "b" } } };
+  assert.equal(eventEntity(hass, "n95", "sensor.ceny_paliv_n95_top5_b"), "event.ceny_paliv_n95_price_change_2");
+  assert.equal(eventEntity({ states: { "event.ceny_paliv_lpg_price_change": {} } }, "lpg", "x"), "event.ceny_paliv_lpg_price_change");
+  assert.equal(eventEntity({ states: {} }, "lpg", "x"), null);
+  const id = "event.ceny_paliv_n95_price_change";
+  // the compressed answer of history_during_period (s, a, lu in seconds) and the full one
+  same(eventHistory({ [id]: [
+    { s: "unknown", a: {}, lu: 100 },
+    { s: "2026-11-10T10:00:00", a: { event_type: "favourite_cheaper", price: 38.5 }, lu: 200 },
+    { state: "2026-11-12T10:00:00", attributes: { event_type: "cheapest_cheaper", price: 38.1 }, last_updated: "2026-11-12T10:00:00Z" },
+  ] }, id).map((e) => e.a.event_type), ["cheapest_cheaper", "favourite_cheaper"]);
+
+  const calls = [];
+  const labels = { ...LABELS_EN, changes_title: "What changed", changes_empty: "No price changes in the last {n} days.",
+    ev_favourite_cheaper: "Your station got cheaper", ev_cheapest_cheaper: "A cheaper station in the area" };
+  const states = { "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.1, { labels }), [id]: { state: "2026-11-12T10:00:00", last_changed: "x", attributes: {} } };
+  const card = new CenyPalivChangesCard();
+  card.setConfig({ fuel: "n95", days: 7 });
+  card.hass = { ...miniHass(states), callWS: async (msg) => { calls.push(msg); return { [id]: [
+    { s: "a", a: { event_type: "favourite_cheaper", station: "Shell · Videnska", price: 38.9, change: -0.2 }, lu: Date.UTC(2026, 10, 10, 9) / 1000 },
+    { s: "b", a: { event_type: "cheapest_cheaper", station: "Levna · Hlavni", price: 38.1, change: -0.4 }, lu: Date.UTC(2026, 10, 12, 9) / 1000 },
+  ] }; } };
+  assert.match(card.shadowRoot.innerHTML, /No price changes in the last 7 days/);
+  await tick();
+  assert.equal(calls.length, 1);
+  same([calls[0].type, calls[0].entity_ids, calls[0].no_attributes], ["history/history_during_period", [id], false]);
+  const html = card.shadowRoot.innerHTML;
+  assert.ok(html.indexOf("A cheaper station in the area") < html.indexOf("Your station got cheaper")); // newest first
+  assert.match(html, /Levna · Hlavni<\/span><\/div>\s*<span class="price"><span class="number">38\.10<\/span><span class="diff good">−0\.40</);
+});
+
+test("the trend of the week: the latest value against 7 and 14 days before", async () => {
+  const days = Array.from({ length: 15 }, (_, i) => `d${i}`);
+  // d14 is today; d7 has no value, so the 7-day reference is d6
+  same(trendDeltas({ d0: 39.0, d6: 38.8, d14: 38.5 }, days), { latest: 38.5, d7: -0.3, d14: -0.5 });
+  same(trendDeltas({ d14: 38.5 }, days), { latest: 38.5, d7: null, d14: null });
+  assert.equal(trendDeltas({}, days), null);
+
+  const today = new Date(); today.setHours(12, 0, 0, 0);
+  const at = (back, v) => ({ start: today.getTime() - back * 86400000, mean: v, min: v - 0.1 });
+  const calls = [];
+  const labels = { ...LABELS_EN, trend_title: "Price trend", graph_empty: "No history yet", series_cheapest: "Cheapest" };
+  const states = {
+    "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.4, { labels }),
+    "sensor.ceny_paliv_n95_area_average_a": role("n95", "a", "area_average", 39.4),
+  };
+  const card = new CenyPalivTrendCard();
+  card.setConfig({ fuel: "n95" });
+  card.hass = { ...miniHass(states), callWS: async (msg) => { calls.push(msg); return {
+    "sensor.ceny_paliv_n95_area_average_a": [at(14, 39.9), at(7, 39.6), at(0, 39.4)],
+    "sensor.ceny_paliv_n95_top5_a": [at(0, 38.5)],
+  }; } };
+  assert.match(card.shadowRoot.innerHTML, /No history yet/);
+  await tick();
+  same(calls[0].statistic_ids, ["sensor.ceny_paliv_n95_area_average_a", "sensor.ceny_paliv_n95_top5_a"]);
+  const html = card.shadowRoot.innerHTML;
+  assert.match(html, /Area average<\/b><span>39\.40 Kč\/l[^]*?<path d="M0\.0,2\.0L36\.0,[\d.]+L72\.0,22\.0"><\/path><\/svg><span class="d good">[^]*?−0\.20<\/span><span class="d good">[^]*?−0\.50/);
+  assert.match(html, /Cheapest<\/b><span>38\.40 Kč\/l[^]*?<span class="d muted">—<\/span><span class="d muted">—/); // the daily minimum, no history yet
 });

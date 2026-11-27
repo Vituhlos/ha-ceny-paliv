@@ -77,8 +77,8 @@ Stav: přepínač paliv a detail stanice s navigací (Mapy.com, Google Maps, Waz
   5. Mapa stanic s barevnými cenami a kruhem oblasti – hotovo (kreslená, bez mapových dlaždic).
   6. Porovnání oblastí (domov, práce, chata) – hotovo.
   7. Na cestě: nejbližší stanice s navigací (oblast, která jede s vámi) – hotovo.
-  8. Co se změnilo: časová osa z událostí změny ceny.
-  9. Trend týdne: průměr oblasti a vaše stanice za 7 a 14 dní.
+  8. Co se změnilo: časová osa z událostí změny ceny – hotovo.
+  9. Trend týdne: průměr oblasti a vaše stanice za 7 a 14 dní – hotovo.
   10. Velká cena pro nástěnný tablet – hotovo.
   11. Odznak s nejnižší cenou – hotovo.
   12. Prvek do dlaždicové (tile) karty – hotovo.

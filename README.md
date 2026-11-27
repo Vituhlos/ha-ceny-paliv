@@ -227,6 +227,8 @@ Besides the main card, the integration brings smaller cards, also in the card pi
 | `custom:ceny-paliv-areas-card` | one fuel in every area you have (home, work, a cottage…), the cheapest first, with its cheapest station and average; areas are named after their device | `fuel` (required) |
 | `custom:ceny-paliv-road-card` | for a phone in the car: the nearest up-to-date stations of a GPS area (best one that follows you), large, each with a big navigate button | `fuel` (required), `stations` (3), `navigator` (`google`, `mapy` or `waze`) |
 | `custom:ceny-paliv-big-card` | one price, large, for a wall tablet: the cheapest, yours or the area average, with the station and the trend; the text grows with the card | `fuel` (required), `price` (`cheapest`, `mine`, `area`) |
+| `custom:ceny-paliv-changes-card` | the last price changes from the fuel's price-change events: your station cheaper or dearer, a cheaper station in the area, with the time and the change; from Home Assistant's history | `fuel` (required), `days` (14) |
+| `custom:ceny-paliv-trend-card` | how the area average, your station and the area's cheapest price moved over 7 and 14 days, with a 15-day sparkline each; from the long-term statistics | `fuel` (required) |
 | `custom:ceny-paliv-stations-map-card` | the area's up-to-date stations as dots coloured from the cheapest to the dearest, around the area's centre and circle (or the town's stations), with the regions' borders behind; the five cheapest and yours carry their price, and a tap opens the station's details and navigation. A drawn map, not map tiles: for streets use the main card's map | `fuel` (required) |
 
 ```yaml
