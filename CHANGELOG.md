@@ -4,6 +4,8 @@
 
 ### New
 
+- Generate a Ceny paliv dashboard with an overview by area and a dedicated view for each configured fuel.
+
 - Compare fuel cost per kilometre for one vehicle, using area prices and consumption set on each card (kg for CNG).
 
 - Rank chains by their nationwide average price and see how many fresh station prices contributed to each average.

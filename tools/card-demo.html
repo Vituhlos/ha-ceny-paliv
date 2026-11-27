@@ -2,6 +2,7 @@
 <!--
   Demo page for the Ceny paliv card: renders the real card file with a mock `hass`, no Home Assistant needed.
   Serve the repository root (python -m http.server 8765) and open /tools/card-demo.html?theme=dark&lang=cs&width=380
+  dashboard=overview|n95|diesel|lpg|cng previews the generated dashboard views.
   Parameters: theme=light|dark, lang=en|cs, width=<px> (card width), compact=1, show=home,list, sort=price|distance|worth,
   cards=main,fuels,savings,compare,regions,stations,areas,road,big,changes,trend,chains,cost,badges,feature (the cards to show, in this order;
   feature: a simplified tile with the price feature under it)
@@ -190,7 +191,41 @@ window.fetch = (url, ...rest) => realFetch(String(url).startsWith('/ceny_paliv_s
 
 const s = document.createElement('script');
 s.src = '../custom_components/ceny_paliv/frontend/ceny-paliv-card.js';
-s.onload = () => {
+s.onload = async () => {
+  // Preview the actual generated configuration, using simple HTML for HA's native view and section containers.
+  if (q.has('dashboard')) {
+    const host = document.getElementById('host');
+    const strategy = customElements.get('ll-strategy-dashboard-ceny-paliv');
+    const dashboard = await strategy.generate({}, hass);
+    const view = dashboard.views.find((v) => v.path === q.get('dashboard')) || dashboard.views[0];
+    const nav = document.createElement('nav');
+    nav.style.cssText = 'display:flex;gap:12px;flex-wrap:wrap';
+    for (const item of dashboard.views) {
+      const link = document.createElement('a');
+      const url = new URL(location.href);
+      url.searchParams.set('dashboard', item.path);
+      link.href = url.href;
+      link.style.color = 'var(--primary-text-color)';
+      link.textContent = item.title;
+      if (item === view) link.setAttribute('aria-current', 'page');
+      nav.append(link);
+    }
+    host.append(nav);
+    for (const cfg of [...(view.badges || []), ...view.sections.flatMap((section) => section.cards)]) {
+      if (cfg.type === 'heading') {
+        const heading = document.createElement('h2');
+        heading.style.cssText = 'margin:0;color:var(--primary-text-color)';
+        heading.textContent = cfg.heading;
+        host.append(heading);
+      } else if (cfg.type.startsWith('custom:')) {
+        const el = document.createElement(cfg.type.slice(7));
+        el.setConfig(cfg);
+        host.append(el);
+        el.hass = hass;
+      }
+    }
+    return;
+  }
   const main = { type: 'custom:ceny-paliv-card', fuel: 'n95', fuels: ['n95', 'diesel'], show: (q.get('show') || 'home,list,graph').split(',') };
   if (q.get('compact')) main.compact = true;
   if (q.get('sort')) main.sort = q.get('sort');

@@ -423,6 +423,13 @@ function browserStorage() {
   try { return window.localStorage || null; } catch (e) { return null; }
 }
 
+// Renamed sensors keep their integration attributes. Older sensors keep their original ID.
+function isFuelSensor(id, state) {
+  const a = state?.attributes;
+  return id.startsWith('sensor.ceny_paliv_') ||
+    (id.startsWith('sensor.') && Boolean(a?.cp_role && a.cp_fuel && a.cp_config_id));
+}
+
 function withLastKnown(hass) {
   const store = browserStorage();
   if (!lastKnownLoaded) {
@@ -437,8 +444,8 @@ function withLastKnown(hass) {
   const gone = [];
   let changed = false;
   for (const id in hass.states) {
-    if (!id.startsWith('sensor.ceny_paliv_')) continue;
     const s = hass.states[id];
+    if (!isFuelSensor(id, s) && !lastKnown.has(id)) continue;
     const a = s.attributes || {};
     if (s.state === 'unavailable') {
       // a restored state belongs to an entity no integration provides (a removed area): never revive it
@@ -473,7 +480,7 @@ function withLastKnown(hass) {
 function topCandidates(hass, fuel) {
   const tops = [];
   for (const id in hass.states) {
-    if (!id.startsWith('sensor.ceny_paliv_') || restored(hass.states[id])) continue;
+    if (!isFuelSensor(id, hass.states[id]) || restored(hass.states[id])) continue;
     const a = hass.states[id].attributes || {};
     if (a.cp_fuel) {
       if (a.cp_fuel === fuel && a.cp_role === 'top5') tops.push({ id, attributes: a });
@@ -610,7 +617,7 @@ class CenyPalivCard extends HTMLElement {
     ids.top5 = selected.id;
     const homes = [];
     for (const id of Object.keys(hass.states)) {
-      if (!id.startsWith('sensor.ceny_paliv_') || restored(hass.states[id])) continue;
+      if (!isFuelSensor(id, hass.states[id]) || restored(hass.states[id])) continue;
       const a = hass.states[id].attributes || {};
       if (a.cp_role === 'home_archive') continue;
       if (a.cp_role && (
@@ -664,7 +671,7 @@ class CenyPalivCard extends HTMLElement {
   static fuels(hass) {
     const out = [];
     for (const [id, st] of Object.entries((hass && hass.states) || {})) {
-      if (!id.startsWith('sensor.ceny_paliv_')) continue;
+      if (!isFuelSensor(id, st)) continue;
       const a = st.attributes || {};
       const isTop = a.cp_role === 'top5' || (!a.cp_role && /_top5$/.test(id) && a.fuel);
       if (isTop && a.fuel && !out.some((o) => o.value === a.fuel)) out.push({ value: a.fuel, label: a.fuel_label || a.fuel });
@@ -675,7 +682,7 @@ class CenyPalivCard extends HTMLElement {
     const configs = [];
     for (const [id, state] of Object.entries((hass && hass.states) || {})) {
       const a = state.attributes || {};
-      if (!id.startsWith('sensor.ceny_paliv_') || a.cp_fuel !== fuel || a.cp_role !== 'top5' || !a.cp_config_id) continue;
+      if (!isFuelSensor(id, state) || a.cp_fuel !== fuel || a.cp_role !== 'top5' || !a.cp_config_id) continue;
       if (!configs.some((item) => item.value === a.cp_config_id)) {
         const area = a.gps_area || null;
         const where = area
@@ -1165,7 +1172,7 @@ class CenyPalivCard extends HTMLElement {
     const configId = top && top.attributes && top.attributes.cp_config_id;
     const average = Object.keys(states).find((id) => {
       const a = states[id].attributes || {};
-      return id.startsWith('sensor.ceny_paliv_') && a.cp_role === 'area_average' && a.cp_fuel === this._config.fuel && a.cp_config_id === configId;
+      return id.startsWith('sensor.') && a.cp_role === 'area_average' && a.cp_fuel === this._config.fuel && a.cp_config_id === configId;
     });
     const out = [];
     if (home) out.push({ key: 'mine', id: (home.attributes && home.attributes.statistic_id) || this._ids.home, type: 'mean', label: this._T('my_station') });
@@ -1487,7 +1494,7 @@ function areaIds(hass) {
   const out = [];
   for (const [id, st] of Object.entries((hass && hass.states) || {})) {
     const a = st.attributes || {};
-    if (id.startsWith('sensor.ceny_paliv_') && a.cp_role === 'top5' && a.cp_config_id && !restored(st) && !out.includes(a.cp_config_id)) out.push(a.cp_config_id);
+    if (id.startsWith('sensor.') && a.cp_role === 'top5' && a.cp_config_id && !restored(st) && !out.includes(a.cp_config_id)) out.push(a.cp_config_id);
   }
   return out.sort();
 }
@@ -1497,7 +1504,7 @@ function areaSensors(hass, configId) {
   const out = {};
   for (const [id, st] of Object.entries((hass && hass.states) || {})) {
     const a = st.attributes || {};
-    if (!id.startsWith('sensor.ceny_paliv_') || a.cp_config_id !== configId || !AREA_ROLES.includes(a.cp_role) || !a.cp_fuel || restored(st)) continue;
+    if (!id.startsWith('sensor.') || a.cp_config_id !== configId || !AREA_ROLES.includes(a.cp_role) || !a.cp_fuel || restored(st)) continue;
     if (a.cp_role === 'home' && ['unavailable', 'unknown'].includes(st.state)) continue;
     (out[a.cp_fuel] = out[a.cp_fuel] || {})[a.cp_role] = id;
   }
@@ -1509,7 +1516,7 @@ function areaOptions(hass) {
   const seen = {};
   for (const [id, st] of Object.entries((hass && hass.states) || {})) {
     const a = st.attributes || {};
-    if (id.startsWith('sensor.ceny_paliv_') && a.cp_role === 'top5' && a.cp_config_id && !(a.cp_config_id in seen)) {
+    if (id.startsWith('sensor.') && a.cp_role === 'top5' && a.cp_config_id && !(a.cp_config_id in seen)) {
       seen[a.cp_config_id] = `${a.city_name || 'GPS area'} (${a.cp_config_id.slice(0, 8)})`;
     }
   }
@@ -2915,6 +2922,72 @@ class CenyPalivFuelCostCard extends CenyPalivMiniCard {
       ${body ? `<div class="rows">${body}</div>` : `<span class="note">${esc(this._T('cost_empty'))}</span>`}
       <span class="source">${this._source()}</span></ha-card>`;
   }
+}
+
+class CenyPalivDashboardStrategy extends HTMLElement {
+  static getCreateSuggestions() { return { title: 'Ceny paliv', icon: 'mdi:gas-station' }; }
+
+  static async generate(config, hass) {
+    const cs = (hass.language || 'en').split('-')[0] === 'cs';
+    const summary = { title: cs ? 'Přehled' : 'Overview', path: 'overview', type: 'sections', sections: [] };
+    const fuelViews = new Map();
+    const consumption = {};
+    for (const fuel of COST_FUELS) {
+      const key = `consumption_${fuel}`;
+      if (config.fuel_cost?.[key] != null) consumption[key] = config.fuel_cost[key];
+    }
+    for (const config_id of areaIds(hass)) {
+      const sensors = areaSensors(hass, config_id);
+      const fuels = FUEL_ORDER.filter((f) => sensors[f]?.top5);
+      if (!fuels.length) continue;
+      const first = sensors[fuels[0]].top5;
+      const name = areaName(hass, first, hass.states[first].attributes.city_name) || (cs ? 'Oblast' : 'Area');
+      const heading = { type: 'heading', heading: name, heading_style: 'title' };
+      const overviewCards = [heading, { type: 'custom:ceny-paliv-fuels-card', config_id }];
+      if (fuels.some((f) => f === 'lpg' || f === 'cng')) {
+        overviewCards.push({ type: 'custom:ceny-paliv-fuel-cost-card', config_id, ...consumption });
+      }
+      summary.sections.push({ type: 'grid', cards: overviewCards });
+
+      for (const fuel of fuels) {
+        const top = hass.states[sensors[fuel].top5].attributes;
+        const binding = { fuel, config_id };
+        if (!fuelViews.has(fuel)) {
+          fuelViews.set(fuel, { title: top.fuel_label || fuel, path: fuel, type: 'sections', badges: [], sections: [] });
+        }
+        const view = fuelViews.get(fuel);
+        view.badges.push({ type: 'custom:ceny-paliv-badge', ...binding });
+        const cards = [heading, { type: 'custom:ceny-paliv-card', ...binding, show: ['home', 'list', 'graph'] }];
+        const types = ['stations-map', 'compare', 'savings', 'trend', 'changes'];
+        if (!view.sections.length) types.push('chains', 'regions');
+        if (top.gps_area) types.push('road');
+        for (const type of types) cards.push({ type: `custom:ceny-paliv-${type}-card`, ...binding });
+        view.sections.push({ type: 'grid', cards });
+      }
+    }
+    if (!summary.sections.length) {
+      const content = cs ? 'Přidejte integraci Ceny paliv nebo počkejte na načtení senzorů a obnovte stránku.'
+        : 'Add the Ceny paliv integration or wait for its sensors to load, then refresh this page.';
+      summary.sections.push({ type: 'grid', cards: [{ type: 'markdown', content }] });
+    }
+    const views = [summary];
+    for (const fuel of FUEL_ORDER) {
+      const view = fuelViews.get(fuel);
+      if (!view) continue;
+      if (view.sections.length > 1) {
+        view.sections.unshift({ type: 'grid', cards: [{ type: 'custom:ceny-paliv-areas-card', fuel }] });
+      }
+      views.push(view);
+    }
+    return { title: 'Ceny paliv', views };
+  }
+}
+
+const strategyTag = 'll-strategy-dashboard-ceny-paliv';
+if (!customElements.get(strategyTag)) customElements.define(strategyTag, CenyPalivDashboardStrategy);
+window.customStrategies = window.customStrategies || [];
+if (!window.customStrategies.some((item) => item.type === 'ceny-paliv' && item.strategyType === 'dashboard')) {
+  window.customStrategies.push({ type: 'ceny-paliv', strategyType: 'dashboard', name: 'Ceny paliv' });
 }
 
 const MINI_CARDS = [

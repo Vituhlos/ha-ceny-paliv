@@ -84,7 +84,7 @@ Stav: přepínač paliv a detail stanice s navigací (Mapy.com, Google Maps, Waz
   12. Prvek do dlaždicové (tile) karty – hotovo.
   13. Žebříček řetězců (průměry počítá integrace z celého stažení) – hotovo.
   14. Výhodnost LPG a CNG (cena za kilometr podle spotřeby) – hotovo.
-- Strategie, která sama vygeneruje celý dashboard „Ceny paliv“ z těchto karet.
+- Strategie, která sama vygeneruje celý dashboard „Ceny paliv“ z těchto karet – hotovo.
 
 ## 0.10 – kniha tankování a hlas
 
