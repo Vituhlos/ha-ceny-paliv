@@ -2854,12 +2854,15 @@ class CenyPalivChainsCard extends CenyPalivMiniCard {
     const row = (chain, index) => `<div class="row">
       <span class="icon fuel">${index + 1}</span><div class="info"><span class="primary">${esc(chain.name)}</span>
       <span class="secondary">${esc(this._T('chain_count', { n: chain.station_count }))}</span></div>
-      <span class="number">${esc(this._num(chain.average))} <small>${esc(unit)}</small></span></div>`;
+      <span class="price"><span class="number">${esc(this._num(chain.average))} <small>${esc(unit)}</small></span></span></div>`;
     const rows = chains.slice(0, 10).map(row);
     const expanded = this.shadowRoot.querySelector('details')?.open;
     this._remainingRows = () => chains.slice(10).map((item, i) => row(item, i + 10)).join('');
     const total = national?.attributes.chain_count || chains.length;
-    return `<ha-card class="card"><div class="head"><span class="icon home"><ha-icon icon="mdi:podium"></ha-icon></span>
+    return `<ha-card class="card"><style>
+      summary { min-height: var(--ha-space-10, 40px); align-content: center; cursor: pointer; color: var(--primary-color); }
+      summary:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+      </style><div class="head"><span class="icon home"><ha-icon icon="mdi:podium"></ha-icon></span>
       <div class="info"><span class="primary">${esc(this._T('chains_title'))} · ${esc(top?.attributes.fuel_label || fuel)}</span>
       <span class="secondary">${esc(total > chains.length ? this._T('chains_limited', { n: chains.length, total }) : this._T('chains_sub'))}</span></div></div>
       <div class="rows">${rows.join('')}</div>
