@@ -41,7 +41,7 @@ const context = {
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivFuelCostCard, CenyPalivChainsCard, CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas };`,
+  `${source}\nglobalThis.testExports = { CenyPalivDashboardStrategy, CenyPalivFuelCostCard, CenyPalivChainsCard, CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas };`,
   context,
 );
 const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas } = context.testExports;
@@ -1298,4 +1298,27 @@ test("fuel cost uses card-specific consumption and the area's price per kg or li
   card.setConfig({ consumption_lpg: 0, consumption_cng: 3 });
   assert.doesNotMatch(card.shadowRoot.innerHTML, />LPG</);
   assert.match(card.shadowRoot.innerHTML, /0\.96/);
+});
+
+test("dashboard strategy builds one view per fuel and binds sections to their actual areas", async () => {
+  const strategy = context.testExports.CenyPalivDashboardStrategy;
+  const states = {
+    "sensor.ceny_paliv_lpg_top5_work": top5("lpg", "work", 18),
+    "sensor.ceny_paliv_n95_top5_work": top5("n95", "work", 36),
+    "sensor.ceny_paliv_n95_top5_home": top5("n95", "home", 38),
+  };
+  const { title, views } = await strategy.generate({ fuel_cost: { consumption_lpg: 9 } }, miniHass(states));
+  assert.equal(title, "Ceny paliv");
+  same(views.map((v) => v.path), ["overview", "n95", "lpg"]);
+  const costs = views[0].sections.flatMap((s) => s.cards).filter((c) => c.type.endsWith("fuel-cost-card"));
+  same(costs, [{ type: "custom:ceny-paliv-fuel-cost-card", config_id: "work", consumption_lpg: 9 }]);
+  same(views[1].badges.map((b) => b.config_id), ["home", "work"]);
+  assert.equal(views[1].sections[0].cards[0].type, "custom:ceny-paliv-areas-card");
+  const cards = views[1].sections.flatMap((s) => s.cards);
+  same(cards.filter((c) => c.type === "custom:ceny-paliv-card").map((c) => c.config_id), ["home", "work"]);
+  assert.equal(cards.filter((c) => c.type.endsWith("chains-card")).length, 1);
+  assert.equal(views[2].badges.length, 1);
+  const empty = await strategy.generate({}, { language: "cs", states: {} });
+  assert.match(empty.views[0].sections[0].cards[0].content, /načtení senzorů/);
+  assert.equal(context.window.customStrategies[0].type, "ceny-paliv");
 });

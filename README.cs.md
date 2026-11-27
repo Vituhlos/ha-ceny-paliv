@@ -220,6 +220,17 @@ map_height: 260
 
 (Jsou to tři samostatné karty; `---` je tu jen odděluje.) V dashboardu typu *sekce* si karta velikost přizpůsobí obsahu.
 
+### Vygenerování dashboardu Ceny paliv
+
+V Home Assistantu od verze 2026.5 otevřete **Nastavení → Dashboardy → Přidat dashboard** a v komunitních dashboardech zvolte **Ceny paliv**. Ve starší podporované verzi vytvořte prázdný dashboard a do editoru jeho surové konfigurace vložte:
+
+```yaml
+strategy:
+  type: custom:ceny-paliv
+```
+
+Přehled seskupuje paliva podle oblasti. Každé palivo má vlastní pohled s cenovými odznaky, seznamem stanic, grafem, mapou a srovnáním. Oblasti s LPG nebo CNG mají také kartu ceny za kilometr. Spotřebu svého vozu můžete nastavit pod `strategy` v položce `fuel_cost` pomocí stejných voleb `consumption_*` jako u samostatné karty. Po přidání oblasti nebo paliva dashboard znovu načtěte.
+
 ### Další karty pro dashboard
 
 Kromě hlavní karty přináší integrace menší karty, také v nabídce karet (hledejte „Ceny paliv“). Každá ukazuje jednu oblast; máte-li jich víc, vyberte ji v editoru karty (`config_id`).

@@ -2893,6 +2893,72 @@ class CenyPalivFuelCostCard extends CenyPalivMiniCard {
   }
 }
 
+class CenyPalivDashboardStrategy extends HTMLElement {
+  static getCreateSuggestions() { return { title: 'Ceny paliv', icon: 'mdi:gas-station' }; }
+
+  static async generate(config, hass) {
+    const cs = (hass.language || 'en').split('-')[0] === 'cs';
+    const summary = { title: cs ? 'Přehled' : 'Overview', path: 'overview', type: 'sections', sections: [] };
+    const fuelViews = new Map();
+    const consumption = {};
+    for (const fuel of COST_FUELS) {
+      const key = `consumption_${fuel}`;
+      if (config.fuel_cost?.[key] != null) consumption[key] = config.fuel_cost[key];
+    }
+    for (const config_id of areaIds(hass)) {
+      const sensors = areaSensors(hass, config_id);
+      const fuels = FUEL_ORDER.filter((f) => sensors[f]?.top5);
+      if (!fuels.length) continue;
+      const first = sensors[fuels[0]].top5;
+      const name = areaName(hass, first, hass.states[first].attributes.city_name) || (cs ? 'Oblast' : 'Area');
+      const heading = { type: 'heading', heading: name, heading_style: 'title' };
+      const overviewCards = [heading, { type: 'custom:ceny-paliv-fuels-card', config_id }];
+      if (fuels.some((f) => f === 'lpg' || f === 'cng')) {
+        overviewCards.push({ type: 'custom:ceny-paliv-fuel-cost-card', config_id, ...consumption });
+      }
+      summary.sections.push({ type: 'grid', cards: overviewCards });
+
+      for (const fuel of fuels) {
+        const top = hass.states[sensors[fuel].top5].attributes;
+        const binding = { fuel, config_id };
+        if (!fuelViews.has(fuel)) {
+          fuelViews.set(fuel, { title: top.fuel_label || fuel, path: fuel, type: 'sections', badges: [], sections: [] });
+        }
+        const view = fuelViews.get(fuel);
+        view.badges.push({ type: 'custom:ceny-paliv-badge', ...binding });
+        const cards = [heading, { type: 'custom:ceny-paliv-card', ...binding, show: ['home', 'list', 'graph'] }];
+        const types = ['stations-map', 'compare', 'savings', 'trend', 'changes'];
+        if (!view.sections.length) types.push('chains', 'regions');
+        if (top.gps_area) types.push('road');
+        for (const type of types) cards.push({ type: `custom:ceny-paliv-${type}-card`, ...binding });
+        view.sections.push({ type: 'grid', cards });
+      }
+    }
+    if (!summary.sections.length) {
+      const content = cs ? 'Přidejte integraci Ceny paliv nebo počkejte na načtení senzorů a obnovte stránku.'
+        : 'Add the Ceny paliv integration or wait for its sensors to load, then refresh this page.';
+      summary.sections.push({ type: 'grid', cards: [{ type: 'markdown', content }] });
+    }
+    const views = [summary];
+    for (const fuel of FUEL_ORDER) {
+      const view = fuelViews.get(fuel);
+      if (!view) continue;
+      if (view.sections.length > 1) {
+        view.sections.unshift({ type: 'grid', cards: [{ type: 'custom:ceny-paliv-areas-card', fuel }] });
+      }
+      views.push(view);
+    }
+    return { title: 'Ceny paliv', views };
+  }
+}
+
+const strategyTag = 'll-strategy-dashboard-ceny-paliv';
+if (!customElements.get(strategyTag)) customElements.define(strategyTag, CenyPalivDashboardStrategy);
+window.customStrategies = window.customStrategies || [];
+if (!window.customStrategies.some((item) => item.type === 'ceny-paliv' && item.strategyType === 'dashboard')) {
+  window.customStrategies.push({ type: 'ceny-paliv', strategyType: 'dashboard', name: 'Ceny paliv' });
+}
+
 const MINI_CARDS = [
   ['ceny-paliv-fuel-cost-card', CenyPalivFuelCostCard, 'Ceny paliv: cost per kilometre', 'Compare LPG, CNG, petrol and diesel for one vehicle.'],
   ['ceny-paliv-chains-card', CenyPalivChainsCard, 'Ceny paliv: chain ranking', 'Average prices by chain across the Czech Republic.'],

@@ -214,6 +214,17 @@ map_height: 260
 
 (The three cards are separate; `---` only separates them here.) In a *sections* dashboard the card also resizes itself to its content.
 
+### Generate a Ceny paliv dashboard
+
+In Home Assistant 2026.5 or later, open **Settings → Dashboards → Add dashboard** and choose **Ceny paliv** under community dashboards. On earlier supported versions, create an empty dashboard and put this in its raw configuration editor:
+
+```yaml
+strategy:
+  type: custom:ceny-paliv
+```
+
+The overview groups fuels by area. Each fuel gets a view with price badges, station list, graph, map and comparisons. Areas with LPG or CNG also get a cost-per-kilometre card. To use your vehicle's consumption in generated cards, add `fuel_cost` under `strategy` with the same `consumption_*` options as the standalone card. Reload the dashboard after adding an area or fuel.
+
 ### More cards for a dashboard
 
 Besides the main card, the integration brings smaller cards, also in the card picker (search "Ceny paliv"). Each shows one area; with several areas choose one in its editor (`config_id`).
