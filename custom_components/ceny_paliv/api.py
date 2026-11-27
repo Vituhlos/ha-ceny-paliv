@@ -47,6 +47,7 @@ from .regions import REGION_NAMES, region_of
 
 _CZECH_TIMEZONE = ZoneInfo("Europe/Prague")
 _GPS_NEAREST_LIMIT = 10
+_MAP_STATION_LIMIT = 80
 _MAX_ATTRIBUTE_TEXT = 120
 _MAX_RANKED_CHAINS = 100  # cap the live sensor attribute even when each station reports a distinct name
 
@@ -821,9 +822,30 @@ def build_payload(
         area_region,
     )
 
+    # The map reads this list on demand. It never becomes a state or Recorder attribute.
+    map_rows = list(enumerate(kept[:_MAP_STATION_LIMIT], start=1))
+    if home and (home_rank := home.get("rank")) and home_rank > _MAP_STATION_LIMIT:
+        map_rows[-1] = (home_rank, kept[home_rank - 1])
+    map_stations = []
+    for rank, (marker, day) in map_rows:
+        street, town = street_and_town(marker)
+        map_stations.append({
+            "rank": rank,
+            "name": _bounded_text(marker["name"]),
+            "chain": _bounded_text(marker.get("chain") or marker["name"]),
+            "street": _bounded_text(street),
+            "city": _bounded_text(town),
+            "lat": marker["lat"],
+            "lng": marker["lng"],
+            "price": marker["price"],
+            "updated_date": day.isoformat(),
+            "home": bool(home and rank == home.get("rank")),
+        })
+
     stamp = fetched_stamp.isoformat(timespec="seconds")
     result = {
         "stations": stations,
+        "map_stations": map_stations,
         "home": home,
         "fetched_at": stamp,
         "last_attempt": now.isoformat(timespec="seconds"),

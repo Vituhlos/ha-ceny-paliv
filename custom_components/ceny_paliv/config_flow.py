@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import uuid4
 
 try:  # Home Assistant 2026.x validates with probatio (and maps voluptuous onto it)
@@ -54,6 +54,8 @@ from .const import (
     CONF_LOCATION,
     CONF_LOCATION_METHOD,
     CONF_PERSON_ENTITY,
+    CONF_DASHBOARD_STYLE,
+    DEFAULT_DASHBOARD_STYLE,
     CONF_LANGUAGE,
     CONF_LOGOS,
     CONF_MAX_AGE_DAYS,
@@ -131,18 +133,13 @@ def _choices(options: list[dict[str, str]]) -> list[SelectOptionDict]:
     return [SelectOptionDict(value=option["value"], label=option["label"]) for option in options]
 
 
-if TYPE_CHECKING:  # the steps run inside a config or options flow
-    _StepsBase = ConfigEntryBaseFlow
-else:
-    _StepsBase = object
-
-
-class _FuelStationSteps(_StepsBase):
+class _FuelStationSteps(ConfigEntryBaseFlow):
     """Shared by the config flow and the options flow: choose fuels, then a favourite station per fuel."""
 
     _key: str
     _city: str
     _fuels: list[str]
+    _dashboard_style: str = DEFAULT_DASHBOARD_STYLE
     _language: str
     _queue: list[str]
     _homes: dict[str, str]
@@ -213,6 +210,7 @@ class _FuelStationSteps(_StepsBase):
         if user_input is not None:
             fuels = user_input[CONF_FUELS]
             self._pending_fuels = list(fuels)
+            self._dashboard_style = user_input.get(CONF_DASHBOARD_STYLE, self._dashboard_style)
             self._pending_language = user_input[CONF_LANGUAGE]
             self._pending_max_age_days = int(user_input.get(CONF_MAX_AGE_DAYS, MAX_AGE_DAYS_DEFAULT))
             if not fuels:
@@ -291,6 +289,12 @@ class _FuelStationSteps(_StepsBase):
                         options=[SelectOptionDict(value=k, label=v[0]) for k, v in FUELS.items()],
                         multiple=True,
                         mode=SelectSelectorMode.LIST,
+                    )
+                ),
+                vol.Required(CONF_DASHBOARD_STYLE, default=self._dashboard_style): SelectSelector(
+                    SelectSelectorConfig(
+                        options=["stations", "map", "fuels"], translation_key="dashboard_style",
+                        mode=SelectSelectorMode.DROPDOWN,
                     )
                 ),
                 vol.Required(CONF_LANGUAGE, default=default_language): SelectSelector(
@@ -651,8 +655,6 @@ class _FuelStationSteps(_StepsBase):
                         self._home_identities.pop(fuel, None)
                     else:
                         self._home_identities[fuel] = selected_identity
-                elif choice == NONE_VALUE:
-                    self._home_identities.pop(fuel, None)
             if choice != NONE_VALUE:
                 self._homes[fuel] = choice
             else:
@@ -803,6 +805,7 @@ class _FuelStationSteps(_StepsBase):
             CONF_FUELS: self._fuels,
             CONF_HOMES: self._homes,
             CONF_LANGUAGE: self._language,
+            CONF_DASHBOARD_STYLE: self._dashboard_style,
             CONF_AREA_MODE: self._area_mode,
             CONF_MAX_AGE_DAYS: self._max_age_days,
         }
@@ -918,6 +921,7 @@ class CenyPalivOptionsFlow(_FuelStationSteps, OptionsFlow):
             fuel: list(records)
             for fuel, records in entry.options.get(CONF_HOME_HISTORY, {}).items()
         }
+        self._dashboard_style = entry.options.get(CONF_DASHBOARD_STYLE, DEFAULT_DASHBOARD_STYLE)
         self._defaults_language = entry.options.get(CONF_LANGUAGE)
         self._defaults_logos = entry.options.get(CONF_LOGOS)
         self._defaults_max_age_days = entry.options.get(CONF_MAX_AGE_DAYS, MAX_AGE_DAYS_DEFAULT)

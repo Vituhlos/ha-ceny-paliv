@@ -6,7 +6,7 @@ from datetime import timedelta
 DOMAIN = "ceny_paliv"
 
 CARD_URL = "/ceny_paliv_static/ceny-paliv-card.js"
-CARD_VERSION = "0.8.0"
+CARD_VERSION = "0.9.0"
 
 # Optional station logos (pack in the GitHub repository, downloaded on request, see logos.py)
 REGIONS_URL = "/ceny_paliv_static/regions.json"  # the region boundaries, for the regions card
@@ -38,6 +38,8 @@ CONF_FUELS = "fuels"
 CONF_HOMES = "homes"  # {fuel: station slug}
 CONF_HOME_IDENTITIES = "home_identities"  # {fuel: exact station URL after an explicit favourite change}
 CONF_HOME_HISTORY = "home_history"  # retired favourite sensor identities, retained to isolate HA statistics
+CONF_DASHBOARD_STYLE = "dashboard_style"
+DEFAULT_DASHBOARD_STYLE = "stations"
 CONF_LANGUAGE = "language"
 CONF_STATION = "station"
 CONF_LOGOS = "logos"  # logo ids ticked in the setup

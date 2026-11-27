@@ -86,6 +86,11 @@ Stav: přepínač paliv a detail stanice s navigací (Mapy.com, Google Maps, Waz
   14. Výhodnost LPG a CNG (cena za kilometr podle spotřeby) – hotovo.
 - Strategie, která sama vygeneruje celý dashboard „Ceny paliv“ z těchto karet – hotovo.
 
+PR #64–#67 jsou sloučené. V nastavení každé oblasti si lze vybrat úvodní pohled Stanice, Mapa nebo Paliva. Dashboard přepíná paliva a oblasti na jedné obrazovce.
+Výchozí audit verze 0.8.0 evidoval 45 splněných pravidel a 9 výjimek. CI měřila 99 % celkem,
+99 % v konfiguračním průvodci a 94 % v modulu log. CI nyní vyžaduje přes 95 % řádků v každém modulu a 100 % řádků i větví průvodce
+včetně návratu k poloze domova. Home Assistant tuto vlastní integraci řadí do kategorie Custom.
+
 ## 0.10 – kniha tankování a hlas
 
 - Kniha tankování (litry, cena, km) se senzory útraty a spotřeby; „vyplatí se dojet?“ s vlastní nádrží a spotřebou.
@@ -97,3 +102,12 @@ Stav: přepínač paliv a detail stanice s navigací (Mapy.com, Google Maps, Waz
 - Kontrola pravidlo po pravidle: u každého `done` konkrétní kód a test, který to dokazuje.
 - README s obrázky karty ve světlém i tmavém motivu; ukázková stránka a srovnání vzhledu jako nástroj v repozitáři.
 - Balíček log doplněný o menší řetězce (Petrol, Am oil, Oktan…).
+
+## Návrhy na další vývoj
+
+- **Upozornění na čistou úsporu při tankování.** Zadám množství a minimální úsporu v Kč.
+  Výpočet odečte náklady na zajížďku. Zpráva uvede stanici, stáří ceny a navigaci.
+- **Čerstvost cen v okolí.** U nejlevnější ceny zobrazit velikost vzorku, počet cen aktualizovaných dnes
+  a počet příliš starých cen. Využít stejné stažení.
+- **Poslední známé ceny po restartu.** Uložit poslední přehled v Home Assistantu s časem stažení,
+  aby byl během výpadku dostupný i na jiném telefonu. Automatizace musí dál rozlišovat čerstvé a uložené údaje.

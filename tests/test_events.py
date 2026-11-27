@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from homeassistant.core import callback
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
@@ -65,7 +66,13 @@ async def test_the_event_entity_reports_real_price_changes(hass, enable_custom_i
     assert state.attributes["friendly_name"] == "Ceny paliv Praha Natural 95 · price change"
 
     seen = []
-    hass.bus.async_listen("state_changed", lambda event: seen.append(event.data["new_state"].attributes.get("event_type")) if event.data["entity_id"] == entity_id else None)
+
+    @callback
+    def record_change(event):
+        if event.data["entity_id"] == entity_id and event.data["new_state"] is not None:
+            seen.append(event.data["new_state"].attributes.get("event_type"))
+
+    hass.bus.async_listen("state_changed", record_change)
 
     # nothing changed: no event
     await _refresh(hass, entry, prices)

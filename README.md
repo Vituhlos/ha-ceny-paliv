@@ -223,7 +223,7 @@ strategy:
   type: custom:ceny-paliv
 ```
 
-The overview groups fuels by area. Each fuel gets a view with price badges, station list, graph, map and comparisons. Areas with LPG or CNG also get a cost-per-kilometre card. To use your vehicle's consumption in generated cards, add `fuel_cost` under `strategy` with the same `consumption_*` options as the standalone card. Reload the dashboard after adding an area or fuel.
+The dashboard opens on a single screen. When adding or configuring an area, choose **Stations first**, **Map first** or **Fuel comparison first**. Switch area, fuel or view directly on the dashboard. Switching views there lasts until the page reloads. Expand **Price history and comparisons** for trends, regional prices and chain rankings. Under the dashboard’s `strategy`, `fuel_cost` accepts the same per-vehicle `consumption_*` settings as the standalone card. Reload the dashboard after adding an area or fuel.
 
 ### More cards for a dashboard
 
@@ -242,7 +242,9 @@ Besides the main card, the integration brings smaller cards, also in the card pi
 | `custom:ceny-paliv-trend-card` | how the area average, your station and the area's cheapest price moved over 7 and 14 days, with a 15-day sparkline each; from the long-term statistics | `fuel` (required) |
 | `custom:ceny-paliv-fuel-cost-card` | ranks LPG, CNG, petrol and diesel by Kč/km using the area's average price × consumption / 100. Set each card to its vehicle's consumption. Missing prices are skipped | `consumption_n95` (6.5), `consumption_diesel` (5.5), `consumption_lpg` (8) in l/100 km, `consumption_cng` (4) in kg/100 km |
 | `custom:ceny-paliv-chains-card` | nationwide chain averages and station counts, cheapest first. Stations without a chain are grouped by their reported name | `fuel` (required) |
-| `custom:ceny-paliv-stations-map-card` | the area's up-to-date stations as dots coloured from the cheapest to the dearest, around the area's centre and circle (or the town's stations), with the regions' borders behind; the five cheapest and yours carry their price, and a tap opens the station's details and navigation. A drawn map, not map tiles: for streets use the main card's map | `fuel` (required) |
+| `custom:ceny-paliv-stations-map-card` | street map with price markers and a GPS radius. Drag to pan, use +/− to zoom or select a marker for its station and navigation. Arrow keys pan a focused map and Home returns to the area. The map shows up to 80 current stations, keeping an in-area favourite when the list is capped | `fuel` (required), `street_map` (default `true`) |
+
+The stations map requests street tiles for the visible area from OpenStreetMap in your browser. Set `street_map: false` to start with the local schematic. If tiles fail to load, the map switches to the schematic and keeps its station prices and navigation. The station list comes from the integration’s cached prices and adds no mBenzin requests.
 
 ```yaml
 type: custom:ceny-paliv-savings-card

@@ -94,17 +94,19 @@
         }
       },
       "fuels": {
-        "title": "Paliva a jazyk",
+        "title": "Paliva a dashboard",
         "description": "Vyberte jedno nebo více paliv – například Natural 95 a LPG pro vůz na dvě paliva. Pro každé palivo se vytvoří samostatné senzory. Nezapomeňte, že mBenzin nerozlišuje benzín E10, cena Natural 95 platí pro všechny 95oktanové benzíny.",
         "data": {
           "fuels": "Paliva",
           "language": "Jazyk textů v dashboardu",
-          "max_age_days": "Zobrazit i starší ceny"
+          "max_age_days": "Zobrazit i starší ceny",
+          "dashboard_style": "Výchozí pohled dashboardu"
         },
         "data_description": {
           "language": "Určuje jazyk popisků v hotových pohledech dashboardu (např. „Moje stanice“). Jazyk samotného nastavení se řídí jazykem Home Assistantu.",
           "max_age_days": "Do přehledu se počítají jen takto čerstvé ceny. Menší stanice aktualizují ceny na mBenzin.cz méně často, takže s 1 dnem z přehledu často vypadnou. Starší ceny se zobrazí s datem.",
-          "fuels": "Každé palivo dostane vlastní senzory a vlastní kartu."
+          "fuels": "Každé palivo dostane vlastní senzory a vlastní kartu.",
+          "dashboard_style": "Co uvidíte jako první při otevření této oblasti. Na dashboardu můžete dočasně přepnout pohled."
         }
       },
       "station": {
@@ -250,17 +252,19 @@
         }
       },
       "fuels": {
-        "title": "Paliva a jazyk",
+        "title": "Paliva a dashboard",
         "description": "Vyberte jedno nebo více paliv – například Natural 95 a LPG pro vůz na dvě paliva. Pro každé palivo se vytvoří samostatné senzory. Nezapomeňte, že mBenzin nerozlišuje benzín E10, cena Natural 95 platí pro všechny 95oktanové benzíny.",
         "data": {
           "fuels": "Paliva",
           "language": "Jazyk textů v dashboardu",
-          "max_age_days": "Zobrazit i starší ceny"
+          "max_age_days": "Zobrazit i starší ceny",
+          "dashboard_style": "Výchozí pohled dashboardu"
         },
         "data_description": {
           "language": "Určuje jazyk popisků v hotových pohledech dashboardu (např. „Moje stanice“). Jazyk samotného nastavení se řídí jazykem Home Assistantu.",
           "max_age_days": "Do přehledu se počítají jen takto čerstvé ceny. Menší stanice aktualizují ceny na mBenzin.cz méně často, takže s 1 dnem z přehledu často vypadnou. Starší ceny se zobrazí s datem.",
-          "fuels": "Každé palivo dostane vlastní senzory a vlastní kartu."
+          "fuels": "Každé palivo dostane vlastní senzory a vlastní kartu.",
+          "dashboard_style": "Co uvidíte jako první při otevření této oblasti. Na dashboardu můžete dočasně přepnout pohled."
         }
       },
       "station": {
@@ -318,6 +322,13 @@
         "1": "Dnes a včera (výchozí)",
         "3": "Až 3 dny",
         "7": "Až 7 dní"
+      }
+    },
+    "dashboard_style": {
+      "options": {
+        "stations": "Nejdřív stanice",
+        "map": "Nejdřív mapa",
+        "fuels": "Nejdřív srovnání paliv"
       }
     }
   },

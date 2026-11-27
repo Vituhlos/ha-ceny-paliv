@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
+
+### Quality
+
+- Enforce more than 95% line coverage in every integration module and cover all lines and branches of the configuration flow on both supported Home Assistant versions.
 
 ### New
 
-- Generate a Ceny paliv dashboard with an overview by area and a dedicated view for each configured fuel.
+- Generate a responsive single-page Ceny paliv dashboard. Choose a station, map or fuel-comparison layout during area setup or in integration options. Switch areas and fuels in place and expand historical comparisons when needed.
 
 - Compare fuel cost per kilometre for one vehicle, using area prices and consumption set on each card (kg for CNG).
 

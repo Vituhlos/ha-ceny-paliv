@@ -229,7 +229,7 @@ strategy:
   type: custom:ceny-paliv
 ```
 
-Přehled seskupuje paliva podle oblasti. Každé palivo má vlastní pohled s cenovými odznaky, seznamem stanic, grafem, mapou a srovnáním. Oblasti s LPG nebo CNG mají také kartu ceny za kilometr. Spotřebu svého vozu můžete nastavit pod `strategy` v položce `fuel_cost` pomocí stejných voleb `consumption_*` jako u samostatné karty. Po přidání oblasti nebo paliva dashboard znovu načtěte.
+Dashboard má jednu obrazovku. Při přidávání nebo konfiguraci oblasti zvolte **Nejdřív stanice**, **Nejdřív mapa** nebo **Nejdřív srovnání paliv**. Oblast, palivo i pohled pak můžete přepnout přímo na dashboardu. Dočasný pohled platí do dalšího načtení stránky. V části **Vývoj cen a srovnání** najdete historii, krajské ceny a žebříček řetězců. Spotřebu svého vozu nastavíte pod `strategy` v položce `fuel_cost` stejně jako u samostatné karty pomocí `consumption_*`. Po přidání oblasti nebo paliva dashboard načtěte znovu.
 
 ### Další karty pro dashboard
 
@@ -248,7 +248,9 @@ Kromě hlavní karty přináší integrace menší karty, také v nabídce karet
 | `custom:ceny-paliv-trend-card` | jak se za 7 a 14 dní pohnul průměr oblasti, vaše stanice a nejnižší cena oblasti, každý s malým grafem za 15 dní; z dlouhodobých statistik | `fuel` (povinné) |
 | `custom:ceny-paliv-fuel-cost-card` | řadí LPG, CNG, benzín a naftu podle Kč/km z průměrné ceny oblasti × spotřeba / 100. Na každé kartě nastavte spotřebu konkrétního vozu. Paliva bez ceny se přeskočí | `consumption_n95` (6,5), `consumption_diesel` (5,5), `consumption_lpg` (8) v l/100 km, `consumption_cng` (4) v kg/100 km |
 | `custom:ceny-paliv-chains-card` | celostátní průměry a počty stanic podle řetězce, od nejlevnějšího. Stanice bez údaje o řetězci se seskupují podle uvedeného názvu | `fuel` (povinné) |
-| `custom:ceny-paliv-stations-map-card` | aktuální stanice oblasti jako body obarvené od nejlevnější po nejdražší, kolem středu a kruhu oblasti (nebo stanice města), v pozadí hranice krajů; pět nejlevnějších a vaše mají cenovku a klepnutím se otevře detail s navigací. Kreslená mapa, ne mapové dlaždice: ulice ukáže mapa v hlavní kartě | `fuel` (povinné) |
+| `custom:ceny-paliv-stations-map-card` | uliční mapa s cenovkami a kruhem GPS oblasti. Tažením mapu posunete, tlačítky +/− přiblížíte a klepnutím na stanici otevřete detail s navigací. Mapu vybranou klávesnicí posunou šipky, Home zobrazí celou oblast. Ukáže až 80 stanic s aktuální cenou včetně oblíbené stanice uvnitř oblasti | `fuel` (povinné), `street_map` (výchozí `true`) |
+
+Prohlížeč načítá pro viditelnou oblast mapové dlaždice OpenStreetMap. Pokud chcete začínat na místní schematické mapě, nastavte `street_map: false`. Při nedostupnosti dlaždic se mapa přepne na schéma a dál zobrazuje ceny stanic i navigaci. Seznam stanic pochází z již stažených cen, bez dalšího požadavku na mBenzin.
 
 ```yaml
 type: custom:ceny-paliv-savings-card
