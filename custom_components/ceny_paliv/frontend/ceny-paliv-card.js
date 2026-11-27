@@ -10,6 +10,8 @@
  *   custom:ceny-paliv-areas-card    one fuel in every area: where it is cheapest (fuel)
  *   custom:ceny-paliv-road-card     the nearest stations, large, with a navigate button (fuel, config_id, stations, navigator)
  *   custom:ceny-paliv-big-card      one price, large, for a wall tablet (fuel, config_id, price: cheapest | mine | area)
+ *   custom:ceny-paliv-changes-card  the last price changes from the price-change events (fuel, config_id, days)
+ *   custom:ceny-paliv-trend-card    the change over 7 and 14 days: the area average, your station, the cheapest (fuel, config_id)
  *   custom:ceny-paliv-badge         a dashboard badge with a price (fuel, price: cheapest | mine | area, config_id)
  *   custom:ceny-paliv-price-feature a tile card feature for a Ceny paliv sensor: the station, rank or comparison, the trend
  *
@@ -95,13 +97,17 @@ function graphDays(today, count) {
 }
 
 // One value per local day from the recorder's daily statistics (`start` in ms, or ISO on older versions).
-function dailyValues(rows, type) {
+function calendarDay(date, timeZone) {
+  return timeZone ? date.toLocaleDateString('sv-SE', { timeZone }) : isoDay(date);
+}
+
+function dailyValues(rows, type, timeZone) {
   const out = {};
   for (const r of Array.isArray(rows) ? rows : []) {
     const v = Number(r && r[type]);
     const start = typeof r.start === 'number' ? r.start : Date.parse(r.start);
     if (r[type] == null || !isFinite(v) || !isFinite(start)) continue;
-    out[isoDay(new Date(start))] = v;
+    out[calendarDay(new Date(start), timeZone)] = v;
   }
   return out;
 }
@@ -1371,7 +1377,7 @@ const EDITOR_TEXT = {
   en: {
     fuel: 'Fuel', fuels: 'Fuels (switch, or the fuels shown)', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
     map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
-    show_regions: 'Show the 14 regions', navigator: 'Navigation app', badge_cheapest: 'The cheapest in the area', badge_mine: 'My station', badge_area: 'The area average', sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
+    show_regions: 'Show the 14 regions', days: 'Days back', navigator: 'Navigation app', badge_cheapest: 'The cheapest in the area', badge_mine: 'My station', badge_area: 'The area average', sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
     consumption: 'Consumption per 100 km in litres, kg for CNG (for "worth it")', price: 'Price', distance: 'Distance', worth: 'Worth the drive',
     home: 'My station', list: 'Cheapest stations', map: 'Map', graph: '30-day graph: my station, the cheapest, the average',
     auto: 'Automatic: 2 columns when the card is wide', columns: 'Always 2 columns', stack: 'Always 1 column',
@@ -1379,7 +1385,7 @@ const EDITOR_TEXT = {
   cs: {
     fuel: 'Palivo', fuels: 'Paliva (přepínač, nebo zobrazená paliva)', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
     map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
-    show_regions: 'Zobrazit 14 krajů', navigator: 'Navigační aplikace', badge_cheapest: 'Nejlevnější v oblasti', badge_mine: 'Moje stanice', badge_area: 'Průměr oblasti', sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
+    show_regions: 'Zobrazit 14 krajů', days: 'Kolik dní zpět', navigator: 'Navigační aplikace', badge_cheapest: 'Nejlevnější v oblasti', badge_mine: 'Moje stanice', badge_area: 'Průměr oblasti', sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
     consumption: 'Spotřeba na 100 km v litrech, u CNG v kg (pro „vyplatí se“)', price: 'Cena', distance: 'Vzdálenost', worth: 'Vyplatí se dojet',
     home: 'Moje stanice', list: 'Nejlevnější stanice', map: 'Mapa', graph: 'Graf za 30 dní: moje stanice, nejlevnější, průměr',
     auto: 'Automaticky: 2 sloupce, je-li karta široká', columns: 'Vždy 2 sloupce', stack: 'Vždy 1 sloupec',
@@ -1547,7 +1553,7 @@ class CenyPalivMiniCard extends HTMLElement {
     const ids = [];
     for (const f of Object.values(this._sensors)) ids.push(...Object.values(f));
     const sig = [JSON.stringify(this._config), area, new Date().toDateString(), hass.language,
-      ...ids.sort().map((id) => `${id}:${hass.states[id].state}:${hass.states[id].last_updated}`)].join('|');
+      this._historySignature?.() || '', ...ids.sort().map((id) => `${id}:${hass.states[id].state}:${hass.states[id].last_updated}`)].join('|');
     if (sig === this._sig || (this._sheet && this._sheet.open)) return;
     this._sig = sig;
     this.shadowRoot.innerHTML = `<style>${STYLE}${MINI_STYLE}</style>${this._area ? this._render() : this._message()}`;
@@ -2333,6 +2339,286 @@ class CenyPalivBigCard extends CenyPalivMiniCard {
   }
 }
 
+// ------------------------------------------------------------------ 8. what changed: the price-change events
+// State attributes identify the fuel and area even after an entity-registry rename.
+function eventEntity(hass, fuel, top5Id) {
+  const top = hass.states[top5Id];
+  const area = top?.attributes?.cp_config_id;
+  const device = hass.entities?.[top5Id]?.device_id;
+  for (const [id, state] of Object.entries(hass.states)) {
+    if (!id.startsWith('event.')) continue;
+    const a = state.attributes || {};
+    if (a.cp_role === 'price_change' && a.cp_fuel === fuel && area && area === a.cp_config_id) return id;
+    // Older installs have device ownership and the suggested entity ID.
+    const suggested = `event.ceny_paliv_${fuel}_price_change`;
+    if (!a.cp_role && device && hass.entities[id]?.device_id === device &&
+        (id === suggested || (id.startsWith(suggested + '_') && /^\d+$/.test(id.slice(suggested.length + 1))))) return id;
+    // Older installs have device ownership and the suggested entity ID.
+    if (!a.cp_role && device && hass.entities[id]?.device_id === device &&
+        new RegExp(`^event\\.ceny_paliv_${fuel}_price_change(?:_\\d+)?$`).test(id)) return id;
+  }
+  return null;
+}
+
+// Recorder-backed cards refresh on the hour, including when Home Assistant is idle.
+class CenyPalivHistoryCard extends CenyPalivMiniCard {
+  connectedCallback() {
+    this._scheduleRefresh();
+    if (this._hass) this.hass = this._hass;
+  }
+
+  disconnectedCallback() {
+    clearTimeout(this._refreshTimer);
+  }
+
+  _scheduleRefresh() {
+    clearTimeout(this._refreshTimer);
+    const hour = 3600000;
+    const delay = this._failedKey ? 60000 : hour - Date.now() % hour;
+    this._refreshTimer = setTimeout(() => {
+      this._failedKey = null;
+      this._sig = '';
+      if (this._hass) this.hass = this._hass;
+      this._scheduleRefresh();
+    }, delay);
+  }
+
+  _historySignature() {
+    return Math.floor(Date.now() / 3600000);
+  }
+
+  _requestFailed(key) {
+    if (key !== this._loadKey) return;
+    this._failedKey = key;
+    this._loadKey = null;
+    this._sig = '';
+    this.hass = this._hass;
+    if (this.isConnected) this._scheduleRefresh();
+  }
+}
+
+// The events from the recorder's history: one state per event (the full or the compressed answer), newest first.
+function eventHistory(answer, entityId) {
+  const rows = Array.isArray(answer) ? (answer.find((group) => group[0]?.entity_id === entityId) || []) : (answer?.[entityId] || []);
+  return rows.map((r) => {
+    const state = r.s !== undefined ? r.s : r.state;
+    const a = r.a !== undefined ? r.a : r.attributes;
+    const when = r.lu !== undefined ? r.lu * 1000 : Date.parse(r.last_updated || r.last_changed);
+    return { state, a: a || {}, when };
+  }).filter((e) => e.a.event_type && !['unknown', 'unavailable'].includes(e.state) && isFinite(e.when)).sort((x, y) => y.when - x.when);
+}
+
+const CHANGE_LOOK = {
+  favourite_cheaper: { icon: 'mdi:arrow-down', cls: 'good' },
+  favourite_dearer: { icon: 'mdi:arrow-up', cls: 'bad' },
+  cheapest_cheaper: { icon: 'mdi:trophy-outline', cls: 'good' },
+};
+
+class CenyPalivChangesCard extends CenyPalivHistoryCard {
+  static get defaults() { return { days: 14 }; }
+
+  static getStubConfig(hass) {
+    const found = CenyPalivCard.fuels(hass)[0];
+    return { type: 'custom:ceny-paliv-changes-card', fuel: found ? found.value : 'n95' };
+  }
+
+  static editorSchema(hass) {
+    return [
+      { name: 'fuel', required: true, selector: { select: { mode: 'dropdown', options: CenyPalivCard.fuels(hass) } } },
+      { name: 'days', selector: { number: { min: 1, max: 30, step: 1, mode: 'slider' } } },
+    ];
+  }
+
+  setConfig(config) {
+    if (!config || !config.fuel) throw new Error('ceny-paliv-changes-card: set "fuel", for example "n95"');
+    super.setConfig(config);
+  }
+
+  getCardSize() { return 5; }
+
+  _days() { return Math.min(30, Math.max(1, Math.round(Number(this._config.days) || 14))); }
+
+  _historySignature() {
+    const fuel = this._config.fuel;
+    const id = eventEntity(this._hass, fuel, this._sensors[fuel]?.top5);
+    const state = this._hass.states[id];
+    return `${super._historySignature()}|${id}|${state?.last_updated || state?.last_changed}`;
+  }
+
+  // the history again for another entity, after a new event, and every hour
+  async _load(entityId) {
+    const key = `${this._days()}|${this._historySignature()}`;
+    if (key === this._loadKey || key === this._failedKey || typeof this._hass.callWS !== 'function') return;
+    this._failedKey = null;
+    this._loadKey = key;
+    const end = new Date();
+    const start = new Date(end.getTime() - this._days() * 86400000);
+    let answer = {};
+    try {
+      answer = (await this._hass.callWS({
+        type: 'history/history_during_period', start_time: start.toISOString(), end_time: end.toISOString(),
+        entity_ids: [entityId], include_start_time_state: false, minimal_response: false, no_attributes: false, significant_changes_only: false,
+      })) || {};
+    } catch (err) {
+      this._requestFailed(key);
+      return;
+    }
+    if (key !== this._loadKey) return;
+    this._events = { key: entityId, list: eventHistory(answer, entityId) };
+    this._sig = '';
+    this.hass = this._hass;
+  }
+
+  _render() {
+    const T = (k, v) => this._T(k, v);
+    const fuel = this._config.fuel;
+    const top = this._state(fuel, 'top5');
+    if (!top) { this._why = 'missing'; return this._message(); }
+    const at = top.attributes || {};
+    const entityId = eventEntity(this._hass, fuel, this._sensors[fuel].top5);
+    if (entityId) this._load(entityId);
+    else { this._loadKey = null; this._failedKey = null; this._events = null; }
+    const list = !this._failedKey && this._events && this._events.key === entityId ? this._events.list.slice(0, 10) : [];
+    const rows = list.map((e) => {
+      const look = CHANGE_LOOK[e.a.event_type] || { icon: 'mdi:swap-vertical', cls: 'muted' };
+      const change = Number(e.a.change);
+      const when = this._dateTime(new Date(e.when), { weekday: 'short', day: 'numeric', month: 'numeric', hour: 'numeric', minute: '2-digit' });
+      return `<div class="row">
+        <span class="icon ${look.cls === 'bad' ? 'fuel' : 'home'}"><ha-icon icon="${look.icon}"></ha-icon></span>
+        <div class="info"><span class="primary">${esc(T(`ev_${e.a.event_type}`))}</span><span class="secondary">${esc(when)} · ${esc(e.a.station || '')}</span></div>
+        <span class="price"><span class="number">${esc(this._num(e.a.price))}</span>${isFinite(change) ? `<span class="diff ${look.cls}">${change > 0 ? '+' : '−'}${esc(this._num(Math.abs(change)))}</span>` : ''}</span>
+      </div>`;
+    }).join('');
+    return `<ha-card class="card">
+      <div class="head"><span class="icon home"><ha-icon icon="mdi:history"></ha-icon></span>
+        <div class="info"><span class="primary">${esc(T('changes_title'))} · ${esc(at.fuel_label || fuel)}</span>
+          <span class="secondary">${esc(at.city_name || '')}</span></div></div>
+      ${rows ? `<div class="rows">${rows}</div>` : `<span class="note">${esc(this._failedKey ? T('history_error') : T('changes_empty', { n: this._days() }))}</span>`}
+      <span class="source">${this._source()}</span>
+    </ha-card>`;
+  }
+}
+CenyPalivChangesCard.prototype._dateTime = CenyPalivCard.prototype._dateTime;
+
+// ------------------------------------------------------------------ 9. the trend of the week
+// The latest daily value and how it moved since 7 and 14 days before (the last day with a value at or before then).
+function trendDeltas(values, days) {
+  let last = -1;
+  for (let i = days.length - 1; i >= 0; i -= 1) if (values[days[i]] != null) { last = i; break; }
+  if (last < 0) return null;
+  const before = (n) => {
+    for (let i = last - n; i >= 0; i -= 1) if (values[days[i]] != null) return values[days[i]];
+    return null;
+  };
+  const latest = values[days[last]];
+  const delta = (v) => (v == null ? null : Math.round((latest - v) * 100) / 100);
+  return { latest, d7: delta(before(7)), d14: delta(before(14)) };
+}
+
+const TREND_STYLE = `
+  .trend-rows { display: flex; flex-direction: column; gap: var(--ha-space-3, 12px); }
+  .trend-row { display: grid; grid-template-columns: minmax(0, 1fr) 72px auto auto; gap: var(--ha-space-3, 12px); align-items: center; }
+  .trend-row .label { display: flex; flex-direction: column; min-width: 0; }
+  .trend-row .label b { font-weight: var(--ha-font-weight-medium, 500); font-size: var(--ha-font-size-m, 14px); }
+  .trend-row .label span { font-size: var(--ha-font-size-s, 12px); color: var(--cp-muted); font-variant-numeric: tabular-nums; }
+  .trend-row svg { width: 72px; height: 24px; display: block; }
+  .trend-row path { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+  .trend-row .d { display: inline-flex; align-items: center; gap: 2px; justify-content: flex-end; min-width: 56px;
+    font-size: var(--ha-font-size-s, 12px); font-weight: var(--ha-font-weight-medium, 500); font-variant-numeric: tabular-nums; --mdc-icon-size: 14px; }
+  .trend-head { display: grid; grid-template-columns: minmax(0, 1fr) 72px auto auto; gap: var(--ha-space-3, 12px); font-size: var(--ha-font-size-xs, 10px); color: var(--cp-muted); }
+  .trend-head span { min-width: 56px; text-align: end; }
+`;
+
+class CenyPalivTrendCard extends CenyPalivHistoryCard {
+  static getStubConfig(hass) {
+    const found = CenyPalivCard.fuels(hass)[0];
+    return { type: 'custom:ceny-paliv-trend-card', fuel: found ? found.value : 'n95' };
+  }
+
+  static editorSchema(hass) {
+    return [{ name: 'fuel', required: true, selector: { select: { mode: 'dropdown', options: CenyPalivCard.fuels(hass) } } }];
+  }
+
+  setConfig(config) {
+    if (!config || !config.fuel) throw new Error('ceny-paliv-trend-card: set "fuel", for example "n95"');
+    super.setConfig(config);
+  }
+
+  getCardSize() { return 4; }
+
+  _series() {
+    const fuel = this._config.fuel;
+    const f = this._sensors[fuel] || {};
+    const home = f.home && this._hass.states[f.home];
+    return [
+      f.area_average && { key: 'average', id: f.area_average, type: 'mean', label: this._T('series_average') },
+      home && { key: 'mine', id: (home.attributes && home.attributes.statistic_id) || f.home, type: 'mean', label: this._T('my_station') },
+      f.top5 && { key: 'cheapest', id: f.top5, type: 'min', label: this._T('series_cheapest') },
+    ].filter(Boolean);
+  }
+
+  async _load(series) {
+    const ids = series.map((x) => x.id);
+    const zone = this._hass.config?.time_zone;
+    const key = `${ids.join('|')}|${zone}|${this._historySignature()}`;
+    if (!ids.length || key === this._loadKey || key === this._failedKey || typeof this._hass.callWS !== 'function') return;
+    this._failedKey = null;
+    this._loadKey = key;
+    const start = new Date(Date.now() - 31 * 86400000);
+    let rows = {};
+    try {
+      rows = (await this._hass.callWS({
+        type: 'recorder/statistics_during_period', start_time: start.toISOString(), end_time: new Date().toISOString(),
+        statistic_ids: ids, period: 'day', types: ['mean', 'min'],
+      })) || {};
+    } catch (err) {
+      this._requestFailed(key);
+      return;
+    }
+    if (key !== this._loadKey) return;
+    this._values = {};
+    for (const x of series) this._values[x.id] = dailyValues(rows[x.id], x.type, zone);
+    this._sig = '';
+    this.hass = this._hass;
+  }
+
+  _render() {
+    const T = (k, v) => this._T(k, v);
+    const fuel = this._config.fuel;
+    const top = this._state(fuel, 'top5');
+    if (!top) { this._why = 'missing'; return this._message(); }
+    const at = top.attributes || {};
+    const series = this._series();
+    this._load(series);
+    const today = calendarDay(new Date(), this._hass.config?.time_zone);
+    const days = graphDays(new Date(today + 'T12:00:00'), 31);
+    const delta = (d) => {
+      if (d == null) return '<span class="d muted">—</span>';
+      const r = this._arrow({ dir: d < 0 ? 'down' : d > 0 ? 'up' : 'flat', delta: d });
+      return `<span class="d ${r.cls}"><ha-icon icon="${r.icon}"></ha-icon>${esc(r.txt)}</span>`;
+    };
+    const rows = (this._failedKey ? [] : series).map((x) => {
+      const values = (this._values || {})[x.id] || {};
+      const t = trendDeltas(values, days);
+      if (!t) return '';
+      // a sparkline of the 15 days, in the row's own scale
+      const known = days.slice(-15).map((d, i) => [i, values[d]]).filter(([, v]) => v != null);
+      const lo = Math.min(...known.map(([, v]) => v));
+      const hi = Math.max(...known.map(([, v]) => v));
+      const path = known.map(([i, v], n) => `${n ? 'L' : 'M'}${(i * 72 / 14).toFixed(1)},${(hi > lo ? 22 - (v - lo) * 20 / (hi - lo) : 12).toFixed(1)}`).join('');
+      return `<div class="trend-row ${x.key}"><span class="label"><b>${esc(x.label)}</b><span>${esc(this._num(t.latest))} ${esc(at.unit_of_measurement || 'Kč/l')}</span></span>
+        <svg viewBox="0 0 72 24" aria-hidden="true"><path d="${path}"></path></svg>${delta(t.d7)}${delta(t.d14)}</div>`;
+    }).join('');
+    return `<ha-card class="card"><style>${TREND_STYLE}</style>
+      <div class="head"><span class="icon home"><ha-icon icon="mdi:chart-timeline-variant"></ha-icon></span>
+        <div class="info"><span class="primary">${esc(T('trend_title'))} · ${esc(at.fuel_label || fuel)}</span>
+          <span class="secondary">${esc(at.city_name || '')}</span></div></div>
+      ${rows ? `<div class="trend-head"><span></span><span></span><span>7 d</span><span>14 d</span></div><div class="trend-rows">${rows}</div>` : `<span class="note">${esc(T(this._failedKey ? 'history_error' : 'graph_empty'))}</span>`}
+      <span class="source">${this._source()}</span>
+    </ha-card>`;
+  }
+}
+
 // ------------------------------------------------------------------ 11. a badge with a price
 const BADGE_STYLE = `
   :host { display: inline-block; }
@@ -2540,6 +2826,8 @@ const MINI_CARDS = [
   ['ceny-paliv-areas-card', CenyPalivAreasCard, 'Ceny paliv: areas', 'One fuel in every area: where it is cheapest now and by how much.'],
   ['ceny-paliv-road-card', CenyPalivRoadCard, 'Ceny paliv: on the road', 'The nearest stations, large, with a navigate button: for a phone in the car.'],
   ['ceny-paliv-big-card', CenyPalivBigCard, 'Ceny paliv: big price', 'One price, large, readable from across the room.'],
+  ['ceny-paliv-changes-card', CenyPalivChangesCard, 'Ceny paliv: what changed', 'The last price changes: your station cheaper or dearer, a cheaper station in the area.'],
+  ['ceny-paliv-trend-card', CenyPalivTrendCard, 'Ceny paliv: trend', 'How the area average, your station and the cheapest moved over 7 and 14 days.'],
   ['ceny-paliv-stations-map-card', CenyPalivStationsMapCard, 'Ceny paliv: stations map', 'The area\'s stations as coloured prices around its centre; tap one for details and navigation.'],
 ];
 if (!customElements.get('ceny-paliv-mini-editor')) customElements.define('ceny-paliv-mini-editor', CenyPalivMiniEditor);

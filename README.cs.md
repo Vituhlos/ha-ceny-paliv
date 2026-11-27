@@ -233,6 +233,8 @@ Kromě hlavní karty přináší integrace menší karty, také v nabídce karet
 | `custom:ceny-paliv-areas-card` | jedno palivo ve všech vašich oblastech (domov, práce, chata…) od nejlevnější, s nejlevnější stanicí a průměrem; oblasti se jmenují podle svého zařízení | `fuel` (povinné) |
 | `custom:ceny-paliv-road-card` | pro telefon v autě: nejbližší stanice GPS oblasti s aktuální cenou (nejlépe té, která jede s vámi), velkým písmem a s velkým tlačítkem navigace | `fuel` (povinné), `stations` (3), `navigator` (`google`, `mapy` nebo `waze`) |
 | `custom:ceny-paliv-big-card` | jedna cena přes celou kartu pro nástěnný tablet: nejnižší, vaše nebo průměr oblasti, se stanicí a trendem; písmo roste s kartou | `fuel` (povinné), `price` (`cheapest`, `mine`, `area`) |
+| `custom:ceny-paliv-changes-card` | poslední změny ceny z událostí paliva: vaše stanice zlevnila nebo zdražila, levnější stanice v oblasti, s časem a změnou; z historie Home Assistantu | `fuel` (povinné), `days` (14) |
+| `custom:ceny-paliv-trend-card` | jak se za 7 a 14 dní pohnul průměr oblasti, vaše stanice a nejnižší cena oblasti, každý s malým grafem za 15 dní; z dlouhodobých statistik | `fuel` (povinné) |
 | `custom:ceny-paliv-stations-map-card` | aktuální stanice oblasti jako body obarvené od nejlevnější po nejdražší, kolem středu a kruhu oblasti (nebo stanice města), v pozadí hranice krajů; pět nejlevnějších a vaše mají cenovku a klepnutím se otevře detail s navigací. Kreslená mapa, ne mapové dlaždice: ulice ukáže mapa v hlavní kartě | `fuel` (povinné) |
 
 ```yaml
