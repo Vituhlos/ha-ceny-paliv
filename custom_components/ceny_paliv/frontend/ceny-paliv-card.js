@@ -2840,8 +2840,13 @@ class CenyPalivChainsCard extends CenyPalivMiniCard {
   constructor() {
     super();
     this.shadowRoot.addEventListener('toggle', (event) => {
-      if (event.target.tagName !== 'DETAILS') return;
-      event.target.querySelector('.rows').innerHTML = event.target.open ? this._remainingRows() : '';
+      const details = event.target;
+      if (details.tagName !== 'DETAILS' || details.open === Boolean(this._expanded)) return;
+      const focused = this.shadowRoot.activeElement === details.querySelector('summary');
+      this._expanded = details.open;
+      this._sig = '';
+      this.hass = this._hass;
+      if (focused) this.shadowRoot.querySelector('summary')?.focus();
     }, true);
   }
 
@@ -2856,8 +2861,8 @@ class CenyPalivChainsCard extends CenyPalivMiniCard {
       <span class="secondary">${esc(this._T('chain_count', { n: chain.station_count }))}</span></div>
       <span class="price"><span class="number">${esc(this._num(chain.average))} <small>${esc(unit)}</small></span></span></div>`;
     const rows = chains.slice(0, 10).map(row);
-    const expanded = this.shadowRoot.querySelector('details')?.open;
-    this._remainingRows = () => chains.slice(10).map((item, i) => row(item, i + 10)).join('');
+    const expanded = this._expanded;
+    const remaining = expanded ? chains.slice(10).map((item, i) => row(item, i + 10)).join('') : '';
     const total = national?.attributes.chain_count || chains.length;
     return `<ha-card class="card"><style>
       summary { min-height: var(--ha-space-10, 40px); align-content: center; cursor: pointer; color: var(--primary-color); }
@@ -2866,7 +2871,7 @@ class CenyPalivChainsCard extends CenyPalivMiniCard {
       <div class="info"><span class="primary">${esc(this._T('chains_title'))} · ${esc(top?.attributes.fuel_label || fuel)}</span>
       <span class="secondary">${esc(total > chains.length ? this._T('chains_limited', { n: chains.length, total }) : this._T('chains_sub'))}</span></div></div>
       <div class="rows">${rows.join('')}</div>
-      ${chains.length > 10 ? `<details${expanded ? ' open' : ''}><summary>${esc(this._T('chains_more', { n: chains.length - 10 }))}</summary><div class="rows">${expanded ? this._remainingRows() : ''}</div></details>` : ''}
+      ${chains.length > 10 ? `<details${expanded ? ' open' : ''}><summary>${esc(this._T('chains_more', { n: chains.length - 10 }))}</summary><div class="rows">${remaining}</div></details>` : ''}
       ${rows.length ? '' : `<span class="note">${esc(this._T('chains_empty'))}</span>`}
       <span class="source">${this._source()}</span></ha-card>`;
   }
