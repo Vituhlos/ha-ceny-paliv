@@ -131,7 +131,7 @@ Each station in `stations` (and `home`) has `rank`, `name`, `title` (a readable 
 
 | Sensor | State | Attributes |
 |---|---|---|
-| `_national_average` | the average in the Czech Republic | `station_count`, `median`, `regions`: for each region `code` (NUTS 3, for example `CZ010`), `name`, `average`, `station_count`, `vs_national` and `rank` (1 = the cheapest region) |
+| `_national_average` | the average in the Czech Republic | `station_count`, `median`, `regions`: for each region `code` (NUTS 3, for example `CZ010`), `name`, `average`, `station_count`, `vs_national` and `rank` (1 = the cheapest region). `chains` lists up to the 100 cheapest chains by unrounded mean, each with `name`, `average` and `station_count`. `chain_count` includes all ranked chains. |
 | `_region_average` | the average in your area's region (a city's region, or the GPS centre's); unavailable when the centre lies outside the Czech Republic | `region`, `region_code`, `station_count`, `rank`, `vs_national` |
 | `_area_average` | the average of the stations in your area | `station_count`, `region`, `region_rank`, `vs_national` and `vs_region` (Kč; below zero: your area is cheaper) |
 

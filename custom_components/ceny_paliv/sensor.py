@@ -300,7 +300,8 @@ class CenyPalivAverageSensor(CenyPalivSensor):
         region = overview.get("region") or {}
         attrs: dict[str, Any] = {"station_count": data.get("station_count")}
         if self._scope == "national":
-            attrs.update(median=data.get("median"), regions=overview.get("regions"), chains=overview.get("chains", []))
+            attrs.update(median=data.get("median"), regions=overview.get("regions"), chains=overview.get("chains", []),
+                         chain_count=overview.get("chain_count", 0))
         elif self._scope == "region":
             attrs.update(region=region.get("name"), region_code=region.get("code"), rank=region.get("rank"), vs_national=region.get("vs_national"))
         else:

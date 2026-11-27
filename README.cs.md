@@ -137,7 +137,7 @@ Každá stanice v `stations` (i v `home`) má `rank`, `name`, `title` (čitelný
 
 | Senzor | Stav | Atributy |
 |---|---|---|
-| `_national_average` | průměr v České republice | `station_count`, `median`, `regions`: u každého kraje `code` (NUTS 3, např. `CZ010`), `name`, `average`, `station_count`, `vs_national` a `rank` (1 = nejlevnější kraj) |
+| `_national_average` | průměr v České republice | `station_count`, `median`, `regions`: u každého kraje `code` (NUTS 3, např. `CZ010`), `name`, `average`, `station_count`, `vs_national` a `rank` (1 = nejlevnější kraj). `chains` obsahuje až 100 nejlevnějších řetězců podle nezaokrouhleného průměru, každý s `name`, `average` a `station_count`. `chain_count` je počet všech hodnocených řetězců. |
 | `_region_average` | průměr v kraji vaší oblasti (kraj města, nebo středu GPS okolí); nedostupný, když je střed mimo Českou republiku | `region`, `region_code`, `station_count`, `rank`, `vs_national` |
 | `_area_average` | průměr stanic ve vaší oblasti | `station_count`, `region`, `region_rank`, `vs_national` a `vs_region` (Kč; pod nulou: vaše oblast je levnější) |
 

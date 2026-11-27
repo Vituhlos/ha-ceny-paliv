@@ -48,6 +48,7 @@ from .regions import REGION_NAMES, region_of
 _CZECH_TIMEZONE = ZoneInfo("Europe/Prague")
 _GPS_NEAREST_LIMIT = 10
 _MAX_ATTRIBUTE_TEXT = 120
+_MAX_RANKED_CHAINS = 100  # cap the live sensor attribute even when each station reports a distinct name
 
 
 def _now_prague() -> dt.datetime:
@@ -551,15 +552,17 @@ def price_overview(
         region["rank"] = rank  # 1 = the cheapest region
     area_region_data: dict[str, Any] | None = next((region for region in regions if region["code"] == area_region), None)
     area_average = _average(area_prices)
+    ranked_chains = sorted((sum(prices) / len(prices), key) for key, prices in by_chain.items())
     return {
         "national": {
             "average": national_average,
             "median": round(median(national), 2) if national else None,
             "station_count": len(national),
         },
+        "chain_count": len(ranked_chains),
         "chains": [
-            {"name": chain_names[key], "average": average, "station_count": len(by_chain[key])}
-            for average, key in sorted((round(sum(prices) / len(prices), 2), key) for key, prices in by_chain.items())
+            {"name": _bounded_text(chain_names[key], 64), "average": round(average, 2), "station_count": len(by_chain[key])}
+            for average, key in ranked_chains[:_MAX_RANKED_CHAINS]
         ],
         "regions": regions,
         "region": area_region_data,

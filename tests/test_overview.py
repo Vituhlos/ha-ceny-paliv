@@ -87,6 +87,15 @@ def test_chain_ranking_uses_all_fresh_stations_before_the_local_list_is_truncate
     ]
 
 
+def test_chain_attribute_is_bounded_and_uses_exact_means_for_ordering(marker):
+    stations = [marker(f"Chain-{i:03}", 39, city="Brno") for i in range(101)]
+    stations += [marker("A", 30.004, city="Brno"), marker("Z", 30.001, city="Brno")]
+    overview = price_overview(stations, [], None)
+    assert overview["chain_count"] == 103
+    assert len(overview["chains"]) == 100
+    assert [(c["name"], c["average"]) for c in overview["chains"][:2]] == [("Z", 30), ("A", 30)]
+
+
 def test_the_payload_compares_only_up_to_date_prices(marker, now):
     markers = [
         _at(marker, "P1", 34, "Praha", PRAHA),
