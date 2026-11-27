@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
+
+### Quality
+
+- Enforce more than 95% line coverage in every integration module and cover all lines and branches of the configuration flow on both supported Home Assistant versions.
 
 ### New
 
