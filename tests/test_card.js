@@ -1304,30 +1304,21 @@ test("fuel cost uses card-specific consumption and the area's price per kg or li
   assert.match(card.shadowRoot.innerHTML, /0\.96/);
 });
 
-test("dashboard strategy builds one view per fuel and binds sections to their actual areas", async () => {
+test("dashboard strategy builds one responsive view with all areas, renamed entities and vehicle settings", async () => {
   const strategy = context.testExports.CenyPalivDashboardStrategy;
   const states = {
     "sensor.ceny_paliv_lpg_top5_work": top5("lpg", "work", 18),
     "sensor.ceny_paliv_n95_top5_work": top5("n95", "work", 36),
-    "sensor.petrol_near_home": top5("n95", "home", 38),
+    "sensor.petrol_near_home": top5("n95", "home", 38, { dashboard_style: "map" }),
   };
   const { title, views } = await strategy.generate({ fuel_cost: { consumption_lpg: 9 } }, miniHass(states));
   assert.equal(title, "Ceny paliv");
-  same(views.map((v) => v.path), ["overview", "n95", "lpg"]);
-  const costs = views[0].sections.flatMap((s) => s.cards).filter((c) => c.type.endsWith("fuel-cost-card"));
-  same(costs, [{ type: "custom:ceny-paliv-fuel-cost-card", config_id: "work", consumption_lpg: 9 }]);
-  same(views[1].badges.map((b) => b.config_id), ["home", "work"]);
-  assert.equal(views[1].sections[0].cards[0].type, "custom:ceny-paliv-areas-card");
-  const cards = views[1].sections.flatMap((s) => s.cards);
-  same(cards.filter((c) => c.type === "custom:ceny-paliv-card").map((c) => c.config_id), ["home", "work"]);
-  assert.equal(cards.filter((c) => c.type.endsWith("chains-card")).length, 1);
-  assert.equal(views[2].badges.length, 1);
-  for (const view of views.slice(1)) {
-    for (const badge of view.badges) assert.equal(badge.fuel, view.path);
-    for (const card of view.sections.flatMap((s) => s.cards).filter((c) => c.type.startsWith("custom:"))) {
-      assert.equal(card.fuel, view.path);
-    }
-  }
+  same(views.map((v) => v.path), ["overview"]);
+  const dashboard = views[0].sections[0].cards[0];
+  assert.equal(dashboard.grid_options.columns, "full");
+  same(dashboard.fuel_cost, { consumption_lpg: 9 });
+  same(dashboard.areas.map((a) => [a.id, a.fuels.map((f) => f.fuel)]), [["home", ["n95"]], ["work", ["n95", "lpg"]]]);
+  assert.equal(dashboard.areas[0].fuels[0].entity, "sensor.petrol_near_home");
   const main = new CenyPalivCard();
   main.setConfig({ fuel: "n95", config_id: "home" });
   assert.equal(main._resolve(miniHass(states)).top5, "sensor.petrol_near_home");

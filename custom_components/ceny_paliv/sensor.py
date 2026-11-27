@@ -20,7 +20,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, FUELS, TOP
+from .const import CONF_DASHBOARD_STYLE, DEFAULT_DASHBOARD_STYLE, DOMAIN, FUELS, TOP
 from .coordinator import CenyPalivConfigEntry, CenyPalivCoordinator
 from .entity import CenyPalivEntity
 
@@ -141,6 +141,7 @@ class CenyPalivTop5Sensor(CenyPalivSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs = {k: self._payload.get(k) for k in TOP_ATTRIBUTES}
+        attrs[CONF_DASHBOARD_STYLE] = self.coordinator.config_entry.options.get(CONF_DASHBOARD_STYLE, DEFAULT_DASHBOARD_STYLE)
         attrs.update(cp_fuel=self._fuel, cp_role="top5", cp_config_id=self._entry_id)
         return attrs
 

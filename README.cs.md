@@ -229,7 +229,7 @@ strategy:
   type: custom:ceny-paliv
 ```
 
-Přehled seskupuje paliva podle oblasti. Každé palivo má vlastní pohled s cenovými odznaky, seznamem stanic, grafem, mapou a srovnáním. Oblasti s LPG nebo CNG mají také kartu ceny za kilometr. Spotřebu svého vozu můžete nastavit pod `strategy` v položce `fuel_cost` pomocí stejných voleb `consumption_*` jako u samostatné karty. Po přidání oblasti nebo paliva dashboard znovu načtěte.
+Dashboard má jednu obrazovku. Při přidávání nebo konfiguraci oblasti zvolte **Nejdřív stanice**, **Nejdřív mapa** nebo **Nejdřív srovnání paliv**. Oblast, palivo i pohled pak můžete přepnout přímo na dashboardu. Dočasný pohled platí do dalšího načtení stránky. V části **Vývoj cen a srovnání** najdete historii, krajské ceny a žebříček řetězců. Spotřebu svého vozu nastavíte pod `strategy` v položce `fuel_cost` stejně jako u samostatné karty pomocí `consumption_*`. Po přidání oblasti nebo paliva dashboard načtěte znovu.
 
 ### Další karty pro dashboard
 

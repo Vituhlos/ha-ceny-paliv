@@ -2924,64 +2924,188 @@ class CenyPalivFuelCostCard extends CenyPalivMiniCard {
   }
 }
 
-class CenyPalivDashboardStrategy extends HTMLElement {
-  static getCreateSuggestions() { return { title: 'Ceny paliv', icon: 'mdi:gas-station' }; }
+const DASHBOARD_MODES = ['stations', 'map', 'fuels'];
 
-  static async generate(config, hass) {
-    const cs = (hass.language || 'en').split('-')[0] === 'cs';
-    const summary = { title: cs ? 'Přehled' : 'Overview', path: 'overview', type: 'sections', sections: [] };
-    const fuelViews = new Map();
-    const consumption = {};
-    for (const fuel of COST_FUELS) {
-      const key = `consumption_${fuel}`;
-      if (config.fuel_cost?.[key] != null) consumption[key] = config.fuel_cost[key];
-    }
-    for (const config_id of areaIds(hass)) {
-      const sensors = areaSensors(hass, config_id);
-      const fuels = FUEL_ORDER.filter((f) => sensors[f]?.top5);
-      if (!fuels.length) continue;
-      const first = sensors[fuels[0]].top5;
-      const name = areaName(hass, first, hass.states[first].attributes.city_name) || (cs ? 'Oblast' : 'Area');
-      const heading = { type: 'heading', heading: name, heading_style: 'title' };
-      const overviewCards = [heading, { type: 'custom:ceny-paliv-fuels-card', config_id }];
-      if (fuels.some((f) => f === 'lpg' || f === 'cng')) {
-        overviewCards.push({ type: 'custom:ceny-paliv-fuel-cost-card', config_id, ...consumption });
-      }
-      summary.sections.push({ type: 'grid', cards: overviewCards });
+function dashboardAreas(hass) {
+  const areas = [];
+  for (const id of areaIds(hass)) {
+    const sensors = areaSensors(hass, id);
+    const fuels = FUEL_ORDER.filter((fuel) => sensors[fuel]?.top5).map((fuel) => {
+      const entity = sensors[fuel].top5;
+      return { fuel, entity, label: hass.states[entity].attributes.fuel_label || fuel };
+    });
+    if (!fuels.length) continue;
+    const first = fuels[0].entity;
+    areas.push({ id, name: areaName(hass, first, hass.states[first].attributes.city_name), fuels });
+  }
+  return areas;
+}
 
-      for (const fuel of fuels) {
-        const top = hass.states[sensors[fuel].top5].attributes;
-        const binding = { fuel, config_id };
-        if (!fuelViews.has(fuel)) {
-          fuelViews.set(fuel, { title: top.fuel_label || fuel, path: fuel, type: 'sections', badges: [], sections: [] });
-        }
-        const view = fuelViews.get(fuel);
-        view.badges.push({ type: 'custom:ceny-paliv-badge', ...binding });
-        const cards = [heading, { type: 'custom:ceny-paliv-card', ...binding, show: ['home', 'list', 'graph'] }];
-        const types = ['stations-map', 'compare', 'savings', 'trend', 'changes'];
-        if (!view.sections.length) types.push('chains', 'regions');
-        if (top.gps_area) types.push('road');
-        for (const type of types) cards.push({ type: `custom:ceny-paliv-${type}-card`, ...binding });
-        view.sections.push({ type: 'grid', cards });
-      }
+const DASHBOARD_STYLE = `
+  :host { display:block; color:var(--primary-text-color); font-family:var(--ha-font-family-body,inherit); container-type:inline-size; }
+  header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin:4px 0 16px; }
+  h2 { font:var(--ha-font-weight-medium,500) var(--ha-font-size-2xl,24px)/1.25 var(--ha-font-family-body,inherit); margin:0; }
+  button, select { font:inherit; color:inherit; }
+  .modes { display:inline-flex; flex-wrap:wrap; padding:3px; gap:2px; border-radius:var(--ha-border-radius-pill,28px);
+    background:color-mix(in srgb,var(--primary-text-color) 7%,transparent); }
+  button { cursor:pointer; min-height:40px; background:transparent; border:0; border-radius:var(--ha-border-radius-pill,28px);
+    padding:0 14px; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:var(--ha-font-size-m,14px); }
+  button[aria-pressed=true] { background:var(--ha-card-background,var(--card-background-color)); color:var(--primary-text-color);
+    box-shadow:0 1px 3px color-mix(in srgb,var(--primary-text-color) 16%,transparent); font-weight:var(--ha-font-weight-bold,700); }
+  button:focus-visible, select:focus-visible, summary:focus-visible { outline:2px solid var(--primary-color); outline-offset:2px; }
+  ha-icon { --mdc-icon-size:18px; }
+  .filters { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+  .filters select { max-width:100%; background:var(--card-background-color); border:1px solid var(--divider-color); border-radius:8px; padding:8px; }
+  .filters button { min-height:36px; border:1px solid var(--divider-color); }
+  .filters button[aria-pressed=true] { color:var(--primary-text-color); border-color:var(--primary-color);
+    background:color-mix(in srgb,var(--primary-color) 15%,var(--card-background-color)); box-shadow:none; }
+  .cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--ha-space-3,12px); align-items:start; }
+  .column { display:grid; gap:var(--ha-space-3,12px); min-width:0; }
+  .map-first > :first-child { grid-column:1 / -1; }
+  details { border-top:1px solid var(--divider-color); margin:20px 0 4px; }
+  summary { cursor:pointer; padding:14px 2px; font-weight:var(--ha-font-weight-medium,500); }
+  @container (max-width:650px) { .cards { grid-template-columns:minmax(0,1fr); } header { align-items:flex-start; } }
+  @container (max-width:399px) { .modes { width:100%; } .modes button { flex:1; padding:0 7px; } }
+`;
+
+// Only the active area's cards are mounted. History and national comparisons load on demand.
+class CenyPalivDashboard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+    this._cards = [];
+    this.shadowRoot.addEventListener('click', (event) => {
+      const button = event.target.closest?.('button');
+      if (!button || (!button.dataset.mode && !button.dataset.fuel)) return;
+      if (button.dataset.mode) this._mode = button.dataset.mode;
+      if (button.dataset.fuel) this._fuel = button.dataset.fuel;
+      this._draw();
+      const group = button.dataset.mode ? 'mode' : 'fuel';
+      this.shadowRoot.querySelector(`button[data-${group}][aria-pressed="true"]`)?.focus();
+    });
+    this.shadowRoot.addEventListener('change', (event) => {
+      if (!event.target.matches('select')) return;
+      this._areaId = event.target.value;
+      this._mode = null;
+      this._draw();
+      this.shadowRoot.querySelector('select')?.focus();
+    });
+  }
+
+  setConfig(config) {
+    this._config = config;
+    this._areaId = config.areas[0]?.id;
+    this._mode = null;
+    this._fuel = null;
+    if (this._hass) this._draw();
+  }
+
+  set hass(hass) {
+    const previous = this._hass;
+    this._hass = hass;
+    if (!this._config) return;
+    if (!previous || previous.language !== hass.language || this._defaultMode() !== this._lastDefault) {
+      this._draw();
+      return;
     }
-    if (!summary.sections.length) {
-      const content = cs ? 'Přidejte integraci Ceny paliv nebo počkejte na načtení senzorů a obnovte stránku.'
-        : 'Add the Ceny paliv integration or wait for its sensors to load, then refresh this page.';
-      summary.sections.push({ type: 'grid', cards: [{ type: 'markdown', content }] });
+    for (const card of this._cards) card.hass = hass;
+  }
+
+  _area() { return this._config.areas.find((a) => a.id === this._areaId); }
+
+  _defaultMode() {
+    const area = this._area();
+    const style = this._hass.states[area?.fuels[0]?.entity]?.attributes.dashboard_style;
+    return DASHBOARD_MODES.includes(style) ? style : 'stations';
+  }
+
+  _draw() {
+    const area = this._area();
+    if (!area) return;
+    const cs = (this._hass.language || 'en').startsWith('cs');
+    const selected = area.fuels.find((f) => f.fuel === this._fuel) || area.fuels[0];
+    this._fuel = selected.fuel;
+    this._lastDefault = this._defaultMode();
+    const mode = this._mode || this._lastDefault;
+    const names = cs ? ['Stanice','Mapa','Paliva'] : ['Stations','Map','Fuels'];
+    const icons = ['gas-station-outline','map-outline','compare-horizontal'];
+    const areaLabel = cs ? 'Oblast' : 'Area';
+    const areaSelector = this._config.areas.length > 1 ? `<select aria-label="${areaLabel}">${this._config.areas.map((a) =>
+      `<option value="${esc(a.id)}" ${a.id === area.id ? 'selected' : ''}>${esc(a.name || areaLabel)}</option>`).join('')}</select>` : '';
+    const fuelButtons = area.fuels.length > 1 ? area.fuels.map((f) => `<button type="button" data-fuel="${esc(f.fuel)}"
+      aria-pressed="${f.fuel === this._fuel}">${esc(f.label)}</button>`).join('') : '';
+    this.shadowRoot.innerHTML = `<style>${DASHBOARD_STYLE}</style>
+      <header><h2>${esc(area.name || 'Ceny paliv')}</h2><div class="modes" role="group" aria-label="${cs ? 'Pohled' : 'View'}">
+        ${DASHBOARD_MODES.map((m,i) => `<button type="button" data-mode="${m}" aria-pressed="${m === mode}"><ha-icon icon="mdi:${icons[i]}"></ha-icon>${names[i]}</button>`).join('')}</div></header>
+      ${areaSelector || fuelButtons ? `<div class="filters" role="group" aria-label="${cs ? 'Oblast a palivo' : 'Area and fuel'}">${areaSelector}${fuelButtons}</div>` : ''}
+      <div class="cards ${mode === 'map' ? 'map-first' : ''}" id="primary"></div>
+      <details><summary>${cs ? 'Vývoj cen a srovnání' : 'Price history and comparisons'}</summary><div class="cards" id="analysis"></div></details>`;
+    this._cards = [];
+    const binding = { fuel:this._fuel, config_id:area.id };
+    const append = (parent, type, options = {}) => {
+      const card = document.createElement(type === 'main' ? 'ceny-paliv-card' : `ceny-paliv-${type}-card`);
+      card.setConfig({ ...binding, ...options });
+      parent.appendChild(card);
+      card.hass = this._hass;
+      this._cards.push(card);
+    };
+    const primary = this.shadowRoot.getElementById('primary');
+    const column = () => {
+      const node = document.createElement('div');
+      node.className = 'column';
+      primary.appendChild(node);
+      return node;
+    };
+    const stations = (node) => append(node,'main',{ show:['home','list'], layout:'stack' });
+    if (mode === 'map') {
+      append(primary,'stations-map');
+      stations(column());
+      append(column(),'savings');
+    } else if (mode === 'fuels') {
+      const left = column();
+      const right = column();
+      append(left,'fuels');
+      if (area.fuels.some((f) => COST_FUELS.includes(f.fuel))) append(right,'fuel-cost',this._config.fuel_cost);
+      append(left,'stations-map');
+      stations(right);
+    } else {
+      stations(column());
+      const right = column();
+      append(right,'stations-map');
+      append(right,'savings');
     }
-    const views = [summary];
-    for (const fuel of FUEL_ORDER) {
-      const view = fuelViews.get(fuel);
-      if (!view) continue;
-      if (view.sections.length > 1) {
-        view.sections.unshift({ type: 'grid', cards: [{ type: 'custom:ceny-paliv-areas-card', fuel }] });
-      }
-      views.push(view);
-    }
-    return { title: 'Ceny paliv', views };
+    const details = this.shadowRoot.querySelector('details');
+    details.addEventListener('toggle', () => {
+      const body = this.shadowRoot.getElementById('analysis');
+      if (!details.open || body.children.length || !details.isConnected) return;
+      append(body,'main',{ show:['graph'] });
+      for (const type of ['trend','changes','compare','regions','chains']) append(body,type);
+      if (this._config.areas.filter((a) => a.fuels.some((f) => f.fuel === this._fuel)).length > 1) append(body,'areas');
+      if (this._hass.states[selected.entity]?.attributes.gps_area) append(body,'road');
+    });
   }
 }
+
+if (!customElements.get('ceny-paliv-dashboard')) customElements.define('ceny-paliv-dashboard', CenyPalivDashboard);
+
+class CenyPalivDashboardStrategy extends HTMLElement {
+  static getCreateSuggestions() { return { title:'Ceny paliv', icon:'mdi:gas-station' }; }
+
+  static async generate(config, hass) {
+    const areas = dashboardAreas(hass);
+    const fuel_cost = {};
+    for (const fuel of COST_FUELS) {
+      const key = `consumption_${fuel}`;
+      if (config.fuel_cost?.[key] != null) fuel_cost[key] = config.fuel_cost[key];
+    }
+    const cs = (hass.language || 'en').startsWith('cs');
+    const card = areas.length ? { type:'custom:ceny-paliv-dashboard', areas, fuel_cost } : { type:'markdown',
+      content:cs ? 'Přidejte integraci Ceny paliv nebo počkejte na načtení senzorů a obnovte stránku.' : 'Add the Ceny paliv integration or wait for its sensors to load, then refresh this page.' };
+    return { title:'Ceny paliv', views:[{ title:'Ceny paliv', path:'overview', type:'sections', max_columns:2,
+      sections:[{ type:'grid', column_span:2, cards:[{...card, grid_options:{columns:'full',rows:'auto'}}] }] }] };
+  }
+}
+
 
 const strategyTag = 'll-strategy-dashboard-ceny-paliv';
 if (!customElements.get(strategyTag)) customElements.define(strategyTag, CenyPalivDashboardStrategy);

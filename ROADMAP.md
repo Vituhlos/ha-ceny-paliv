@@ -86,7 +86,7 @@ Stav: přepínač paliv a detail stanice s navigací (Mapy.com, Google Maps, Waz
   14. Výhodnost LPG a CNG (cena za kilometr podle spotřeby) – hotovo.
 - Strategie, která sama vygeneruje celý dashboard „Ceny paliv“ z těchto karet – hotovo.
 
-PR #64–#67 jsou sloučené. V Home Assistantu 2026.10.4 jsme ověřili generovaný přehled a pohledy Natural 95 a CNG v motivech Fluvy Light a Fluvy Dark se vzorovými stanicemi. Při této zkoušce se integrace k mBenzinu nepřipojovala.
+PR #64–#67 jsou sloučené. V nastavení každé oblasti si lze vybrat úvodní pohled Stanice, Mapa nebo Paliva. Dashboard přepíná paliva a oblasti na jedné obrazovce.
 Výchozí audit verze 0.8.0 evidoval 45 splněných pravidel a 9 výjimek. CI měřila 99 % celkem,
 99 % v konfiguračním průvodci a 94 % v modulu log. CI nyní vyžaduje přes 95 % řádků v každém modulu a 100 % řádků i větví průvodce
 včetně návratu k poloze domova. Home Assistant tuto vlastní integraci řadí do kategorie Custom.

@@ -54,6 +54,8 @@ from .const import (
     CONF_LOCATION,
     CONF_LOCATION_METHOD,
     CONF_PERSON_ENTITY,
+    CONF_DASHBOARD_STYLE,
+    DEFAULT_DASHBOARD_STYLE,
     CONF_LANGUAGE,
     CONF_LOGOS,
     CONF_MAX_AGE_DAYS,
@@ -137,6 +139,7 @@ class _FuelStationSteps(ConfigEntryBaseFlow):
     _key: str
     _city: str
     _fuels: list[str]
+    _dashboard_style: str = DEFAULT_DASHBOARD_STYLE
     _language: str
     _queue: list[str]
     _homes: dict[str, str]
@@ -207,6 +210,7 @@ class _FuelStationSteps(ConfigEntryBaseFlow):
         if user_input is not None:
             fuels = user_input[CONF_FUELS]
             self._pending_fuels = list(fuels)
+            self._dashboard_style = user_input.get(CONF_DASHBOARD_STYLE, self._dashboard_style)
             self._pending_language = user_input[CONF_LANGUAGE]
             self._pending_max_age_days = int(user_input.get(CONF_MAX_AGE_DAYS, MAX_AGE_DAYS_DEFAULT))
             if not fuels:
@@ -285,6 +289,12 @@ class _FuelStationSteps(ConfigEntryBaseFlow):
                         options=[SelectOptionDict(value=k, label=v[0]) for k, v in FUELS.items()],
                         multiple=True,
                         mode=SelectSelectorMode.LIST,
+                    )
+                ),
+                vol.Required(CONF_DASHBOARD_STYLE, default=self._dashboard_style): SelectSelector(
+                    SelectSelectorConfig(
+                        options=["stations", "map", "fuels"], translation_key="dashboard_style",
+                        mode=SelectSelectorMode.DROPDOWN,
                     )
                 ),
                 vol.Required(CONF_LANGUAGE, default=default_language): SelectSelector(
@@ -795,6 +805,7 @@ class _FuelStationSteps(ConfigEntryBaseFlow):
             CONF_FUELS: self._fuels,
             CONF_HOMES: self._homes,
             CONF_LANGUAGE: self._language,
+            CONF_DASHBOARD_STYLE: self._dashboard_style,
             CONF_AREA_MODE: self._area_mode,
             CONF_MAX_AGE_DAYS: self._max_age_days,
         }
@@ -910,6 +921,7 @@ class CenyPalivOptionsFlow(_FuelStationSteps, OptionsFlow):
             fuel: list(records)
             for fuel, records in entry.options.get(CONF_HOME_HISTORY, {}).items()
         }
+        self._dashboard_style = entry.options.get(CONF_DASHBOARD_STYLE, DEFAULT_DASHBOARD_STYLE)
         self._defaults_language = entry.options.get(CONF_LANGUAGE)
         self._defaults_logos = entry.options.get(CONF_LOGOS)
         self._defaults_max_age_days = entry.options.get(CONF_MAX_AGE_DAYS, MAX_AGE_DAYS_DEFAULT)

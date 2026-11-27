@@ -223,7 +223,7 @@ strategy:
   type: custom:ceny-paliv
 ```
 
-The overview groups fuels by area. Each fuel gets a view with price badges, station list, graph, map and comparisons. Areas with LPG or CNG also get a cost-per-kilometre card. To use your vehicle's consumption in generated cards, add `fuel_cost` under `strategy` with the same `consumption_*` options as the standalone card. Reload the dashboard after adding an area or fuel.
+The dashboard opens on a single screen. When adding or configuring an area, choose **Stations first**, **Map first** or **Fuel comparison first**. Switch area, fuel or view directly on the dashboard. Switching views there lasts until the page reloads. Expand **Price history and comparisons** for trends, regional prices and chain rankings. Under the dashboard’s `strategy`, `fuel_cost` accepts the same per-vehicle `consumption_*` settings as the standalone card. Reload the dashboard after adding an area or fuel.
 
 ### More cards for a dashboard
 

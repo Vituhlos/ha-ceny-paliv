@@ -39,13 +39,14 @@ async def test_config_flow(hass, enable_custom_integrations, mock_frontend, mark
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {"city": "Praha"})
         assert result["step_id"] == "fuels"
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"fuels": ["n95"], "language": "cs"},
+            result["flow_id"], {"fuels": ["n95"], "language": "cs", "dashboard_style": "map"},
         )
         assert result["step_id"] == "station"
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {"station": "Oblibena"})
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert result["data"] == {"key": "dummy", "city": "Praha"}
         assert result["options"]["homes"] == {"n95": "Oblibena"}
+        assert result["options"]["dashboard_style"] == "map"
         assert fetch.await_count == 2
         await hass.async_block_till_done()
 
@@ -115,7 +116,7 @@ async def test_options_flow_preserves_settings(hass, enable_custom_integrations,
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={"key": "dummy", "city": "Praha"},
-        options={"fuels": ["n95"], "homes": {"n95": "Oblibena"}, "language": "cs"},
+        options={"fuels": ["n95"], "homes": {"n95": "Oblibena"}, "language": "cs", "dashboard_style": "fuels"},
         unique_id="Praha",
     )
     entry.add_to_hass(hass)
@@ -141,6 +142,7 @@ async def test_options_flow_preserves_settings(hass, enable_custom_integrations,
         assert result["type"] is FlowResultType.CREATE_ENTRY
         assert entry.options["homes"] == {"n95": "Oblibena"}
         assert entry.options["language"] == "cs"
+        assert entry.options["dashboard_style"] == "fuels"
         assert entry.options["max_age_days"] == 7
 
         # the next options flow offers the saved choice
@@ -148,6 +150,7 @@ async def test_options_flow_preserves_settings(hass, enable_custom_integrations,
         result = await hass.config_entries.options.async_configure(result["flow_id"], {"area_mode": "city"})
         result = await hass.config_entries.options.async_configure(result["flow_id"], {"city": "Praha"})
         schema = result["data_schema"].schema
+        assert next(k for k in schema if k == "dashboard_style").default() == "fuels"
         assert next(k for k in schema if k == "max_age_days").default() == "7"
 
 
