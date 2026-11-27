@@ -3,7 +3,7 @@
   Demo page for the Ceny paliv card: renders the real card file with a mock `hass`, no Home Assistant needed.
   Serve the repository root (python -m http.server 8765) and open /tools/card-demo.html?theme=dark&lang=cs&width=380
   Parameters: theme=light|dark, lang=en|cs, width=<px> (card width), compact=1, show=home,list, sort=price|distance|worth,
-  cards=main,fuels,savings,compare,regions,stations,areas,road,big,changes,trend,chains,badges,feature (the cards to show, in this order;
+  cards=main,fuels,savings,compare,regions,stations,areas,road,big,changes,trend,chains,cost,badges,feature (the cards to show, in this order;
   feature: a simplified tile with the price feature under it)
   The data is made up (no real stations of anyone's area).
 -->
@@ -79,6 +79,7 @@ const LABELS = {
     longpress: 'long-press a row for your station history', tap_station: 'tap a station for details and navigation',
     vs_yesterday: 'vs yesterday', source: 'Ceny: mbenzin.cz', e10_note: '(E10 not distinguished)', trends_start: 'Trends start tomorrow (first daily record: today)',
     chains_title: "Chain ranking", chains_sub: "Nationwide average price", chain_count: "Stations: {n}", chains_empty: "No current chain prices.", chains_more: "Show {n} more",
+    cost_title: "Fuel cost per kilometre", cost_sub: "Area average × vehicle consumption", cost_empty: "A current area price and positive consumption are needed.",
     since_partial: '* since {d} — history still filling', graph_title: 'Prices over 30 days', series_cheapest: 'Cheapest in the area', series_average: 'Area average', graph_empty: 'No history yet: it fills up day by day.', fuels_title: 'Fuel prices', mine_short: 'mine {p}', savings_title: 'A full tank', fill_up: '{n} {u} fill-up', save_at: 'At {name} you save {d} Kč', mine_cheapest: 'Your station is the cheapest', save_vs_avg: 'At {name} {d} Kč less than at the average price', drive_extra: '{km} km more there and back ≈ {d} Kč', worth_yes: 'worth it: you still save {d} Kč', worth_no: 'not worth the drive', compare_title: 'Price comparison', compare_sub: 'average prices in {unit}, against the country', compare_area: 'Area', compare_region: 'Region', compare_country: 'Czech Republic', compare_ranks: 'The {n} regions, cheapest first', regions_title: 'Regions', regions_sub: 'average price by region; tap a region', regions_loading: 'Loading the map…', regions_source: 'Boundaries: ČÚZK', map_title: 'Stations', map_sub: '{n} up-to-date prices; tap a station', map_center: 'Centre of the area', areas_title: 'Areas', areas_sub: 'the cheapest first', road_title: 'On the road', road_gps_only: 'Only a GPS area knows how far its stations are: choose one in the card editor.', history_error: 'Could not load history. Retrying…', changes_title: 'What changed', changes_empty: 'No price changes in the last {n} days.', ev_favourite_cheaper: 'Your station got cheaper', ev_favourite_dearer: 'Your station got dearer', ev_cheapest_cheaper: 'A cheaper station in the area', trend_title: 'Price trend', sort: 'Order', sort_price: 'Price', sort_distance: 'Distance', sort_worth: 'Worth it', with_drive: '≈ {p} with the drive', navigate: 'Navigate', close: 'Close', rank_of: '#{rank} of {n}',
     more_than_cheapest: '+{d} vs the cheapest', no_recent: 'No recent prices' },
   cs: { locale: 'cs-CZ', my_station: 'Moje stanice', updated_today: 'Aktualizováno dnes', updated_yesterday: 'Aktualizováno včera', today: 'Dnes', yesterday: 'Včera',
@@ -88,6 +89,7 @@ const LABELS = {
     longpress: 'dlouhým stisknutím řádku zobrazíte historii vaší stanice', tap_station: 'klepnutím na stanici zobrazíte podrobnosti a navigaci',
     vs_yesterday: 'oproti včerejšku', source: 'Ceny: mbenzin.cz', e10_note: '(E10 se nerozlišuje)', trends_start: 'Trendy se objeví zítra (první denní záznam: dnes)',
     chains_title: "Žebříček řetězců", chains_sub: "Průměrná cena v Česku", chain_count: "Počet stanic: {n}", chains_empty: "Aktuální ceny řetězců nejsou k dispozici.", chains_more: "Zobrazit další ({n})",
+    cost_title: "Cena paliva za kilometr", cost_sub: "Průměrná cena v oblasti × spotřeba vozu", cost_empty: "Pro výpočet je potřeba aktuální průměr oblasti a kladná spotřeba.",
     since_partial: '* od {d} — historie se teprve plní', graph_title: 'Ceny za 30 dní', series_cheapest: 'Nejlevnější v oblasti', series_average: 'Průměr oblasti', graph_empty: 'Zatím bez historie: plní se den po dni.', fuels_title: 'Ceny paliv', mine_short: 'moje {p}', savings_title: 'Plná nádrž', fill_up: 'natankování {n} {u}', save_at: 'U {name} ušetříte {d} Kč', mine_cheapest: 'Vaše stanice je nejlevnější', save_vs_avg: 'U {name} o {d} Kč méně než za průměrnou cenu', drive_extra: 'o {km} km delší cesta tam a zpět ≈ {d} Kč', worth_yes: 'vyplatí se: i tak ušetříte {d} Kč', worth_no: 'nevyplatí se dojet', compare_title: 'Srovnání cen', compare_sub: 'průměrné ceny v {unit}, proti celé republice', compare_area: 'Oblast', compare_region: 'Kraj', compare_country: 'Česko', compare_ranks: '{n} krajů od nejlevnějšího', regions_title: 'Kraje', regions_sub: 'průměrná cena podle krajů; klepněte na kraj', regions_loading: 'Načítám mapu…', regions_source: 'Hranice: ČÚZK', map_title: 'Stanice', map_sub: '{n} aktuálních cen; klepněte na stanici', map_center: 'Střed oblasti', areas_title: 'Oblasti', areas_sub: 'od nejlevnější', road_title: 'Na cestě', road_gps_only: 'Vzdálenost stanic zná jen GPS oblast: vyberte ji v editoru karty.', history_error: 'Historii se nepodařilo načíst. Zkusím to znovu…', changes_title: 'Co se změnilo', changes_empty: 'Za posledních {n} dní se ceny nezměnily.', ev_favourite_cheaper: 'Vaše stanice zlevnila', ev_favourite_dearer: 'Vaše stanice zdražila', ev_cheapest_cheaper: 'Levnější stanice v oblasti', trend_title: 'Vývoj ceny', sort: 'Řazení', sort_price: 'Cena', sort_distance: 'Vzdálenost', sort_worth: 'Vyplatí se', with_drive: '≈ {p} i s cestou', navigate: 'Navigovat', close: 'Zavřít', rank_of: '{rank}. z {n}',
     more_than_cheapest: '+{d} oproti nejlevnější', no_recent: 'Žádné aktuální ceny' },
 }[lang];
@@ -112,7 +114,7 @@ function fuelStates(fuel, label, base) {
   const id = 'demo-area';
   const states = {};
   states[`sensor.ceny_paliv_${fuel}_top5`] = { state: String(base), last_updated: new Date().toISOString(), attributes: {
-    cp_fuel: fuel, cp_role: 'top5', cp_config_id: id, fuel, fuel_label: label, unit_of_measurement: 'Kč/l', city_name: lang === 'cs' ? 'GPS okolí' : 'GPS area',
+    cp_fuel: fuel, cp_role: 'top5', cp_config_id: id, fuel, fuel_label: label, unit_of_measurement: fuel === 'cng' ? 'Kč/kg' : 'Kč/l', city_name: lang === 'cs' ? 'GPS okolí' : 'GPS area',
     stations, home: stations[2], labels: LABELS, language: lang, max_age_days: 1, logos: [],
     fetched_at: new Date().toISOString(), next_update: new Date(Date.now() + 6 * 3600000).toISOString(),
     gps_area: { method: 'home', radius_km: 20, station_count: 16, latitude: 49.2, longitude: 16.62 }, excluded: 2,
@@ -122,7 +124,7 @@ function fuelStates(fuel, label, base) {
       { ...stations[0] },
     ] } };
   states[`sensor.ceny_paliv_${fuel}_home`] = { state: String(base + 0.6), last_updated: new Date().toISOString(), attributes: {
-    cp_fuel: fuel, cp_role: 'home', cp_config_id: id, station: stations[2].title, price: base + 0.6, unit_of_measurement: 'Kč/l',
+    cp_fuel: fuel, cp_role: 'home', cp_config_id: id, station: stations[2].title, price: base + 0.6, unit_of_measurement: fuel === 'cng' ? 'Kč/kg' : 'Kč/l',
     latitude: stations[2].lat, longitude: stations[2].lng, distance_km: stations[2].distance_km,
     age_days: 1, updated_date: yesterday, rank: 3, fresh_count: 14, vs_cheapest: 0.6, cheapest_name: 'Benzina',
     trends: { 1: trend(0, 1), 2: trend(-0.2, 2), 7: trend(0.4, 7) } } };
@@ -136,18 +138,18 @@ function fuelStates(fuel, label, base) {
   const country = Math.round(regions.reduce((t, r) => t + r.average, 0) / regions.length * 100) / 100;
   const own = regions.find((r) => r.code === 'CZ064');
   states[`sensor.ceny_paliv_${fuel}_national_average`] = { state: String(country), last_updated: '', attributes: {
-    cp_fuel: fuel, cp_role: 'national_average', cp_config_id: id, unit_of_measurement: 'Kč/l', median: country, station_count: 2114, chains: [{ name: "Lhota Oil", average: base, station_count: 12 }, { name: "Brno Oil", average: base + 0.6, station_count: 18 }], regions } };
+    cp_fuel: fuel, cp_role: 'national_average', cp_config_id: id, unit_of_measurement: fuel === 'cng' ? 'Kč/kg' : 'Kč/l', median: country, station_count: 2114, chains: [{ name: "Lhota Oil", average: base, station_count: 12 }, { name: "Brno Oil", average: base + 0.6, station_count: 18 }], regions } };
   states[`sensor.ceny_paliv_${fuel}_region_average`] = { state: String(own.average), last_updated: '', attributes: {
-    cp_fuel: fuel, cp_role: 'region_average', cp_config_id: id, unit_of_measurement: 'Kč/l', region: own.name, region_code: own.code, rank: own.rank } };
+    cp_fuel: fuel, cp_role: 'region_average', cp_config_id: id, unit_of_measurement: fuel === 'cng' ? 'Kč/kg' : 'Kč/l', region: own.name, region_code: own.code, rank: own.rank } };
   states[`sensor.ceny_paliv_${fuel}_area_average`] = { state: String(base + 0.9), last_updated: '', attributes: {
-    cp_fuel: fuel, cp_role: 'area_average', cp_config_id: id, unit_of_measurement: 'Kč/l', station_count: 14,
+    cp_fuel: fuel, cp_role: 'area_average', cp_config_id: id, unit_of_measurement: fuel === 'cng' ? 'Kč/kg' : 'Kč/l', station_count: 14,
     region: own.name, region_rank: own.rank, vs_national: Math.round((base + 0.9 - country) * 100) / 100, vs_region: Math.round((base + 0.9 - own.average) * 100) / 100 } };
   stations.forEach((s, i) => { states[`sensor.ceny_paliv_${fuel}_${i + 1}`] = { state: String(s.price), last_updated: '', attributes: {
     cp_fuel: fuel, cp_role: 'position', cp_index: i + 1, cp_config_id: id, station: s.title, price: s.price, latitude: s.lat, longitude: s.lng } }; });
   return states;
 }
 
-const states = { ...fuelStates('n95', 'Natural 95', 38.5), ...fuelStates('diesel', 'Diesel', 43.5) };
+const states = { ...fuelStates('n95', 'Natural 95', 38.5), ...fuelStates('diesel', lang === 'cs' ? 'Nafta' : 'Diesel', 43.5), ...fuelStates('cng', 'CNG', 35.2), ...fuelStates('lpg', 'LPG', 16.9) };
 states['event.ceny_paliv_n95_price_change'] = { state: new Date().toISOString(), last_changed: '', attributes: { cp_fuel: 'n95', cp_role: 'price_change', cp_config_id: states['sensor.ceny_paliv_n95_top5'].attributes.cp_config_id, event_types: ['favourite_cheaper', 'favourite_dearer', 'cheapest_cheaper'] } };
 const hass = { states, language: lang, locale: { language: lang, number_format: 'language', time_format: 'language', time_zone: 'local' },
   themes: { darkMode: theme === 'dark' }, config: { time_zone: 'Europe/Prague', latitude: 49.2, longitude: 16.62 }, entities: {},
@@ -190,7 +192,7 @@ s.onload = () => {
   const main = { type: 'custom:ceny-paliv-card', fuel: 'n95', fuels: ['n95', 'diesel'], show: (q.get('show') || 'home,list,graph').split(',') };
   if (q.get('compact')) main.compact = true;
   if (q.get('sort')) main.sort = q.get('sort');
-  const configs = { main, chains: { type: "custom:ceny-paliv-chains-card", fuel: "n95" }, fuels: { type: 'custom:ceny-paliv-fuels-card' }, savings: { type: 'custom:ceny-paliv-savings-card', fuel: 'n95' },
+  const configs = { main, cost: { type: 'custom:ceny-paliv-fuel-cost-card' }, chains: { type: "custom:ceny-paliv-chains-card", fuel: "n95" }, fuels: { type: 'custom:ceny-paliv-fuels-card' }, savings: { type: 'custom:ceny-paliv-savings-card', fuel: 'n95' },
     compare: { type: 'custom:ceny-paliv-compare-card', fuel: 'n95' }, regions: { type: 'custom:ceny-paliv-regions-card', fuel: 'n95' },
     stations: { type: 'custom:ceny-paliv-stations-map-card', fuel: 'n95' }, areas: { type: 'custom:ceny-paliv-areas-card', fuel: 'n95' },
     road: { type: 'custom:ceny-paliv-road-card', fuel: 'n95' }, big: { type: 'custom:ceny-paliv-big-card', fuel: 'n95' },

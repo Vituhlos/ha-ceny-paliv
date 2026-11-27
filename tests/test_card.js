@@ -41,7 +41,7 @@ const context = {
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivChainsCard, CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas };`,
+  `${source}\nglobalThis.testExports = { CenyPalivFuelCostCard, CenyPalivChainsCard, CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas };`,
   context,
 );
 const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas } = context.testExports;
@@ -1281,4 +1281,21 @@ test("chain ranking reads the nationwide aggregate, including the station count"
       chains: [{ name: "North & South", average: 34.25, station_count: 16 }], unit_of_measurement: "Kč/l" }) };
   card.hass = miniHass(states);
   assert.match(card.shadowRoot.innerHTML, /North &amp; South[^]*Stations: 16[^]*34\.25/);
+});
+
+test("fuel cost uses card-specific consumption and the area's price per kg or litre", () => {
+  const card = new context.testExports.CenyPalivFuelCostCard();
+  const states = {};
+  for (const [fuel, price] of [["n95", 40], ["cng", 32], ["lpg", 17], ["diesel", "unavailable"]]) {
+    states[`sensor.ceny_paliv_${fuel}_top5`] = top5(fuel, "a", 15);
+    states[`sensor.ceny_paliv_${fuel}_area_average`] = role(fuel, "a", "area_average", price);
+  }
+  card.setConfig({ consumption_cng: 5, consumption_lpg: 8 });
+  card.hass = miniHass(states);
+  const html = card.shadowRoot.innerHTML;
+  assert.match(html, /LPG[^]*17\.00 Kč\/l · 8\.0 l\/100 km[^]*1\.36[^]*CNG[^]*32\.00 Kč\/kg · 5\.0 kg\/100 km[^]*1\.60[^]*N95[^]*2\.60/);
+  assert.doesNotMatch(html, />DIESEL</);
+  card.setConfig({ consumption_lpg: 0, consumption_cng: 3 });
+  assert.doesNotMatch(card.shadowRoot.innerHTML, />LPG</);
+  assert.match(card.shadowRoot.innerHTML, /0\.96/);
 });
