@@ -524,7 +524,14 @@ def price_overview(
     national = [marker["price"] for marker in fresh_markers]
     national_average = _average(national)
     by_region: dict[str, list[float]] = {}
+    by_chain: dict[str, list[float]] = {}
+    chain_names: dict[str, str] = {}
     for marker in fresh_markers:
+        raw = marker.get("chain")
+        name = " ".join((raw if isinstance(raw, str) and raw.strip() else marker["name"]).split())
+        key = name.casefold()
+        by_chain.setdefault(key, []).append(marker["price"])
+        chain_names[key] = min(name, chain_names.get(key, name))
         if (code := region_of(marker["lat"], marker["lng"])) is not None:
             by_region.setdefault(code, []).append(marker["price"])
     regions: list[dict[str, Any]] = sorted(
@@ -550,6 +557,10 @@ def price_overview(
             "median": round(median(national), 2) if national else None,
             "station_count": len(national),
         },
+        "chains": [
+            {"name": chain_names[key], "average": average, "station_count": len(by_chain[key])}
+            for average, key in sorted((round(sum(prices) / len(prices), 2), key) for key, prices in by_chain.items())
+        ],
         "regions": regions,
         "region": area_region_data,
         "area": {

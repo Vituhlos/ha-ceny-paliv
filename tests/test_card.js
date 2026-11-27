@@ -41,7 +41,7 @@ const context = {
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas };`,
+  `${source}\nglobalThis.testExports = { CenyPalivChainsCard, CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas };`,
   context,
 );
 const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas } = context.testExports;
@@ -1271,4 +1271,14 @@ test("recorder errors retry on the timer without another sensor update", async (
   assert.equal(count, 2);
   assert.match(card.shadowRoot.innerHTML, /No history yet/);
   card.disconnectedCallback();
+});
+
+test("chain ranking reads the nationwide aggregate, including the station count", () => {
+  const card = new context.testExports.CenyPalivChainsCard();
+  card.setConfig({ fuel: "n95" });
+  const states = { "sensor.ceny_paliv_n95_top5": top5("n95", "a", 30, { labels: { chain_count: "Stations: {n}" } }),
+    "sensor.ceny_paliv_n95_national_average": role("n95", "a", "national_average", 34, {
+      chains: [{ name: "North & South", average: 34.25, station_count: 16 }], unit_of_measurement: "Kč/l" }) };
+  card.hass = miniHass(states);
+  assert.match(card.shadowRoot.innerHTML, /North &amp; South[^]*Stations: 16[^]*34\.25/);
 });

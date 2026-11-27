@@ -4,6 +4,8 @@
 
 ### New
 
+- Rank chains by their nationwide average price and see how many fresh station prices contributed to each average.
+
 - **Two more cards for a dashboard**: `ceny-paliv-fuels-card` shows every fuel of an area at a glance (the cheapest
   price and station, your station, the trend since yesterday); `ceny-paliv-savings-card` shows what a full tank costs
   at your station, at the cheapest one and at the average price, how much you save and whether the longer drive to

@@ -272,7 +272,7 @@ class CenyPalivAverageSensor(CenyPalivSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 2
     # the 14 regions are for the card, read from the live state
-    _unrecorded_attributes = frozenset({"regions"})
+    _unrecorded_attributes = frozenset({"regions", "chains"})
 
     def __init__(self, coordinator: CenyPalivCoordinator, entry: CenyPalivConfigEntry, fuel: str, scope: str) -> None:
         super().__init__(coordinator, entry, fuel, f"{scope}_average")
@@ -300,7 +300,7 @@ class CenyPalivAverageSensor(CenyPalivSensor):
         region = overview.get("region") or {}
         attrs: dict[str, Any] = {"station_count": data.get("station_count")}
         if self._scope == "national":
-            attrs.update(median=data.get("median"), regions=overview.get("regions"))
+            attrs.update(median=data.get("median"), regions=overview.get("regions"), chains=overview.get("chains", []))
         elif self._scope == "region":
             attrs.update(region=region.get("name"), region_code=region.get("code"), rank=region.get("rank"), vs_national=region.get("vs_national"))
         else:

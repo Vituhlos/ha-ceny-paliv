@@ -2818,7 +2818,43 @@ class CenyPalivMiniEditor extends HTMLElement {
   }
 }
 
+class CenyPalivChainsCard extends CenyPalivMiniCard {
+  static getStubConfig(hass) {
+    return { type: 'custom:ceny-paliv-chains-card', fuel: CenyPalivCard.fuels(hass)[0]?.value || 'n95' };
+  }
+
+  static editorSchema(hass) {
+    return [{ name: 'fuel', required: true, selector: { select: { options: CenyPalivCard.fuels(hass) } } }];
+  }
+
+  setConfig(config) {
+    if (!config?.fuel) throw new Error('ceny-paliv-chains-card: set "fuel"');
+    super.setConfig(config);
+  }
+
+  _render() {
+    const fuel = this._config.fuel;
+    const national = this._state(fuel, 'national_average');
+    const top = this._state(fuel, 'top5');
+    const chains = national?.attributes.chains || [];
+    const unit = national?.attributes.unit_of_measurement || top?.attributes.unit_of_measurement || '';
+    const row = (chain, index) => `<div class="row">
+      <span class="icon fuel">${index + 1}</span><div class="info"><span class="primary">${esc(chain.name)}</span>
+      <span class="secondary">${esc(this._T('chain_count', { n: chain.station_count }))}</span></div>
+      <span class="number">${esc(this._num(chain.average))} <small>${esc(unit)}</small></span></div>`;
+    const rows = chains.map(row);
+    return `<ha-card class="card"><div class="head"><span class="icon home"><ha-icon icon="mdi:podium"></ha-icon></span>
+      <div class="info"><span class="primary">${esc(this._T('chains_title'))} · ${esc(top?.attributes.fuel_label || fuel)}</span>
+      <span class="secondary">${esc(this._T('chains_sub'))}</span></div></div>
+      <div class="rows">${rows.slice(0, 10).join('')}</div>
+      ${rows.length > 10 ? `<details><summary>${esc(this._T('chains_more', { n: rows.length - 10 }))}</summary><div class="rows">${rows.slice(10).join('')}</div></details>` : ''}
+      ${rows.length ? '' : `<span class="note">${esc(this._T('chains_empty'))}</span>`}
+      <span class="source">${this._source()}</span></ha-card>`;
+  }
+}
+
 const MINI_CARDS = [
+  ['ceny-paliv-chains-card', CenyPalivChainsCard, 'Ceny paliv: chain ranking', 'Average prices by chain across the Czech Republic.'],
   ['ceny-paliv-fuels-card', CenyPalivFuelsCard, 'Ceny paliv: all fuels', 'Every fuel of an area at a glance: the cheapest price, your station and the trend.'],
   ['ceny-paliv-savings-card', CenyPalivSavingsCard, 'Ceny paliv: full tank', 'What a full tank costs at your station, the cheapest one and the average, and whether the drive pays off.'],
   ['ceny-paliv-compare-card', CenyPalivCompareCard, 'Ceny paliv: comparison', 'Your station and area against the region and the country, and the 14 regions ranked.'],
