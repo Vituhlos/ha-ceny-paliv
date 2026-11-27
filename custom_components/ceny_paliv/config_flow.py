@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import uuid4
 
 try:  # Home Assistant 2026.x validates with probatio (and maps voluptuous onto it)
@@ -131,13 +131,7 @@ def _choices(options: list[dict[str, str]]) -> list[SelectOptionDict]:
     return [SelectOptionDict(value=option["value"], label=option["label"]) for option in options]
 
 
-if TYPE_CHECKING:  # the steps run inside a config or options flow
-    _StepsBase = ConfigEntryBaseFlow
-else:
-    _StepsBase = object
-
-
-class _FuelStationSteps(_StepsBase):
+class _FuelStationSteps(ConfigEntryBaseFlow):
     """Shared by the config flow and the options flow: choose fuels, then a favourite station per fuel."""
 
     _key: str
@@ -651,8 +645,6 @@ class _FuelStationSteps(_StepsBase):
                         self._home_identities.pop(fuel, None)
                     else:
                         self._home_identities[fuel] = selected_identity
-                elif choice == NONE_VALUE:
-                    self._home_identities.pop(fuel, None)
             if choice != NONE_VALUE:
                 self._homes[fuel] = choice
             else:

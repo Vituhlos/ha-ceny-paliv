@@ -41,6 +41,7 @@ async def test_index_skips_malformed_items_and_reads_a_lone_match_as_one_name():
     ]
     assert chains_in(["OMV Praha", "Shell"], result) == {"omv"}
     assert await async_fetch_index(session_returning(text="not json")) is None
+    assert await async_fetch_index(session_returning(status=503)) is None
 
 
 def test_scan_ignores_bad_manifest_entries(tmp_path):
@@ -54,6 +55,13 @@ def test_scan_ignores_bad_manifest_entries(tmp_path):
         {"id": "orlen", "match": ["orlen"]},
         {"id": "robin-oil", "match": ["robin-oil", "robin oil"]},
     ]
+
+
+def test_scan_uses_valid_local_files_when_manifest_is_malformed(tmp_path):
+    (tmp_path / "installed.json").write_text("[]", encoding="utf-8")
+    (tmp_path / "local.png").write_bytes(PNG_MAGIC)
+    (tmp_path / "Invalid.png").write_bytes(PNG_MAGIC)
+    assert scan_logos(tmp_path) == [{"id": "local", "match": ["local"]}]
 
 
 async def test_sync_never_deletes_outside_its_folder(hass, tmp_path):
@@ -78,6 +86,18 @@ async def test_sync_refuses_a_download_that_is_not_a_small_png(hass, tmp_path):
     assert not (logo_dir(hass) / "orlen.png").exists()
     await async_sync(hass, session_returning(body=PNG_MAGIC + b"x"), index, {"orlen"})
     assert (logo_dir(hass) / "orlen.png").exists()
+
+
+async def test_sync_keeps_installed_logos_when_another_download_times_out(hass, tmp_path):
+    hass.config.config_dir = str(tmp_path)
+    index = [{"id": chain, "label": chain, "match": [chain]} for chain in ("orlen", "shell")]
+    await async_sync(hass, session_returning(body=PNG_MAGIC), index, {"orlen"})
+    offline = MagicMock()
+    offline.get.side_effect = TimeoutError
+    await async_sync(hass, offline, index, {"orlen", "shell"})
+    assert offline.get.call_count == 1
+    assert "shell.png" in offline.get.call_args.args[0]
+    assert scan_logos(logo_dir(hass)) == [{"id": "orlen", "match": ["orlen"]}]
 
 
 async def test_logo_view_serves_only_valid_ids(hass, tmp_path):

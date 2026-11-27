@@ -1595,6 +1595,9 @@ async def test_archived_favourite_is_disabled_and_reenabled_when_chosen_again(
         assert registry.async_get(legacy.entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
         await choose("Oblibena")
         assert registry.async_get(legacy.entity_id).disabled_by is None
+        registry.async_update_entity(legacy.entity_id, disabled_by=er.RegistryEntryDisabler.USER)
+        await choose("Oblibena")
+        assert registry.async_get(legacy.entity_id).disabled_by is er.RegistryEntryDisabler.USER
 
 
 async def test_zone_occupancy_changes_do_not_refresh(hass, enable_custom_integrations, mock_frontend, marker):

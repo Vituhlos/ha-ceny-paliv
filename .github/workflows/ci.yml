@@ -31,8 +31,10 @@ jobs:
           cache-dependency-path: ${{ matrix.requirements }}
       - name: Install test dependencies
         run: python -m pip install -r "${{ matrix.requirements }}"
-      - name: "Run tests (quality scale test-coverage rule: at least 95 %)"
-        run: python -m pytest -q --cov=custom_components.ceny_paliv --cov-report=term-missing:skip-covered --cov-fail-under=95
+      - name: Test every module and check config flow branches
+        run: |
+          python -m pytest -q --cov=custom_components.ceny_paliv --cov-branch --cov-report=term-missing:skip-covered --cov-report=json
+          python script/check_coverage.py
       - name: "Static typing (quality scale strict-typing: mypy --strict)"
         # Home Assistant 2025.1 still types its schemas with voluptuous; the current version is the reference
         if: matrix.ha == '2026.10.4'
