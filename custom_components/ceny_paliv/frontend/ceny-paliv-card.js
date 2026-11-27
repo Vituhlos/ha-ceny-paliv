@@ -1378,6 +1378,7 @@ const EDITOR_TEXT = {
     fuel: 'Fuel', fuels: 'Fuels (switch, or the fuels shown)', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
     map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
     show_regions: 'Show the 14 regions', days: 'Days back', navigator: 'Navigation app', badge_cheapest: 'The cheapest in the area', badge_mine: 'My station', badge_area: 'The area average', sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
+    consumption_n95: 'Petrol consumption', consumption_diesel: 'Diesel consumption', consumption_lpg: 'LPG consumption', consumption_cng: 'CNG consumption',
     consumption: 'Consumption per 100 km in litres, kg for CNG (for "worth it")', price: 'Price', distance: 'Distance', worth: 'Worth the drive',
     home: 'My station', list: 'Cheapest stations', map: 'Map', graph: '30-day graph: my station, the cheapest, the average',
     auto: 'Automatic: 2 columns when the card is wide', columns: 'Always 2 columns', stack: 'Always 1 column',
@@ -1386,6 +1387,7 @@ const EDITOR_TEXT = {
     fuel: 'Palivo', fuels: 'Paliva (přepínač, nebo zobrazená paliva)', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
     map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
     show_regions: 'Zobrazit 14 krajů', days: 'Kolik dní zpět', navigator: 'Navigační aplikace', badge_cheapest: 'Nejlevnější v oblasti', badge_mine: 'Moje stanice', badge_area: 'Průměr oblasti', sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
+    consumption_n95: 'Spotřeba benzínu', consumption_diesel: 'Spotřeba nafty', consumption_lpg: 'Spotřeba LPG', consumption_cng: 'Spotřeba CNG',
     consumption: 'Spotřeba na 100 km v litrech, u CNG v kg (pro „vyplatí se“)', price: 'Cena', distance: 'Vzdálenost', worth: 'Vyplatí se dojet',
     home: 'Moje stanice', list: 'Nejlevnější stanice', map: 'Mapa', graph: 'Graf za 30 dní: moje stanice, nejlevnější, průměr',
     auto: 'Automaticky: 2 sloupce, je-li karta široká', columns: 'Vždy 2 sloupce', stack: 'Vždy 1 sloupec',
@@ -2877,7 +2879,46 @@ class CenyPalivChainsCard extends CenyPalivMiniCard {
   }
 }
 
+const COST_FUELS = ['n95', 'diesel', 'lpg', 'cng'];
+
+class CenyPalivFuelCostCard extends CenyPalivMiniCard {
+  static get defaults() {
+    return { consumption_n95: 6.5, consumption_diesel: 5.5, consumption_lpg: 8, consumption_cng: 4 };
+  }
+
+  static getStubConfig() { return { type: 'custom:ceny-paliv-fuel-cost-card' }; }
+
+  static editorSchema() {
+    return COST_FUELS.map((fuel) => ({
+      name: `consumption_${fuel}`,
+      selector: { number: { min: 0.1, step: 0.1, mode: 'box', unit_of_measurement: fuel === 'cng' ? 'kg/100 km' : 'l/100 km' } },
+    }));
+  }
+
+  _render() {
+    const rows = [];
+    for (const fuel of COST_FUELS) {
+      const average = this._state(fuel, 'area_average');
+      const price = Number(average?.state);
+      const used = Number(this._config[`consumption_${fuel}`]);
+      if (!average?.state?.trim() || !Number.isFinite(price) || price <= 0 || !Number.isFinite(used) || used <= 0) continue;
+      const top = this._state(fuel, 'top5');
+      const unit = fuel === 'cng' ? 'kg' : 'l';
+      rows.push({ label: top?.attributes.fuel_label || fuel.toUpperCase(), unit, price, used, cost: price * used / 100 });
+    }
+    rows.sort((a, b) => a.cost - b.cost);
+    const body = rows.map((row) => `<div class="row"><div class="info"><span class="primary">${esc(row.label)}</span>
+      <span class="secondary">${esc(this._num(row.price))} Kč/${row.unit} · ${esc(this._num(row.used, 1))} ${row.unit}/100 km</span></div>
+      <span class="price"><span class="number">${esc(this._num(row.cost))}</span><small>Kč/km</small></span></div>`).join('');
+    return `<ha-card class="card"><div class="head"><span class="icon home"><ha-icon icon="mdi:car"></ha-icon></span>
+      <div class="info"><span class="primary">${esc(this._T('cost_title'))}</span><span class="secondary">${esc(this._T('cost_sub'))}</span></div></div>
+      ${body ? `<div class="rows">${body}</div>` : `<span class="note">${esc(this._T('cost_empty'))}</span>`}
+      <span class="source">${this._source()}</span></ha-card>`;
+  }
+}
+
 const MINI_CARDS = [
+  ['ceny-paliv-fuel-cost-card', CenyPalivFuelCostCard, 'Ceny paliv: cost per kilometre', 'Compare LPG, CNG, petrol and diesel for one vehicle.'],
   ['ceny-paliv-chains-card', CenyPalivChainsCard, 'Ceny paliv: chain ranking', 'Average prices by chain across the Czech Republic.'],
   ['ceny-paliv-fuels-card', CenyPalivFuelsCard, 'Ceny paliv: all fuels', 'Every fuel of an area at a glance: the cheapest price, your station and the trend.'],
   ['ceny-paliv-savings-card', CenyPalivSavingsCard, 'Ceny paliv: full tank', 'What a full tank costs at your station, the cheapest one and the average, and whether the drive pays off.'],

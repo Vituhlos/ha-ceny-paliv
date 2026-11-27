@@ -4,6 +4,8 @@
 
 ### New
 
+- Compare fuel cost per kilometre for one vehicle, using area prices and consumption set on each card (kg for CNG).
+
 - Rank chains by their nationwide average price and see how many fresh station prices contributed to each average.
 
 - **Two more cards for a dashboard**: `ceny-paliv-fuels-card` shows every fuel of an area at a glance (the cheapest
