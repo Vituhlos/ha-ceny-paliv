@@ -1066,7 +1066,7 @@ async def test_coordinator_sensors_and_failed_refresh(
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={"key": "dummy", "city": "Praha"},
-        options={"fuels": ["n95", "diesel"], "homes": {"n95": "Oblibena"}, "language": "cs"},
+        options={"fuels": ["n95", "diesel"], "homes": {"n95": "Oblibena"}, "language": "cs", "dashboard_style": "map"},
         unique_id="Praha",
     )
     entry.add_to_hass(hass)
@@ -1080,6 +1080,8 @@ async def test_coordinator_sensors_and_failed_refresh(
         top = hass.states.get("sensor.ceny_paliv_n95_top5")
         home = hass.states.get("sensor.ceny_paliv_n95_home")
         position = hass.states.get("sensor.ceny_paliv_n95_1")
+        assert top.attributes["dashboard_style"] == "map"
+        assert hass.states.get("sensor.ceny_paliv_diesel_top5").attributes["dashboard_style"] == "map"
         assert top.state == "33"
         assert top.attributes["city_total"] == 2
         # condition of the mBenzin key: the source is shown with the prices

@@ -2936,7 +2936,9 @@ function dashboardAreas(hass) {
     });
     if (!fuels.length) continue;
     const first = fuels[0].entity;
-    areas.push({ id, name: areaName(hass, first, hass.states[first].attributes.city_name), fuels });
+    const style = fuels.map((item) => hass.states[item.entity].attributes.dashboard_style)
+      .find((value) => DASHBOARD_MODES.includes(value)) || 'stations';
+    areas.push({ id, name: areaName(hass, first, hass.states[first].attributes.city_name), style, fuels });
   }
   return areas;
 }
@@ -3015,8 +3017,11 @@ class CenyPalivDashboard extends HTMLElement {
 
   _defaultMode() {
     const area = this._area();
-    const style = this._hass.states[area?.fuels[0]?.entity]?.attributes.dashboard_style;
-    return DASHBOARD_MODES.includes(style) ? style : 'stations';
+    for (const item of area?.fuels || []) {
+      const style = this._hass.states[item.entity]?.attributes.dashboard_style;
+      if (DASHBOARD_MODES.includes(style)) return style;
+    }
+    return area?.style || 'stations';
   }
 
   _draw() {
@@ -3062,12 +3067,10 @@ class CenyPalivDashboard extends HTMLElement {
       stations(column());
       append(column(),'savings');
     } else if (mode === 'fuels') {
-      const left = column();
-      const right = column();
-      append(left,'fuels');
-      if (area.fuels.some((f) => COST_FUELS.includes(f.fuel))) append(right,'fuel-cost',this._config.fuel_cost);
-      append(left,'stations-map');
-      stations(right);
+      append(primary, 'fuels');
+      if (area.fuels.some((f) => COST_FUELS.includes(f.fuel))) append(primary, 'fuel-cost', this._config.fuel_cost);
+      stations(primary);
+      append(primary, 'stations-map');
     } else {
       stations(column());
       const right = column();

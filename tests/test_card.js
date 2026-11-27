@@ -41,7 +41,7 @@ const context = {
   console: { info() {} },
 };
 vm.runInNewContext(
-  `${source}\nglobalThis.testExports = { CenyPalivDashboardStrategy, CenyPalivFuelCostCard, CenyPalivChainsCard, CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas };`,
+  `${source}\nglobalThis.testExports = { CenyPalivDashboard, CenyPalivDashboardStrategy, CenyPalivFuelCostCard, CenyPalivChainsCard, CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas };`,
   context,
 );
 const { CenyPalivCard, CenyPalivCardEditor, editorDefaults, withLastKnown, navigationLinks, switchFuels, withDrive, kmBetween, dailyValues, graphDays, chartModel, areaIds, areaSensors, fillUpSaving, CenyPalivFuelsCard, CenyPalivSavingsCard, CenyPalivMiniEditor, CenyPalivCompareCard, CenyPalivRegionsCard, regionPaths, CenyPalivStationsMapCard, toKm, CenyPalivBadge, CenyPalivPriceFeature, supportsPriceFeature, CenyPalivAreasCard, CenyPalivRoadCard, CenyPalivBigCard, CenyPalivChangesCard, CenyPalivTrendCard, eventEntity, eventHistory, trendDeltas } = context.testExports;
@@ -1325,4 +1325,23 @@ test("dashboard strategy builds one responsive view with all areas, renamed enti
   const empty = await strategy.generate({}, { language: "cs", states: {} });
   assert.match(empty.views[0].sections[0].cards[0].content, /načtení senzorů/);
   assert.equal(context.window.customStrategies[0].type, "ceny-paliv");
+});
+
+
+test("dashboard keeps the area's preferred layout through outages and price-only updates", () => {
+  const dashboard = new context.testExports.CenyPalivDashboard();
+  dashboard.setConfig({ areas: [{ id: "a", style: "map", fuels: [{ entity: "sensor.first" }, { entity: "sensor.second" }] }] });
+  const source = { language: "en", states: { "sensor.second": { attributes: { dashboard_style: "fuels" } } } };
+  const card = {};
+  let renders = 0;
+  dashboard._draw = () => { renders++; dashboard._lastDefault = dashboard._defaultMode(); };
+  dashboard._cards = [card];
+  dashboard.hass = source;
+  assert.equal(dashboard._lastDefault, "fuels");
+  const updated = { ...source };
+  dashboard.hass = updated;
+  assert.equal(renders, 1);
+  assert.equal(card.hass, updated);
+  dashboard.hass = { language: "en", states: {} };
+  assert.equal(dashboard._lastDefault, "map");
 });
