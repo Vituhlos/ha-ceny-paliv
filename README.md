@@ -131,7 +131,7 @@ Each station in `stations` (and `home`) has `rank`, `name`, `title` (a readable 
 
 | Sensor | State | Attributes |
 |---|---|---|
-| `_national_average` | the average in the Czech Republic | `station_count`, `median`, `regions`: for each region `code` (NUTS 3, for example `CZ010`), `name`, `average`, `station_count`, `vs_national` and `rank` (1 = the cheapest region) |
+| `_national_average` | the average in the Czech Republic | `station_count`, `median`, `regions`: for each region `code` (NUTS 3, for example `CZ010`), `name`, `average`, `station_count`, `vs_national` and `rank` (1 = the cheapest region). `chains` lists up to the 100 cheapest chains by unrounded mean, each with `name`, `average` and `station_count`. `chain_count` includes all ranked chains. |
 | `_region_average` | the average in your area's region (a city's region, or the GPS centre's); unavailable when the centre lies outside the Czech Republic | `region`, `region_code`, `station_count`, `rank`, `vs_national` |
 | `_area_average` | the average of the stations in your area | `station_count`, `region`, `region_rank`, `vs_national` and `vs_region` (Kč; below zero: your area is cheaper) |
 
@@ -229,6 +229,7 @@ Besides the main card, the integration brings smaller cards, also in the card pi
 | `custom:ceny-paliv-big-card` | one price, large, for a wall tablet: the cheapest, yours or the area average, with the station and the trend; the text grows with the card | `fuel` (required), `price` (`cheapest`, `mine`, `area`) |
 | `custom:ceny-paliv-changes-card` | the last price changes from the fuel's price-change events: your station cheaper or dearer, a cheaper station in the area, with the time and the change; from Home Assistant's history | `fuel` (required), `days` (14) |
 | `custom:ceny-paliv-trend-card` | how the area average, your station and the area's cheapest price moved over 7 and 14 days, with a 15-day sparkline each; from the long-term statistics | `fuel` (required) |
+| `custom:ceny-paliv-chains-card` | nationwide chain averages and station counts, cheapest first. Stations without a chain are grouped by their reported name | `fuel` (required) |
 | `custom:ceny-paliv-stations-map-card` | the area's up-to-date stations as dots coloured from the cheapest to the dearest, around the area's centre and circle (or the town's stations), with the regions' borders behind; the five cheapest and yours carry their price, and a tap opens the station's details and navigation. A drawn map, not map tiles: for streets use the main card's map | `fuel` (required) |
 
 ```yaml

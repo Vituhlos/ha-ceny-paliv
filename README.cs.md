@@ -137,7 +137,7 @@ Každá stanice v `stations` (i v `home`) má `rank`, `name`, `title` (čitelný
 
 | Senzor | Stav | Atributy |
 |---|---|---|
-| `_national_average` | průměr v České republice | `station_count`, `median`, `regions`: u každého kraje `code` (NUTS 3, např. `CZ010`), `name`, `average`, `station_count`, `vs_national` a `rank` (1 = nejlevnější kraj) |
+| `_national_average` | průměr v České republice | `station_count`, `median`, `regions`: u každého kraje `code` (NUTS 3, např. `CZ010`), `name`, `average`, `station_count`, `vs_national` a `rank` (1 = nejlevnější kraj). `chains` obsahuje až 100 nejlevnějších řetězců podle nezaokrouhleného průměru, každý s `name`, `average` a `station_count`. `chain_count` je počet všech hodnocených řetězců. |
 | `_region_average` | průměr v kraji vaší oblasti (kraj města, nebo středu GPS okolí); nedostupný, když je střed mimo Českou republiku | `region`, `region_code`, `station_count`, `rank`, `vs_national` |
 | `_area_average` | průměr stanic ve vaší oblasti | `station_count`, `region`, `region_rank`, `vs_national` a `vs_region` (Kč; pod nulou: vaše oblast je levnější) |
 
@@ -235,6 +235,7 @@ Kromě hlavní karty přináší integrace menší karty, také v nabídce karet
 | `custom:ceny-paliv-big-card` | jedna cena přes celou kartu pro nástěnný tablet: nejnižší, vaše nebo průměr oblasti, se stanicí a trendem; písmo roste s kartou | `fuel` (povinné), `price` (`cheapest`, `mine`, `area`) |
 | `custom:ceny-paliv-changes-card` | poslední změny ceny z událostí paliva: vaše stanice zlevnila nebo zdražila, levnější stanice v oblasti, s časem a změnou; z historie Home Assistantu | `fuel` (povinné), `days` (14) |
 | `custom:ceny-paliv-trend-card` | jak se za 7 a 14 dní pohnul průměr oblasti, vaše stanice a nejnižší cena oblasti, každý s malým grafem za 15 dní; z dlouhodobých statistik | `fuel` (povinné) |
+| `custom:ceny-paliv-chains-card` | celostátní průměry a počty stanic podle řetězce, od nejlevnějšího. Stanice bez údaje o řetězci se seskupují podle uvedeného názvu | `fuel` (povinné) |
 | `custom:ceny-paliv-stations-map-card` | aktuální stanice oblasti jako body obarvené od nejlevnější po nejdražší, kolem středu a kruhu oblasti (nebo stanice města), v pozadí hranice krajů; pět nejlevnějších a vaše mají cenovku a klepnutím se otevře detail s navigací. Kreslená mapa, ne mapové dlaždice: ulice ukáže mapa v hlavní kartě | `fuel` (povinné) |
 
 ```yaml

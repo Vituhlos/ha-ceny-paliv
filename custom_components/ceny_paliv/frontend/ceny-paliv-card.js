@@ -1529,7 +1529,12 @@ class CenyPalivMiniCard extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     this._sig = '';
     this.shadowRoot.addEventListener('click', (e) => this._open(e));
-    this.shadowRoot.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._open(e); } });
+    this.shadowRoot.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && e.composedPath().some((node) => node.dataset?.moreInfo)) {
+        e.preventDefault();
+        this._open(e);
+      }
+    });
   }
 
   static get defaults() { return {}; }
@@ -2818,7 +2823,62 @@ class CenyPalivMiniEditor extends HTMLElement {
   }
 }
 
+class CenyPalivChainsCard extends CenyPalivMiniCard {
+  static getStubConfig(hass) {
+    return { type: 'custom:ceny-paliv-chains-card', fuel: CenyPalivCard.fuels(hass)[0]?.value || 'n95' };
+  }
+
+  static editorSchema(hass) {
+    return [{ name: 'fuel', required: true, selector: { select: { options: CenyPalivCard.fuels(hass) } } }];
+  }
+
+  setConfig(config) {
+    if (!config?.fuel) throw new Error('ceny-paliv-chains-card: set "fuel"');
+    super.setConfig(config);
+  }
+
+  constructor() {
+    super();
+    this.shadowRoot.addEventListener('toggle', (event) => {
+      const details = event.target;
+      if (details.tagName !== 'DETAILS' || details.open === Boolean(this._expanded)) return;
+      const focused = this.shadowRoot.activeElement === details.querySelector('summary');
+      this._expanded = details.open;
+      this._sig = '';
+      this.hass = this._hass;
+      if (focused) this.shadowRoot.querySelector('summary')?.focus();
+    }, true);
+  }
+
+  _render() {
+    const fuel = this._config.fuel;
+    const national = this._state(fuel, 'national_average');
+    const top = this._state(fuel, 'top5');
+    const chains = national?.attributes.chains || [];
+    const unit = national?.attributes.unit_of_measurement || top?.attributes.unit_of_measurement || '';
+    const row = (chain, index) => `<div class="row">
+      <span class="icon fuel">${index + 1}</span><div class="info"><span class="primary">${esc(chain.name)}</span>
+      <span class="secondary">${esc(this._T('chain_count', { n: chain.station_count }))}</span></div>
+      <span class="price"><span class="number">${esc(this._num(chain.average))} <small>${esc(unit)}</small></span></span></div>`;
+    const rows = chains.slice(0, 10).map(row);
+    const expanded = this._expanded;
+    const remaining = expanded ? chains.slice(10).map((item, i) => row(item, i + 10)).join('') : '';
+    const total = national?.attributes.chain_count || chains.length;
+    return `<ha-card class="card"><style>
+      summary { min-height: var(--ha-space-10, 40px); align-content: center; cursor: pointer; color: var(--primary-color); }
+      summary:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+      </style><div class="head"><span class="icon home"><ha-icon icon="mdi:podium"></ha-icon></span>
+      <div class="info"><span class="primary">${esc(this._T('chains_title'))} · ${esc(top?.attributes.fuel_label || fuel)}</span>
+      <span class="secondary">${esc(total > chains.length ? this._T('chains_limited', { n: chains.length, total }) : this._T('chains_sub'))}</span></div></div>
+      <div class="rows">${rows.join('')}</div>
+      ${chains.length > 10 ? `<details${expanded ? ' open' : ''}><summary>${esc(this._T('chains_more', { n: chains.length - 10 }))}</summary><div class="rows">${remaining}</div></details>` : ''}
+      ${rows.length ? '' : `<span class="note">${esc(this._T('chains_empty'))}</span>`}
+      <span class="source">${this._source()}</span></ha-card>`;
+  }
+}
+
 const MINI_CARDS = [
+  ['ceny-paliv-chains-card', CenyPalivChainsCard, 'Ceny paliv: chain ranking', 'Average prices by chain across the Czech Republic.'],
   ['ceny-paliv-fuels-card', CenyPalivFuelsCard, 'Ceny paliv: all fuels', 'Every fuel of an area at a glance: the cheapest price, your station and the trend.'],
   ['ceny-paliv-savings-card', CenyPalivSavingsCard, 'Ceny paliv: full tank', 'What a full tank costs at your station, the cheapest one and the average, and whether the drive pays off.'],
   ['ceny-paliv-compare-card', CenyPalivCompareCard, 'Ceny paliv: comparison', 'Your station and area against the region and the country, and the 14 regions ranked.'],

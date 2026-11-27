@@ -73,6 +73,29 @@ def test_price_overview_ranks_the_regions_and_places_the_area(marker):
     assert empty["area"] == {"average": None, "station_count": 0, "vs_national": None, "vs_region": None}
 
 
+def test_chain_ranking_uses_all_fresh_stations_before_the_local_list_is_truncated(marker, now):
+    stations = [
+        {**marker(f"station-{i}", 30 + i, city="Brno"), "chain": " North  Oil " if i % 2 else "north oil"}
+        for i in range(16)
+    ]
+    stations += [marker("Independent", 32, city="Lhota"), {**marker("Old", 10, fresh="01.11.2024"), "chain": "North Oil"}]
+    payload = build_payload(stations, fuel="n95", city="Brno", home_slug=None, history={}, now=now)
+    assert len(payload["stations"]) == 5
+    assert payload["overview"]["chains"] == [
+        {"name": "Independent", "average": 32, "station_count": 1},
+        {"name": "North Oil", "average": 37.5, "station_count": 16},
+    ]
+
+
+def test_chain_attribute_is_bounded_and_uses_exact_means_for_ordering(marker):
+    stations = [marker(f"Chain-{i:03}", 39, city="Brno") for i in range(101)]
+    stations += [marker("A", 30.004, city="Brno"), marker("Z", 30.001, city="Brno")]
+    overview = price_overview(stations, [], None)
+    assert overview["chain_count"] == 103
+    assert len(overview["chains"]) == 100
+    assert [(c["name"], c["average"]) for c in overview["chains"][:2]] == [("Z", 30), ("A", 30)]
+
+
 def test_the_payload_compares_only_up_to_date_prices(marker, now):
     markers = [
         _at(marker, "P1", 34, "Praha", PRAHA),
@@ -123,6 +146,7 @@ async def test_average_sensors(hass, enable_custom_integrations, mock_frontend, 
     national = hass.states.get("sensor.ceny_paliv_n95_national_average")
     assert national.state == "34.0"
     assert national.attributes["station_count"] == 3
+    assert len(national.attributes["chains"]) == 3
     assert national.attributes["median"] == 34
     assert [region["code"] for region in national.attributes["regions"]] == ["CZ064", "CZ010"]
     assert national.attributes["unit_of_measurement"] == "Kč/l"
