@@ -1529,7 +1529,12 @@ class CenyPalivMiniCard extends HTMLElement {
     this.attachShadow({ mode: 'open' });
     this._sig = '';
     this.shadowRoot.addEventListener('click', (e) => this._open(e));
-    this.shadowRoot.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this._open(e); } });
+    this.shadowRoot.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && e.composedPath().some((node) => node.dataset?.moreInfo)) {
+        e.preventDefault();
+        this._open(e);
+      }
+    });
   }
 
   static get defaults() { return {}; }
@@ -2847,7 +2852,7 @@ class CenyPalivChainsCard extends CenyPalivMiniCard {
       <div class="info"><span class="primary">${esc(this._T('chains_title'))} · ${esc(top?.attributes.fuel_label || fuel)}</span>
       <span class="secondary">${esc(this._T('chains_sub'))}</span></div></div>
       <div class="rows">${rows.slice(0, 10).join('')}</div>
-      ${rows.length > 10 ? `<details><summary>${esc(this._T('chains_more', { n: rows.length - 10 }))}</summary><div class="rows">${rows.slice(10).join('')}</div></details>` : ''}
+      ${rows.length > 10 ? `<details${this.shadowRoot.querySelector('details')?.open ? ' open' : ''}><summary>${esc(this._T('chains_more', { n: rows.length - 10 }))}</summary><div class="rows">${rows.slice(10).join('')}</div></details>` : ''}
       ${rows.length ? '' : `<span class="note">${esc(this._T('chains_empty'))}</span>`}
       <span class="source">${this._source()}</span></ha-card>`;
   }

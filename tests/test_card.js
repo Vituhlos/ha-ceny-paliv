@@ -1279,6 +1279,10 @@ test("chain ranking reads the nationwide aggregate, including the station count"
   const states = { "sensor.ceny_paliv_n95_top5": top5("n95", "a", 30, { labels: { chain_count: "Stations: {n}" } }),
     "sensor.ceny_paliv_n95_national_average": role("n95", "a", "national_average", 34, {
       chains: [{ name: "North & South", average: 34.25, station_count: 16 }], unit_of_measurement: "Kč/l" }) };
+  let prevented = false;
+  card.shadowRoot.listeners.keydown[0]({ key: "Enter", composedPath: () => [{ tagName: "SUMMARY" }],
+    preventDefault: () => { prevented = true; } });
+  assert.equal(prevented, false);
   card.hass = miniHass(states);
   assert.match(card.shadowRoot.innerHTML, /North &amp; South[^]*Stations: 16[^]*34\.25/);
 });
