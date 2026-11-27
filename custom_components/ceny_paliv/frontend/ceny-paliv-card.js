@@ -1383,7 +1383,7 @@ class CenyPalivCard extends HTMLElement {
 const EDITOR_TEXT = {
   en: {
     fuel: 'Fuel', fuels: 'Fuels (switch, or the fuels shown)', config_id: 'Configuration / area', show: 'Parts to show', layout: 'Layout', stations: 'Stations in the list', compact: 'Compact', show_footer: 'Show update times and legend',
-    map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
+    street_map: 'Load OpenStreetMap street tiles', map_height: 'Map height in px (0 = automatic)', logo_path: 'Folder of your own logos (leave empty for the logo pack)',
     show_regions: 'Show the 14 regions', days: 'Days back', navigator: 'Navigation app', badge_cheapest: 'The cheapest in the area', badge_mine: 'My station', badge_area: 'The area average', sort: 'Order of the stations', tank_litres: 'Fill-up in litres, kg for CNG (for "worth it")',
     consumption_n95: 'Petrol consumption', consumption_diesel: 'Diesel consumption', consumption_lpg: 'LPG consumption', consumption_cng: 'CNG consumption',
     consumption: 'Consumption per 100 km in litres, kg for CNG (for "worth it")', price: 'Price', distance: 'Distance', worth: 'Worth the drive',
@@ -1392,7 +1392,7 @@ const EDITOR_TEXT = {
   },
   cs: {
     fuel: 'Palivo', fuels: 'Paliva (přepínač, nebo zobrazená paliva)', config_id: 'Konfigurace / oblast', show: 'Zobrazené části', layout: 'Rozvržení', stations: 'Počet stanic v seznamu', compact: 'Kompaktní', show_footer: 'Zobrazit časy aktualizace a legendu',
-    map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
+    street_map: 'Načíst mapové dlaždice OpenStreetMap', map_height: 'Výška mapy v px (0 = automaticky)', logo_path: 'Složka s vlastními logy (prázdné = balíček log)',
     show_regions: 'Zobrazit 14 krajů', days: 'Kolik dní zpět', navigator: 'Navigační aplikace', badge_cheapest: 'Nejlevnější v oblasti', badge_mine: 'Moje stanice', badge_area: 'Průměr oblasti', sort: 'Řazení stanic', tank_litres: 'Kolik natankujete v litrech, u CNG v kg (pro „vyplatí se“)',
     consumption_n95: 'Spotřeba benzínu', consumption_diesel: 'Spotřeba nafty', consumption_lpg: 'Spotřeba LPG', consumption_cng: 'Spotřeba CNG',
     consumption: 'Spotřeba na 100 km v litrech, u CNG v kg (pro „vyplatí se“)', price: 'Cena', distance: 'Vzdálenost', worth: 'Vyplatí se dojet',
@@ -2002,8 +2002,34 @@ function toKm(lat, lng, lat0, lng0) {
   return [(lng - lng0) * Math.cos(lat0 * Math.PI / 180) * 111.32, (lat0 - lat) * 110.574];
 }
 
+// Fractional coordinates in the standard Web Mercator tile grid, independent of zoom.
+function mapPoint(lat, lng) {
+  const radians = Math.max(-85.0511, Math.min(85.0511, lat)) * Math.PI / 180;
+  return [(Number(lng) + 180) / 360, (1 - Math.asinh(Math.tan(radians)) / Math.PI) / 2];
+}
+
+function visibleTiles(zoom, left, top) {
+  const tiles = [];
+  const n = 2 ** zoom;
+  for (let x = Math.max(0, Math.floor(left / 256)); x < Math.min(n, Math.ceil((left + MAP_W) / 256)); x++) {
+    for (let y = Math.max(0, Math.floor(top / 256)); y < Math.min(n, Math.ceil((top + MAP_H) / 256)); y++) {
+      tiles.push(`<image class="street-tile" x="${x * 256 - left}" y="${y * 256 - top}" width="256" height="256" href="https://tile.openstreetmap.org/${zoom}/${x}/${y}.png" />`);
+    }
+  }
+  return tiles.join('');
+}
+
 const STATIONS_MAP_STYLE = `
   .smap svg { display: block; width: 100%; height: auto; border-radius: var(--cp-radius); overflow: hidden; }
+  .smap { position: relative; }
+  .smap svg { touch-action: none; cursor: grab; background: var(--cp-surface); }
+  .smap svg:active { cursor: grabbing; }
+  .smap svg:focus-visible { outline: 2px solid var(--cp-home); outline-offset: -2px; }
+  .smap .map-tools { position: absolute; top: 8px; left: 8px; display: flex; gap: 2px; }
+  .smap button { min-width: 34px; min-height: 34px; font: inherit; font-size: 16px; color: var(--cp-text); background: var(--cp-surface); border: 1px solid var(--cp-line); border-radius: 6px; cursor: pointer; }
+  .smap .credit { position: absolute; bottom: 2px; right: 2px; padding: 2px 5px; font-size: 10px; background: var(--cp-surface); color: var(--cp-text); }
+  .map-status { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--cp-muted); font-size: 12px; }
+  .map-status button { border: 0; background: none; color: var(--cp-home); font: inherit; cursor: pointer; }
   .smap .land { fill: var(--cp-neutral); fill-opacity: 0.12; }
   .smap .border { fill: none; stroke: var(--cp-line); stroke-width: 1; }
   .smap .area { fill: var(--cp-home); fill-opacity: 0.06; stroke: var(--cp-home); stroke-opacity: 0.5; stroke-width: 1.5; stroke-dasharray: 5 4; }
@@ -2016,13 +2042,30 @@ const STATIONS_MAP_STYLE = `
   .smap .chip text { fill: var(--cp-text); font-size: 11px; font-weight: 500; font-family: inherit; font-variant-numeric: tabular-nums; }
 `;
 
+const STATION_MAP_WORDS = {
+  en: { map_shown: '{n} of {total} current stations', zoom_in: 'Zoom in', zoom_out: 'Zoom out', map_fit: 'Show whole area', map_keys: 'Station map. Arrow keys pan, plus and minus zoom, Home fits the area.', map_streets: 'Street map', map_diagram: 'Schematic map', map_tile_error: 'Street tiles unavailable · schematic map' },
+  cs: { map_shown: 'Zobrazeno {n} z {total} aktuálních stanic', zoom_in: 'Přiblížit', zoom_out: 'Oddálit', map_fit: 'Zobrazit celou oblast', map_keys: 'Mapa stanic. Šipky posunou mapu, plus a minus mění přiblížení, Home zobrazí celou oblast.', map_streets: 'Uliční mapa', map_diagram: 'Schematická mapa', map_tile_error: 'Mapové dlaždice nejsou dostupné · schematická mapa' },
+};
+
 class CenyPalivStationsMapCard extends CenyPalivMiniCard {
   constructor() {
     super();
     this._sort = 'map';  // a station from the nearest list has no price rank in its details
     this.shadowRoot.addEventListener('click', (e) => this._tap(e));
-    this.shadowRoot.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') this._tap(e); });
+    this.shadowRoot.addEventListener('keydown', (e) => this._key(e));
+    this.shadowRoot.addEventListener('pointerdown', (e) => this._dragStart(e));
+    this.shadowRoot.addEventListener('pointermove', (e) => this._dragMove(e));
+    this.shadowRoot.addEventListener('pointerup', (e) => this._dragEnd(e));
+    this.shadowRoot.addEventListener('pointercancel', () => { this._drag = null; this._redraw(); });
+    this.shadowRoot.addEventListener('error', (e) => {
+      if (e.target.classList?.contains('street-tile') && !this._tileError) {
+        this._tileError = true;
+        this._redraw();
+      }
+    }, true);
   }
+
+  static get defaults() { return { street_map: true }; }
 
   static getStubConfig(hass) {
     const found = CenyPalivCard.fuels(hass)[0];
@@ -2030,17 +2073,36 @@ class CenyPalivStationsMapCard extends CenyPalivMiniCard {
   }
 
   static editorSchema(hass) {
-    return [{ name: 'fuel', required: true, selector: { select: { mode: 'dropdown', options: CenyPalivCard.fuels(hass) } } }];
+    return [
+      { name: 'fuel', required: true, selector: { select: { mode: 'dropdown', options: CenyPalivCard.fuels(hass) } } },
+      { name: 'street_map', selector: { boolean: {} } },
+    ];
   }
 
   setConfig(config) {
     if (!config || !config.fuel) throw new Error('ceny-paliv-stations-map-card: set "fuel", for example "n95"');
+    this._viewport = null;
+    this._street = config.street_map !== false;
+    this._tileError = false;
     super.setConfig(config);
   }
 
   getCardSize() { return 6; }
 
-  // the up-to-date stations: the cheapest ones and, in a GPS area, the nearest ones, each once
+  // A renamed top-five sensor still identifies the area. Fetch once per state update.
+  _fetchStations(entityId, top) {
+    const key = JSON.stringify([entityId, top.last_updated, top.attributes.fetched_at]);
+    if (this._stationKey === key) return;
+    this._stationKey = key;
+    this._mapStations = null;
+    if (typeof this._hass.callApi !== 'function') return;
+    this._hass.callApi('GET', `ceny_paliv/stations/${encodeURIComponent(entityId)}`).then((data) => {
+      if (this._stationKey !== key || !Array.isArray(data?.stations)) return;
+      this._mapStations = data.stations;
+      this._redraw();
+    }).catch(() => {}); // previous backend or offline: use the bounded state data
+  }
+
   _stations(at) {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const maxAge = at.max_age_days != null ? Number(at.max_age_days) : 1;
@@ -2048,26 +2110,33 @@ class CenyPalivStationsMapCard extends CenyPalivMiniCard {
     const seen = new Set();
     const out = [];
     const cheapest = new Set(fresh(at.stations));
-    for (const x of fresh(at.stations).concat(fresh(at.gps_nearest_stations))) {
+    const candidates = this._mapStations ? fresh(this._mapStations).map((row) => {
+      const detailed = at.stations?.find((x) => x.rank === row.rank && x.lat === row.lat && x.lng === row.lng && x.price === row.price);
+      return detailed || row;
+    }) : [...cheapest, ...fresh(at.gps_nearest_stations)];
+    for (const x of candidates) {
       const id = `${x.name}|${x.lat}|${x.lng}|${x.price}`;
-      if (seen.has(id) || !isFinite(Number(x.lat)) || !isFinite(Number(x.lng)) || !isFinite(Number(x.price))) continue;
+      if (seen.has(id) || x.lat == null || x.lng == null || x.price == null || !isFinite(Number(x.lat)) || !isFinite(Number(x.lng)) || !isFinite(Number(x.price))) continue;
       seen.add(id);
-      out.push(Object.assign({}, x, { rank: cheapest.has(x) ? x.rank : null }));
+      out.push(Object.assign({}, x, { rank: this._mapStations || cheapest.has(x) ? x.rank : null }));
     }
     return out;
   }
 
   _render() {
-    const T = (k, v) => this._T(k, v);
     const fuel = this._config.fuel;
     const top = this._state(fuel, 'top5');
     if (!top) { this._why = 'missing'; return this._message(); }
-    if (!regionGeometry) {
+    const street = this._street && !this._tileError;
+    if (!street && !regionGeometry) {
       const loading = loadRegionGeometry();
       if (loading) loading.then(() => { this._sig = ''; if (this._hass) this.hass = this._hass; });
     }
     const at = top.attributes || {};
+    const words = (at.language || this._hass.language || 'en').startsWith('cs') ? STATION_MAP_WORDS.cs : STATION_MAP_WORDS.en;
+    const T = (k, v) => words[k] ? words[k].replace(/\{(\w+)\}/g, (m, key) => v?.[key] ?? m) : this._T(k, v);
     this._ids = { top5: this._sensors[fuel].top5 };  // the borrowed details use the area's logos
+    this._fetchStations(this._ids.top5, top);
     const stations = this._stations(at);
     const prices = stations.map((x) => Number(x.price));
     const min = prices.length ? Math.min(...prices) : null;
@@ -2078,7 +2147,7 @@ class CenyPalivStationsMapCard extends CenyPalivMiniCard {
     const upToDate = total != null && isFinite(Number(total)) ? Number(total) - Number(at.excluded || 0) : stations.length;
     this._rows = { list: stations, fresh: Math.max(upToDate, stations.length), unit, min };
     const area = at.gps_area || null;
-    const center = CenyPalivCard.prototype._center.call(this, at);
+    const center = area ? CenyPalivCard.prototype._center.call(this, at) : null;
     // the frame: the circle of a GPS area, else the stations with a kilometre around them
     let lat0; let lng0; let half;
     if (area && center && Number(area.radius_km) > 0) {
@@ -2094,60 +2163,153 @@ class CenyPalivStationsMapCard extends CenyPalivMiniCard {
     } else {
       return `<ha-card class="card"><span class="note">${esc(T('no_recent'))}</span></ha-card>`;
     }
-    const scale = (Math.min(MAP_W, MAP_H) / 2) / half;  // view units per kilometre: the frame fits the shorter side
-    const view = (lat, lng) => { const [x, y] = toKm(lat, lng, lat0, lng0); return [MAP_W / 2 + x * scale, MAP_H / 2 + y * scale]; };
+    const frame = JSON.stringify([this._ids.top5, area?.latitude, area?.longitude, area?.radius_km]);
+    if (this._frame !== frame) { this._frame = frame; this._viewport = null; }
+    const kmAtZoomZero = 40075.017 * Math.cos(lat0 * Math.PI / 180);
+    const fitZoom = Math.max(2, Math.min(18, Math.floor(Math.log2(MAP_H * kmAtZoomZero / (512 * half)))));
+    const [x0, y0] = mapPoint(lat0, lng0);
+    const vp = this._viewport || { x: x0, y: y0, z: fitZoom };
+    this._shown = vp;
+    const world = 256 * 2 ** vp.z;
+    const left = vp.x * world - MAP_W / 2;
+    const topEdge = vp.y * world - MAP_H / 2;
+    const view = (lat, lng) => {
+      const [x, y] = mapPoint(lat, lng);
+      return [x * world - left, y * world - topEdge];
+    };
+    const scale = world / kmAtZoomZero;
     const pts = (ring) => ring.map(([lat, lng]) => view(lat, lng).map((v) => v.toFixed(1)).join(',')).join('L');
     let land = '';
-    if (regionGeometry && regionGeometry.regions) {
+    if (!street && regionGeometry && regionGeometry.regions) {
       const d = regionGeometry.regions.map((r) => r.polygons.map((p) => `M${pts(p[0])}Z`).join('')).join('');
       land = `<path class="land" d="${d}"></path><path class="border" d="${d}"></path>`;
     }
     const circle = area && center && Number(area.radius_km) > 0
-      ? `<circle class="area" cx="${MAP_W / 2}" cy="${MAP_H / 2}" r="${(Number(area.radius_km) * scale).toFixed(1)}"></circle>` : '';
+      ? `<circle class="area" cx="${view(...center)[0].toFixed(1)}" cy="${view(...center)[1].toFixed(1)}" r="${(Number(area.radius_km) * scale).toFixed(1)}"></circle>` : '';
     const mark = center ? (() => { const [cx, cy] = view(center[0], center[1]); return `<circle class="center" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5"><title>${esc(T('map_center'))}</title></circle>`; })() : '';
     const colour = (price) => {
       const t = max > min ? Math.round(100 * (price - min) / (max - min)) : 0;
       return `color-mix(in srgb, var(--cp-bad-base) ${t}%, var(--cp-good-base))`;
     };
-    // labels for the five cheapest and your station, the cheapest first; one that would cover another is left out
+    // Place price labels cheapest first; keep colliding stations accessible as dots.
     const placed = [];
     const order = stations.map((x, i) => i).sort((a, b) => stations[a].price - stations[b].price);
-    const labelled = new Set(order.filter((i) => stations[i].rank != null || stations[i].home).slice(0, 6));
     const dots = [];  // the dearest first, so the cheapest dots lie on top
     const chips = [];
     for (const i of order) {
       const x = stations[i];
       const [px, py] = view(Number(x.lat), Number(x.lng));
+      if (px < 0 || px > MAP_W || py < 0 || py > MAP_H) continue;
       const label = `${x.name}: ${this._num(x.price)} ${unit}`;
       dots.unshift(`<g class="st${x.home ? ' home' : ''}" role="button" tabindex="0" data-station="${i}" aria-label="${esc(label)}" style="color: ${colour(Number(x.price))}">
         <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="6" fill="currentColor"></circle><title>${esc(label)}</title></g>`);
-      if (!labelled.has(i)) continue;
       const text = this._num(x.price);
       const w = 8 + text.length * 6.2;
-      const box = [px - w / 2, py - 27, w, 18];
+      const box = [Math.max(1, Math.min(MAP_W - w - 1, px - w / 2)), py < 28 ? py + 8 : py - 27, w, 18];
       if (placed.some((b) => box[0] < b[0] + b[2] && b[0] < box[0] + box[2] && box[1] < b[1] + b[3] && b[1] < box[1] + box[3])) continue;
       placed.push(box);
       chips.push(`<g class="chip st" data-station="${i}" style="color: ${colour(Number(x.price))}"><rect x="${box[0].toFixed(1)}" y="${box[1].toFixed(1)}" width="${w.toFixed(1)}" height="18" rx="9"></rect>
-        <text x="${px.toFixed(1)}" y="${(py - 14.5).toFixed(1)}" text-anchor="middle">${esc(text)}</text></g>`);
+        <text x="${(box[0] + w / 2).toFixed(1)}" y="${(box[1] + 12.5).toFixed(1)}" text-anchor="middle">${esc(text)}</text></g>`);
     }
+    const control = (action, glyph, label) => `<button data-map-action="${action}" aria-label="${esc(T(label))}" title="${esc(T(label))}">${glyph}</button>`;
+    const controls = control('in', '+', 'zoom_in') + control('out', '−', 'zoom_out') + control('fit', '⌖', 'map_fit');
     const where = area ? `${at.city_name || ''} · ${this._num(area.radius_km, 0)} km` : (at.city_name || '');
     return `<ha-card class="card"><style>${STATIONS_MAP_STYLE}${REGIONS_STYLE}</style>
       <div class="head"><span class="icon fuel"><ha-icon icon="mdi:map-marker-multiple-outline"></ha-icon></span>
         <div class="info"><span class="primary">${esc(T('map_title'))} · ${esc(at.fuel_label || fuel)}</span>
-          <span class="secondary">${esc(where)} · ${esc(T('map_sub', { n: stations.length }))}</span></div></div>
-      <div class="smap"><svg viewBox="0 0 ${MAP_W} ${MAP_H}" role="group" aria-label="${esc(T('map_title'))}">${land}${circle}${mark}${dots.join('')}${chips.join('')}</svg></div>
+          <span class="secondary">${esc(where)} · ${esc(T(upToDate > stations.length ? 'map_shown' : 'map_sub', { n: stations.length, total: upToDate }))}</span></div></div>
+      <div class="smap"><svg viewBox="0 0 ${MAP_W} ${MAP_H}" tabindex="0" role="group" aria-label="${esc(T('map_keys'))}"><g class="map-layer">${street ? visibleTiles(vp.z, left, topEdge) : land}${circle}${mark}${dots.join('')}${chips.join('')}</g></svg>
+        <div class="map-tools">${controls}</div>${street ? '<a class="credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>' : ''}</div>
+      <div class="map-status"><span>${esc(T(street ? 'map_streets' : this._tileError ? 'map_tile_error' : 'map_diagram'))}</span>${control('layer', esc(T(street ? 'map_diagram' : 'map_streets')), street ? 'map_diagram' : 'map_streets')}</div>
       ${min != null ? `<div class="scale"><span>${esc(this._num(min))}</span><span class="ramp" aria-hidden="true"></span><span>${esc(this._num(max))}</span></div>` : ''}
-      <span class="source">${this._source()} · ${esc(T('regions_source'))}</span>
+      <span class="source">${this._source()}${street ? '' : ' · ' + esc(T('regions_source'))}</span>
     </ha-card>`;
+  }
+
+  _redraw(focus) {
+    this._sig = '';
+    if (this._hass) this.hass = this._hass;
+    if (focus) this.shadowRoot.querySelector(focus)?.focus({ preventScroll: true });
+  }
+
+  _pan(dx, dy) {
+    const { x, y, z } = this._shown;
+    const world = 256 * 2 ** z;
+    const limit = (v, half) => Math.max(half / world, Math.min(1 - half / world, v));
+    this._viewport = { x: limit(x + dx / world, MAP_W / 2), y: limit(y + dy / world, MAP_H / 2), z };
+  }
+
+  _action(action, focus) {
+    if (action === 'layer') {
+      this._street = !this._street || this._tileError;
+      this._tileError = false;
+    } else if (action === 'fit') {
+      this._viewport = null;
+    } else {
+      const z = Math.max(2, Math.min(18, this._shown.z + (action === 'in' ? 1 : -1)));
+      this._viewport = { ...this._shown, z };
+    }
+    this._redraw(focus);
+  }
+
+  _key(e) {
+    const path = e.composedPath();
+    if (path.some((n) => n.dataset?.station !== undefined) && (e.key === 'Enter' || e.key === ' ')) {
+      this._tap(e);
+      return;
+    }
+    if (!e.target.matches?.('.smap svg')) return; // native buttons activate themselves
+    const keys = { '+': 'in', '=': 'in', '-': 'out', Home: 'fit' };
+    const arrows = { ArrowLeft: [-64, 0], ArrowRight: [64, 0], ArrowUp: [0, -64], ArrowDown: [0, 64] };
+    if (!(e.key in keys) && !(e.key in arrows)) return;
+    e.preventDefault();
+    if (e.key in keys) this._action(keys[e.key], '.smap svg');
+    else {
+      this._pan(...arrows[e.key]);
+      this._redraw('.smap svg');
+    }
+  }
+
+  _dragStart(e) {
+    const svg = e.target.closest?.('.smap svg');
+    if (!svg || e.button !== 0 || !e.isPrimary) return;
+    this._skipTap = false;
+    this._drag = { id: e.pointerId, svg, x: e.clientX, y: e.clientY, dx: 0, dy: 0, moved: false };
+  }
+
+  _dragMove(e) {
+    const d = this._drag;
+    if (!d || d.id !== e.pointerId) return;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (!d.moved && Math.hypot(dx, dy) < 4) return;
+    if (!d.moved) d.svg.setPointerCapture(d.id);
+    d.moved = true;
+    const box = d.svg.getBoundingClientRect();
+    d.dx = dx * MAP_W / box.width;
+    d.dy = dy * MAP_H / box.height;
+    d.svg.querySelector('.map-layer').setAttribute('transform', `translate(${d.dx} ${d.dy})`);
+  }
+
+  _dragEnd(e) {
+    const d = this._drag;
+    if (!d || d.id !== e.pointerId) return;
+    this._drag = null;
+    if (!d.moved) return;
+    this._skipTap = true;
+    this._pan(-d.dx, -d.dy);
+    this._redraw();
   }
 
   _tap(e) {
     const path = e.composedPath ? e.composedPath() : [];
     if (path.some((n) => n.dataset && n.dataset.close !== undefined)) { if (this._sheet) this._sheet.close(); return; }
+    const action = path.find((n) => n.dataset?.mapAction)?.dataset.mapAction;
+    if (action) { this._action(action, `[data-map-action="${action}"]`); return; }
+    if (this._skipTap && e.type === 'click') { this._skipTap = false; return; }
     const t = path.find((n) => n.dataset && n.dataset.station !== undefined);
     if (!t) return;
     if (e.preventDefault) e.preventDefault();
-    const fresh = !this._sheet;
+    const fresh = !this._sheet?.isConnected;
     this._openStation(Number(t.dataset.station));
     // the map is drawn again once the details close (it waits while they are open)
     if (fresh && this._sheet) this._sheet.addEventListener('close', () => { this._sig = ''; if (this._hass) this.hass = this._hass; });

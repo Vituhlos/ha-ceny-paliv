@@ -5,11 +5,12 @@ from pathlib import Path
 
 from aiohttp import web
 
+from homeassistant.auth.permissions.const import POLICY_READ
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.helpers.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import config_validation as cv, issue_registry as ir
+from homeassistant.helpers import config_validation as cv, entity_registry as er, issue_registry as ir
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
@@ -45,6 +46,31 @@ class CenyPalivRegionsView(CenyPalivCardView):
     name = "ceny_paliv:regions"
 
 
+class CenyPalivStationsView(HomeAssistantView):
+    """Return the selected map's snapshot only to a user who can read its top-five sensor."""
+
+    url = "/api/ceny_paliv/stations/{entity_id}"
+    name = "api:ceny_paliv:stations"
+    requires_auth = True
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def get(self, request: web.Request, entity_id: str) -> web.Response:
+        if not request["hass_user"].permissions.check_entity(entity_id, POLICY_READ):
+            raise web.HTTPForbidden()
+        registered = er.async_get(self._hass).async_get(entity_id)
+        if not registered or registered.platform != DOMAIN or not registered.config_entry_id:
+            raise web.HTTPNotFound()
+        entry: CenyPalivConfigEntry | None = self._hass.config_entries.async_get_entry(registered.config_entry_id)
+        if not entry or entry.state is not ConfigEntryState.LOADED:
+            raise web.HTTPNotFound()
+        for fuel, payload in (entry.runtime_data.data or {}).items():
+            if registered.unique_id == f"{entry.entry_id}_{fuel}_top5":
+                return self.json({"stations": payload["map_stations"]}, headers={"Cache-Control": "no-store"})
+        raise web.HTTPNotFound()
+
+
 class CenyPalivLogoView(HomeAssistantView):
     """Serves the downloaded chain logos (<config>/ceny_paliv_logos/<id>.png). No auth: the browser loads them in <img>."""
 
@@ -68,6 +94,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(CenyPalivCardView(card))
     hass.http.register_view(CenyPalivRegionsView(Path(__file__).parent / "regions.json"))
     hass.http.register_view(CenyPalivLogoView(hass))
+    hass.http.register_view(CenyPalivStationsView(hass))
     add_extra_js_url(hass, f"{CARD_URL}?v={CARD_VERSION}")
     async_setup_services(hass)
     return True

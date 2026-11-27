@@ -1047,15 +1047,65 @@ test("the stations map: the area's circle, every up-to-date station as a dot, la
   card.setConfig({ fuel: "n95" });
   card.hass = miniHass({ "sensor.ceny_paliv_n95_top5_a": top });
   const html = card.shadowRoot.innerHTML;
-  assert.match(html, /3 up-to-date prices/); // A once, the outdated one left out
-  assert.match(html, /<circle class="area" cx="200" cy="150" r="138\.9"><\/circle>/); // 10 km fits the 300 px height
+  assert.match(html, /3 of 26 current stations/); // A once, the outdated one left out
+  assert.match(html, /<circle class="area" cx="200\.0" cy="150\.0" r="[\d.]+"><\/circle>/);
+  assert.match(html, /tile\.openstreetmap\.org/);
+  assert.match(html, /© OpenStreetMap contributors/);
   assert.equal((html.match(/<g class="st[ "]/g) || []).length, 3);
   assert.match(html, /<g class="st home"/); // your station ringed
   assert.match(html, /<g class="chip st" data-station="0"[^]*?>38\.50</); // the cheapest labelled
-  assert.doesNotMatch(html, /<g class="chip st" data-station="2"/); // the nearest-only, dearest one is a dot only
+  assert.match(html, /data-map-action="fit"/);
   same(card._rows.list.map((x) => [x.name, x.rank]), [["A", 1], ["B", 2], ["Near", null]]);
   assert.equal(card._rows.fresh, 26); // ranked among the area's 26 up-to-date stations
   assert.match(html, /color-mix\(in srgb, var\(--cp-bad-base\) 100%, var\(--cp-good-base\)\)/); // "Near" is the dearest
+});
+
+test("interactive map fetches the actual entity and preserves pan and station actions across redraws", async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const row = (name, rank, lat, lng) => ({ name, lat, lng, rank, price: 30 + rank, updated_date: today });
+  const id = "sensor.renamed_map_source";
+  const first = row("First", 1, 49.2, 16.6);
+  const extra = row("Extra", 6, 49.21, 16.63);
+  const top = top5("n95", "test", 31, { stations: [first], city_total: 6, max_age_days: 1, language: "en" });
+  const hass = miniHass({ [id]: top });
+  const requests = [];
+  hass.callApi = async (...args) => { requests.push(args); return { stations: [first, extra] }; };
+  const card = new CenyPalivStationsMapCard();
+  card.setConfig({ fuel: "n95" });
+  card.hass = hass;
+  await Promise.resolve();
+  same(requests, [["GET", "ceny_paliv/stations/sensor.renamed_map_source"]]);
+  same(card._rows.list.map((r) => r.name), ["First", "Extra"]);
+  const initial = { ...card._shown };
+  const key = (k) => card._key({ key: k, target: { matches: () => true }, composedPath: () => [], preventDefault() {} });
+  key("+");
+  assert.equal(card._shown.z, initial.z + 1);
+  key("ArrowRight");
+  assert.ok(card._shown.x > initial.x);
+  key("Home");
+  same(card._shown, initial);
+  card._action("layer");
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /href="https:\/\/tile\.openstreetmap/);
+  card._action("layer");
+  card.shadowRoot.listeners.error[0]({ target: { classList: { contains: () => true } } });
+  assert.match(card.shadowRoot.innerHTML, /Street tiles unavailable/);
+  assert.doesNotMatch(card.shadowRoot.innerHTML, /© OpenStreetMap contributors/);
+  card._action("layer");
+  assert.match(card.shadowRoot.innerHTML, /© OpenStreetMap contributors/);
+  assert.equal(requests.length, 1);
+
+  // Move the cheapest marker to the north-west edge; its entire price pill stays visible.
+  const [, cx, cy] = card.shadowRoot.innerHTML.match(/data-station="0"[^>]*>\s*<circle cx="([\d.]+)" cy="([\d.]+)"/);
+  const world = 256 * 2 ** initial.z;
+  card._viewport = { ...initial, x: initial.x + (Number(cx) - 2) / world, y: initial.y + (Number(cy) - 3) / world };
+  card._redraw();
+  assert.match(card.shadowRoot.innerHTML, /class="chip st" data-station="0"[^>]*><rect x="1.0" y="11.0"/);
+  let opened;
+  card._openStation = (i) => { opened = card._rows.list[i]; };
+  card._tap({ composedPath: () => [{ dataset: { station: "1" } }] });
+  same(opened, extra);
+  const details = card._stationHtml(extra, extra.rank);
+  assert.match(details, /Google Maps/);
 });
 
 test("the badge: the cheapest price, your station's or the area average, and a dash without sensors", () => {
