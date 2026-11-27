@@ -58,6 +58,9 @@ async def test_the_event_entity_reports_real_price_changes(hass, enable_custom_i
     entity_id = "event.ceny_paliv_n95_price_change"
     state = hass.states.get(entity_id)
     assert state.state == "unknown"  # the prices at start-up are only the baseline
+    assert state.attributes["cp_fuel"] == "n95"
+    assert state.attributes["cp_role"] == "price_change"
+    assert state.attributes["cp_config_id"]
     assert state.attributes["event_types"] == ["favourite_cheaper", "favourite_dearer", "cheapest_cheaper"]
     assert state.attributes["friendly_name"] == "Ceny paliv Praha Natural 95 · price change"
 

@@ -41,6 +41,7 @@ class CenyPalivPriceChangeEvent(CenyPalivEntity, EventEntity):
     def __init__(self, coordinator: CenyPalivCoordinator, entry: CenyPalivConfigEntry, fuel: str) -> None:
         super().__init__(coordinator, entry, fuel, "price_change")
         self.entity_id = f"event.ceny_paliv_{fuel}_price_change"
+        self._attr_extra_state_attributes = {"cp_config_id": entry.entry_id, "cp_fuel": fuel, "cp_role": "price_change"}
         self._favourite: tuple[str, float] | None = None
         self._cheapest: float | None = None
 

@@ -1183,9 +1183,10 @@ test("what changed: the fuel's event entity of the area, its history newest firs
   const hass = { states: { "event.ceny_paliv_n95_price_change": {}, "event.ceny_paliv_n95_price_change_2": {}, "sensor.ceny_paliv_n95_top5_b": {} },
     entities: { "event.ceny_paliv_n95_price_change": { device_id: "a" }, "event.ceny_paliv_n95_price_change_2": { device_id: "b" }, "sensor.ceny_paliv_n95_top5_b": { device_id: "b" } } };
   assert.equal(eventEntity(hass, "n95", "sensor.ceny_paliv_n95_top5_b"), "event.ceny_paliv_n95_price_change_2");
-  assert.equal(eventEntity({ states: { "event.ceny_paliv_lpg_price_change": {} } }, "lpg", "x"), "event.ceny_paliv_lpg_price_change");
+  delete hass.states["event.ceny_paliv_n95_price_change_2"];
+  assert.equal(eventEntity(hass, "n95", "sensor.ceny_paliv_n95_top5_b"), null);
   assert.equal(eventEntity({ states: {} }, "lpg", "x"), null);
-  const id = "event.ceny_paliv_n95_price_change";
+  const id = "event.renamed";
   // the compressed answer of history_during_period (s, a, lu in seconds) and the full one
   same(eventHistory({ [id]: [
     { s: "unknown", a: {}, lu: 100 },
@@ -1193,10 +1194,13 @@ test("what changed: the fuel's event entity of the area, its history newest firs
     { state: "2026-11-12T10:00:00", attributes: { event_type: "cheapest_cheaper", price: 38.1 }, last_updated: "2026-11-12T10:00:00Z" },
   ] }, id).map((e) => e.a.event_type), ["cheapest_cheaper", "favourite_cheaper"]);
 
+  same(eventHistory([[{ entity_id: id, state: "x", attributes: { event_type: "cheapest_cheaper" },
+    last_updated: "2026-11-12T10:00:00Z" }]], id).map((e) => e.a.event_type), ["cheapest_cheaper"]);
   const calls = [];
   const labels = { ...LABELS_EN, changes_title: "What changed", changes_empty: "No price changes in the last {n} days.",
     ev_favourite_cheaper: "Your station got cheaper", ev_cheapest_cheaper: "A cheaper station in the area" };
-  const states = { "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.1, { labels }), [id]: { state: "2026-11-12T10:00:00", last_changed: "x", attributes: {} } };
+  const states = { "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38.1, { labels }), [id]: { state: "2026-11-12T10:00:00", last_changed: "x",
+    attributes: { cp_role: "price_change", cp_config_id: "a", cp_fuel: "n95" } } };
   const card = new CenyPalivChangesCard();
   card.setConfig({ fuel: "n95", days: 7 });
   card.hass = { ...miniHass(states), callWS: async (msg) => { calls.push(msg); return { [id]: [
@@ -1207,6 +1211,10 @@ test("what changed: the fuel's event entity of the area, its history newest firs
   await tick();
   assert.equal(calls.length, 1);
   same([calls[0].type, calls[0].entity_ids, calls[0].no_attributes], ["history/history_during_period", [id], false]);
+  states[id].last_updated = "new";
+  card.hass = card._hass;
+  await tick();
+  assert.equal(calls.length, 2);
   const html = card.shadowRoot.innerHTML;
   assert.ok(html.indexOf("A cheaper station in the area") < html.indexOf("Your station got cheaper")); // newest first
   assert.match(html, /Levna · Hlavni<\/span><\/div>\s*<span class="price"><span class="number">38\.10<\/span><span class="diff good">−0\.40</);
@@ -1239,4 +1247,28 @@ test("the trend of the week: the latest value against 7 and 14 days before", asy
   const html = card.shadowRoot.innerHTML;
   assert.match(html, /Area average<\/b><span>39\.40 Kč\/l[^]*?<path d="M0\.0,2\.0L36\.0,[\d.]+L72\.0,22\.0"><\/path><\/svg><span class="d good">[^]*?−0\.20<\/span><span class="d good">[^]*?−0\.50/);
   assert.match(html, /Cheapest<\/b><span>38\.40 Kč\/l[^]*?<span class="d muted">—<\/span><span class="d muted">—/); // the daily minimum, no history yet
+});
+
+test("daily statistics use the HA time zone and keep yesterday's fortnight reference", () => {
+  same(dailyValues([{ start: "2026-11-10T23:00:00Z", mean: 39 }], "mean", "Europe/Prague"), { "2026-11-11": 39 });
+  const days = Array.from({ length: 16 }, (_, i) => String(i));
+  same(trendDeltas({ 0: 39, 14: 38 }, days), { latest: 38, d7: -1, d14: -1 });
+});
+
+test("recorder errors retry on the timer without another sensor update", async () => {
+  const card = new CenyPalivTrendCard();
+  card.isConnected = true;
+  card.connectedCallback();
+  card.setConfig({ fuel: "n95" });
+  let count = 0;
+  const labels = { ...LABELS_EN, history_error: "Could not load history", graph_empty: "No history yet" };
+  const states = { "sensor.ceny_paliv_n95_top5_a": top5("n95", "a", 38, { labels }) };
+  card.hass = { ...miniHass(states), callWS: async () => { if (++count === 1) throw Error(); return {}; } };
+  await tick();
+  assert.match(card.shadowRoot.innerHTML, /Could not load history/);
+  timers.at(-1)();
+  await tick();
+  assert.equal(count, 2);
+  assert.match(card.shadowRoot.innerHTML, /No history yet/);
+  card.disconnectedCallback();
 });
