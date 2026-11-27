@@ -1305,7 +1305,7 @@ test("dashboard strategy builds one view per fuel and binds sections to their ac
   const states = {
     "sensor.ceny_paliv_lpg_top5_work": top5("lpg", "work", 18),
     "sensor.ceny_paliv_n95_top5_work": top5("n95", "work", 36),
-    "sensor.ceny_paliv_n95_top5_home": top5("n95", "home", 38),
+    "sensor.petrol_near_home": top5("n95", "home", 38),
   };
   const { title, views } = await strategy.generate({ fuel_cost: { consumption_lpg: 9 } }, miniHass(states));
   assert.equal(title, "Ceny paliv");
@@ -1318,6 +1318,15 @@ test("dashboard strategy builds one view per fuel and binds sections to their ac
   same(cards.filter((c) => c.type === "custom:ceny-paliv-card").map((c) => c.config_id), ["home", "work"]);
   assert.equal(cards.filter((c) => c.type.endsWith("chains-card")).length, 1);
   assert.equal(views[2].badges.length, 1);
+  for (const view of views.slice(1)) {
+    for (const badge of view.badges) assert.equal(badge.fuel, view.path);
+    for (const card of view.sections.flatMap((s) => s.cards).filter((c) => c.type.startsWith("custom:"))) {
+      assert.equal(card.fuel, view.path);
+    }
+  }
+  const main = new CenyPalivCard();
+  main.setConfig({ fuel: "n95", config_id: "home" });
+  assert.equal(main._resolve(miniHass(states)).top5, "sensor.petrol_near_home");
   const empty = await strategy.generate({}, { language: "cs", states: {} });
   assert.match(empty.views[0].sections[0].cards[0].content, /načtení senzorů/);
   assert.equal(context.window.customStrategies[0].type, "ceny-paliv");

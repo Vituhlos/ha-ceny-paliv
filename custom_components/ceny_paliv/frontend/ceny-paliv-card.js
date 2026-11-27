@@ -423,6 +423,13 @@ function browserStorage() {
   try { return window.localStorage || null; } catch (e) { return null; }
 }
 
+// Renamed sensors keep their integration attributes. Older sensors keep their original ID.
+function isFuelSensor(id, state) {
+  const a = state?.attributes;
+  return id.startsWith('sensor.ceny_paliv_') ||
+    (id.startsWith('sensor.') && Boolean(a?.cp_role && a.cp_fuel && a.cp_config_id));
+}
+
 function withLastKnown(hass) {
   const store = browserStorage();
   if (!lastKnownLoaded) {
@@ -437,8 +444,8 @@ function withLastKnown(hass) {
   const gone = [];
   let changed = false;
   for (const id in hass.states) {
-    if (!id.startsWith('sensor.ceny_paliv_')) continue;
     const s = hass.states[id];
+    if (!isFuelSensor(id, s) && !lastKnown.has(id)) continue;
     const a = s.attributes || {};
     if (s.state === 'unavailable') {
       // a restored state belongs to an entity no integration provides (a removed area): never revive it
@@ -473,7 +480,7 @@ function withLastKnown(hass) {
 function topCandidates(hass, fuel) {
   const tops = [];
   for (const id in hass.states) {
-    if (!id.startsWith('sensor.ceny_paliv_') || restored(hass.states[id])) continue;
+    if (!isFuelSensor(id, hass.states[id]) || restored(hass.states[id])) continue;
     const a = hass.states[id].attributes || {};
     if (a.cp_fuel) {
       if (a.cp_fuel === fuel && a.cp_role === 'top5') tops.push({ id, attributes: a });
@@ -610,7 +617,7 @@ class CenyPalivCard extends HTMLElement {
     ids.top5 = selected.id;
     const homes = [];
     for (const id of Object.keys(hass.states)) {
-      if (!id.startsWith('sensor.ceny_paliv_') || restored(hass.states[id])) continue;
+      if (!isFuelSensor(id, hass.states[id]) || restored(hass.states[id])) continue;
       const a = hass.states[id].attributes || {};
       if (a.cp_role === 'home_archive') continue;
       if (a.cp_role && (
@@ -664,7 +671,7 @@ class CenyPalivCard extends HTMLElement {
   static fuels(hass) {
     const out = [];
     for (const [id, st] of Object.entries((hass && hass.states) || {})) {
-      if (!id.startsWith('sensor.ceny_paliv_')) continue;
+      if (!isFuelSensor(id, st)) continue;
       const a = st.attributes || {};
       const isTop = a.cp_role === 'top5' || (!a.cp_role && /_top5$/.test(id) && a.fuel);
       if (isTop && a.fuel && !out.some((o) => o.value === a.fuel)) out.push({ value: a.fuel, label: a.fuel_label || a.fuel });
@@ -675,7 +682,7 @@ class CenyPalivCard extends HTMLElement {
     const configs = [];
     for (const [id, state] of Object.entries((hass && hass.states) || {})) {
       const a = state.attributes || {};
-      if (!id.startsWith('sensor.ceny_paliv_') || a.cp_fuel !== fuel || a.cp_role !== 'top5' || !a.cp_config_id) continue;
+      if (!isFuelSensor(id, state) || a.cp_fuel !== fuel || a.cp_role !== 'top5' || !a.cp_config_id) continue;
       if (!configs.some((item) => item.value === a.cp_config_id)) {
         const area = a.gps_area || null;
         const where = area
@@ -1165,7 +1172,7 @@ class CenyPalivCard extends HTMLElement {
     const configId = top && top.attributes && top.attributes.cp_config_id;
     const average = Object.keys(states).find((id) => {
       const a = states[id].attributes || {};
-      return id.startsWith('sensor.ceny_paliv_') && a.cp_role === 'area_average' && a.cp_fuel === this._config.fuel && a.cp_config_id === configId;
+      return id.startsWith('sensor.') && a.cp_role === 'area_average' && a.cp_fuel === this._config.fuel && a.cp_config_id === configId;
     });
     const out = [];
     if (home) out.push({ key: 'mine', id: (home.attributes && home.attributes.statistic_id) || this._ids.home, type: 'mean', label: this._T('my_station') });
@@ -1487,7 +1494,7 @@ function areaIds(hass) {
   const out = [];
   for (const [id, st] of Object.entries((hass && hass.states) || {})) {
     const a = st.attributes || {};
-    if (id.startsWith('sensor.ceny_paliv_') && a.cp_role === 'top5' && a.cp_config_id && !restored(st) && !out.includes(a.cp_config_id)) out.push(a.cp_config_id);
+    if (id.startsWith('sensor.') && a.cp_role === 'top5' && a.cp_config_id && !restored(st) && !out.includes(a.cp_config_id)) out.push(a.cp_config_id);
   }
   return out.sort();
 }
@@ -1497,7 +1504,7 @@ function areaSensors(hass, configId) {
   const out = {};
   for (const [id, st] of Object.entries((hass && hass.states) || {})) {
     const a = st.attributes || {};
-    if (!id.startsWith('sensor.ceny_paliv_') || a.cp_config_id !== configId || !AREA_ROLES.includes(a.cp_role) || !a.cp_fuel || restored(st)) continue;
+    if (!id.startsWith('sensor.') || a.cp_config_id !== configId || !AREA_ROLES.includes(a.cp_role) || !a.cp_fuel || restored(st)) continue;
     if (a.cp_role === 'home' && ['unavailable', 'unknown'].includes(st.state)) continue;
     (out[a.cp_fuel] = out[a.cp_fuel] || {})[a.cp_role] = id;
   }
@@ -1509,7 +1516,7 @@ function areaOptions(hass) {
   const seen = {};
   for (const [id, st] of Object.entries((hass && hass.states) || {})) {
     const a = st.attributes || {};
-    if (id.startsWith('sensor.ceny_paliv_') && a.cp_role === 'top5' && a.cp_config_id && !(a.cp_config_id in seen)) {
+    if (id.startsWith('sensor.') && a.cp_role === 'top5' && a.cp_config_id && !(a.cp_config_id in seen)) {
       seen[a.cp_config_id] = `${a.city_name || 'GPS area'} (${a.cp_config_id.slice(0, 8)})`;
     }
   }
